@@ -1,0 +1,33 @@
+model_list:
+  - model_name: "local-chat"
+    litellm_params:
+      model: "llamacpp/local-chat"
+      api_base: "http://inference:8001"
+      api_key: "dummy-key"
+      temperature: 0.2
+      max_tokens: 2048
+      timeout: 120
+
+  # Alias for compatibility
+  - model_name: "gpt-3.5-turbo"
+    litellm_params:
+      model: "llamacpp/local-chat"
+      api_base: "http://inference:8001"
+      api_key: "dummy-key"
+      temperature: 0.2
+      max_tokens: 2048
+
+# Default parameters for all models
+litellm_settings:
+  drop_params: true  # Drop unsupported parameters
+  success_callback: []
+  failure_callback: []
+
+# Server configuration
+general_settings:
+  master_key: "dummy-master-key"  # Optional for local use
+  database_url: null
+
+# Logging configuration
+logging:
+  level: "INFO"
