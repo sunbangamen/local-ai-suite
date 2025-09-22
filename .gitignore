@@ -1,0 +1,43 @@
+# Environment variables
+.env
+
+# Model files (too large)
+models/*.gguf
+models/*.bin
+models/*.safetensors
+models/*.pt
+models/*.pth
+
+# Vector database data
+docker/qdrant/
+
+# RAG data (user documents)
+data/rag_docs/*
+data/chunks/*
+data/indices/*
+data/cache/*
+
+# Keep directory structure
+!data/rag_docs/.gitkeep
+!data/chunks/.gitkeep
+!data/indices/.gitkeep
+!data/cache/.gitkeep
+!models/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+venv/
+env/
+
+# Logs
+*.log
+logs/
+
+# Docker volumes
+volumes/
