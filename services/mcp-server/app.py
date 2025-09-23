@@ -23,6 +23,32 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
+import base64
+import tempfile
+from io import BytesIO
+from PIL import Image
+
+# Playwright와 Notion 임포트 (지연 로딩)
+playwright = None
+notion_client = None
+
+async def init_playwright():
+    """Playwright 초기화"""
+    global playwright
+    if playwright is None:
+        from playwright.async_api import async_playwright
+        playwright = await async_playwright().start()
+    return playwright
+
+def init_notion():
+    """Notion 클라이언트 초기화"""
+    global notion_client
+    if notion_client is None:
+        from notion_client import Client
+        notion_token = os.getenv("NOTION_TOKEN")
+        if notion_token:
+            notion_client = Client(auth=notion_token)
+    return notion_client
 
 # 환경 변수
 PROJECT_ROOT = os.getenv("PROJECT_ROOT", "/workspace")
@@ -73,6 +99,33 @@ class AIResponse(BaseModel):
     model: str
     message: str
     response: str
+
+class WebScreenshotResult(BaseModel):
+    url: str
+    screenshot_base64: str
+    width: int
+    height: int
+    timestamp: str
+
+class WebScrapeResult(BaseModel):
+    url: str
+    selector: str
+    data: List[str]
+    count: int
+
+class WebUIAnalysis(BaseModel):
+    url: str
+    title: str
+    css_styles: Dict[str, Any]
+    layout_info: Dict[str, Any]
+    color_scheme: List[str]
+    fonts: List[str]
+
+class NotionPageResult(BaseModel):
+    page_id: str
+    url: str
+    title: str
+    status: str
 
 # =============================================================================
 # MCP Resources - 파일 시스템 접근
@@ -366,6 +419,302 @@ async def git_status(path: str = ".") -> ExecutionResult:
             returncode=1,
             success=False
         )
+
+# =============================================================================
+# Playwright 웹 자동화 도구
+# =============================================================================
+
+@mcp.tool()
+async def web_screenshot(url: str, width: int = 1280, height: int = 720) -> WebScreenshotResult:
+    """웹사이트 스크린샷 촬영"""
+    try:
+        pw = await init_playwright()
+        browser = await pw.chromium.launch(headless=True)
+        page = await browser.new_page(viewport={"width": width, "height": height})
+
+        await page.goto(url, wait_until="networkidle")
+        screenshot_bytes = await page.screenshot(full_page=True)
+
+        # Base64 인코딩
+        screenshot_b64 = base64.b64encode(screenshot_bytes).decode()
+
+        await browser.close()
+
+        from datetime import datetime
+        return WebScreenshotResult(
+            url=url,
+            screenshot_base64=screenshot_b64,
+            width=width,
+            height=height,
+            timestamp=datetime.now().isoformat()
+        )
+
+    except Exception as e:
+        raise Exception(f"스크린샷 촬영 오류: {str(e)}")
+
+@mcp.tool()
+async def web_scrape(url: str, selector: str, attribute: str = "textContent") -> WebScrapeResult:
+    """웹사이트에서 특정 요소 크롤링"""
+    try:
+        pw = await init_playwright()
+        browser = await pw.chromium.launch(headless=True)
+        page = await browser.new_page()
+
+        await page.goto(url, wait_until="networkidle")
+
+        # 요소들 찾기
+        elements = await page.query_selector_all(selector)
+        data = []
+
+        for element in elements:
+            if attribute == "textContent":
+                content = await element.text_content()
+            elif attribute == "innerHTML":
+                content = await element.inner_html()
+            elif attribute == "href":
+                content = await element.get_attribute("href")
+            elif attribute == "src":
+                content = await element.get_attribute("src")
+            else:
+                content = await element.get_attribute(attribute)
+
+            if content and content.strip():
+                data.append(content.strip())
+
+        await browser.close()
+
+        return WebScrapeResult(
+            url=url,
+            selector=selector,
+            data=data,
+            count=len(data)
+        )
+
+    except Exception as e:
+        raise Exception(f"웹 크롤링 오류: {str(e)}")
+
+@mcp.tool()
+async def web_analyze_ui(url: str) -> WebUIAnalysis:
+    """웹사이트 UI/디자인 분석"""
+    try:
+        pw = await init_playwright()
+        browser = await pw.chromium.launch(headless=True)
+        page = await browser.new_page()
+
+        await page.goto(url, wait_until="networkidle")
+
+        # 제목 가져오기
+        title = await page.title()
+
+        # CSS 스타일 분석
+        css_analysis = await page.evaluate("""
+            () => {
+                const styles = {};
+                const computedStyle = window.getComputedStyle(document.body);
+
+                // 기본 스타일 정보
+                styles.backgroundColor = computedStyle.backgroundColor;
+                styles.color = computedStyle.color;
+                styles.fontFamily = computedStyle.fontFamily;
+                styles.fontSize = computedStyle.fontSize;
+
+                // 레이아웃 정보
+                const layout = {};
+                layout.width = document.body.offsetWidth;
+                layout.height = document.body.offsetHeight;
+                layout.padding = computedStyle.padding;
+                layout.margin = computedStyle.margin;
+
+                // 색상 팔레트 추출
+                const colors = new Set();
+                const elements = document.querySelectorAll('*');
+                for (let i = 0; i < Math.min(elements.length, 100); i++) {
+                    const style = window.getComputedStyle(elements[i]);
+                    if (style.backgroundColor !== 'rgba(0, 0, 0, 0)') {
+                        colors.add(style.backgroundColor);
+                    }
+                    if (style.color !== 'rgba(0, 0, 0, 0)') {
+                        colors.add(style.color);
+                    }
+                }
+
+                // 폰트 정보
+                const fonts = new Set();
+                for (let i = 0; i < Math.min(elements.length, 50); i++) {
+                    const style = window.getComputedStyle(elements[i]);
+                    fonts.add(style.fontFamily);
+                }
+
+                return {
+                    styles,
+                    layout,
+                    colors: Array.from(colors).slice(0, 10),
+                    fonts: Array.from(fonts).slice(0, 5)
+                };
+            }
+        """)
+
+        await browser.close()
+
+        return WebUIAnalysis(
+            url=url,
+            title=title,
+            css_styles=css_analysis["styles"],
+            layout_info=css_analysis["layout"],
+            color_scheme=css_analysis["colors"],
+            fonts=css_analysis["fonts"]
+        )
+
+    except Exception as e:
+        raise Exception(f"UI 분석 오류: {str(e)}")
+
+@mcp.tool()
+async def web_automate(url: str, actions: str) -> ExecutionResult:
+    """웹 자동화 실행 (JSON 형태의 액션 리스트)"""
+    try:
+        import json
+        action_list = json.loads(actions)
+
+        pw = await init_playwright()
+        browser = await pw.chromium.launch(headless=False)  # 디버깅을 위해 headless=False
+        page = await browser.new_page()
+
+        await page.goto(url, wait_until="networkidle")
+
+        results = []
+
+        for action in action_list:
+            action_type = action.get("type")
+            selector = action.get("selector")
+            value = action.get("value", "")
+
+            if action_type == "click":
+                await page.click(selector)
+                results.append(f"클릭: {selector}")
+
+            elif action_type == "fill":
+                await page.fill(selector, value)
+                results.append(f"입력: {selector} = {value}")
+
+            elif action_type == "wait":
+                await page.wait_for_timeout(int(value) * 1000)
+                results.append(f"대기: {value}초")
+
+            elif action_type == "screenshot":
+                screenshot = await page.screenshot()
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+                    f.write(screenshot)
+                    results.append(f"스크린샷: {f.name}")
+
+        await browser.close()
+
+        return ExecutionResult(
+            command=f"web_automate({url})",
+            stdout="\n".join(results),
+            stderr="",
+            returncode=0,
+            success=True
+        )
+
+    except Exception as e:
+        return ExecutionResult(
+            command=f"web_automate({url})",
+            stdout="",
+            stderr=f"웹 자동화 오류: {str(e)}",
+            returncode=1,
+            success=False
+        )
+
+# =============================================================================
+# Notion API 연동 도구
+# =============================================================================
+
+@mcp.tool()
+async def notion_create_page(database_id: str, title: str, properties: str = "{}") -> NotionPageResult:
+    """Notion 데이터베이스에 새 페이지 생성"""
+    try:
+        notion = init_notion()
+        if not notion:
+            raise Exception("Notion 토큰이 설정되지 않았습니다. NOTION_TOKEN 환경변수를 설정하세요.")
+
+        import json
+        props = json.loads(properties)
+
+        # 기본 속성 설정
+        page_properties = {
+            "Name": {"title": [{"text": {"content": title}}]}
+        }
+
+        # 추가 속성 병합
+        page_properties.update(props)
+
+        response = notion.pages.create(
+            parent={"database_id": database_id},
+            properties=page_properties
+        )
+
+        return NotionPageResult(
+            page_id=response["id"],
+            url=response["url"],
+            title=title,
+            status="created"
+        )
+
+    except Exception as e:
+        raise Exception(f"Notion 페이지 생성 오류: {str(e)}")
+
+@mcp.tool()
+async def notion_search(query: str, filter_type: str = "page") -> List[Dict]:
+    """Notion에서 페이지 검색"""
+    try:
+        notion = init_notion()
+        if not notion:
+            raise Exception("Notion 토큰이 설정되지 않았습니다. NOTION_TOKEN 환경변수를 설정하세요.")
+
+        response = notion.search(
+            query=query,
+            filter={
+                "value": filter_type,
+                "property": "object"
+            }
+        )
+
+        results = []
+        for item in response["results"][:10]:  # 최대 10개 결과
+            results.append({
+                "id": item["id"],
+                "title": item.get("properties", {}).get("Name", {}).get("title", [{}])[0].get("text", {}).get("content", "제목 없음"),
+                "url": item["url"],
+                "last_edited": item["last_edited_time"]
+            })
+
+        return results
+
+    except Exception as e:
+        raise Exception(f"Notion 검색 오류: {str(e)}")
+
+@mcp.tool()
+async def web_to_notion(url: str, database_id: str, title_selector: str = "h1", content_selector: str = "p") -> NotionPageResult:
+    """웹 크롤링 결과를 Notion에 저장"""
+    try:
+        # 웹 크롤링
+        title_result = await web_scrape(url, title_selector)
+        content_result = await web_scrape(url, content_selector)
+
+        title = title_result.data[0] if title_result.data else f"웹페이지: {url}"
+        content = "\n".join(content_result.data[:5])  # 최대 5개 문단
+
+        # Notion 페이지 생성
+        properties = json.dumps({
+            "URL": {"url": url},
+            "Content": {"rich_text": [{"text": {"content": content[:2000]}}]}  # 2000자 제한
+        })
+
+        result = await notion_create_page(database_id, title, properties)
+        return result
+
+    except Exception as e:
+        raise Exception(f"웹→Notion 저장 오류: {str(e)}")
 
 # =============================================================================
 # 서버 실행
