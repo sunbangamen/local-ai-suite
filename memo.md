@@ -1,32 +1,32 @@
-# Phase 1 구현 완료 상태 및 점검사항
+# Phase 2 RAG 시스템 구현 완료 상태 및 점검사항
 
-## 📋 현재 완료된 작업 (2025-09-22 21:13)
+## 📋 현재 완료된 작업 (2025-09-23 12:49)
 
-### ✅ 성공적으로 완료된 항목
+### ✅ Phase 1 + Phase 2 성공적으로 완료된 항목
 
-1. **모델 다운로드 완료**
+1. **Phase 1: 기본 AI 서빙 시스템 완료**
    - `qwen2.5-14b-instruct-q4_k_m.gguf` (8.4GB) - 일반 대화형 모델
    - `qwen2.5-coder-14b-instruct-q4_k_m.gguf` (8.4GB) - 코딩 전용 모델
-   - 총 17GB 모델 파일 준비 완료
-
-2. **환경 설정 완료**
-   - 브랜치: `issue-1` 사용 중
-   - `.env` 파일 생성 및 모델명 설정 완료
-   - 디렉토리 구조: `docker/`, `services/api-gateway/` 생성
-
-3. **Docker Compose 구성 완료**
-   - `docker/compose.p1.yml` 작성
-   - GPU 패스스루 설정 (RTX 4050 대응)
-   - llama.cpp + LiteLLM 조합 구성
-
-4. **서비스 실행 성공**
-   - `make up-p1` 명령으로 정상 실행
    - 추론 서버 (포트 8001): ✅ 정상 동작
-   - API Gateway (포트 8000): ⚠️ 설정 문제 있음
+   - API Gateway (포트 8000): ✅ 정상 동작 (헬스체크 문제 해결됨)
+   - AI CLI 도구 (`scripts/ai.py`): ✅ 자동 모델 선택 지원
+
+2. **Phase 2: RAG 시스템 완료**
+   - **FastEmbed 임베딩 서비스** (포트 8003): ✅ PyTorch-free 경량화 완료
+     - 모델: `BAAI/bge-small-en-v1.5` (384차원)
+     - ONNX 런타임 기반으로 빠른 임베딩 생성
+   - **Qdrant 벡터 데이터베이스** (포트 6333): ✅ 고성능 벡터 검색
+   - **RAG 서비스** (포트 8002): ✅ 문서 인덱싱 + 질의응답
+   - **한국어 코딩 문서 인덱싱** 완료: 6개 청크 처리
+
+3. **통합 시스템 구성 완료**
+   - `docker/compose.p2.yml`: 전체 RAG 파이프라인 Docker Compose
+   - 환경변수 설정 완료 (`.env`)
+   - 헬스체크 문제 분석 및 해결 완료
 
 ### ✅ 검증 완료된 기능
 
-**llama.cpp 추론 서버 (포트 8001)**
+**1. llama.cpp 추론 서버 (포트 8001)**
 ```bash
 # 모델 목록 확인 (성공)
 curl -s http://localhost:8001/v1/models
@@ -37,71 +37,110 @@ curl -X POST http://localhost:8001/v1/chat/completions \
   -d '{"messages": [{"role": "user", "content": "안녕하세요!"}], "max_tokens": 100}'
 ```
 
-**실제 응답 예시:**
-> "물론이죠! 어떤 종류의 함수를 원하시는지 좀 더 자세히 설명해주실 수 있나요?"
+**2. API Gateway (포트 8000) - LiteLLM**
+```bash
+# OpenAI 호환 모델 목록 (성공)
+curl -s http://localhost:8000/v1/models
+
+# OpenAI 호환 채팅 API (성공)
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "qwen2.5-14b-instruct", "messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+**3. RAG 시스템 완전 동작 검증**
+```bash
+# 문서 인덱싱 (성공)
+curl -X POST http://localhost:8002/index \
+  -H "Content-Type: application/json" \
+  -d '{"collection": "default"}'
+
+# 한국어 질의응답 (성공)
+curl -X POST http://localhost:8002/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Python에서 파일을 읽는 방법", "collection": "default"}'
+```
+
+**실제 RAG 응답 예시:**
+> "Python에서 파일을 읽는 방법은 다음과 같습니다:
+> ```python
+> def read_file(file_path):
+>     try:
+>         with open(file_path, 'r', encoding='utf-8') as file:
+>             return file.read()
+>     except FileNotFoundError:
+>         return "파일을 찾을 수 없습니다."
+> ```"
 
 ---
 
-## ⚠️ 해결해야 할 문제점
+## ✅ 해결 완료된 이전 문제점들
 
-### 1. LiteLLM API Gateway (포트 8000) 문제
-**증상:**
-- `curl http://localhost:8000/v1/models` → Error
+### 1. ~~LiteLLM API Gateway (포트 8000) 문제~~ → **해결됨**
+**이전 증상:**
 - API Gateway 컨테이너가 포트 4000에서 실행되지만 8000으로 매핑 안 됨
 
-**시도한 해결방법:**
-1. 환경변수 `LITELLM_PORT=8000` → `PORT=8000`로 변경
-2. LiteLLM 설정에서 `model: "openai/gpt-3.5-turbo"` → `model: "llamacpp/local-chat"`로 변경
-3. `api_base: "http://inference:8001/v1"` → `http://inference:8001"`로 수정
+**해결 방법:**
+- Docker Compose 명령어에 `--host` 및 `--port` 파라미터 명시적 추가
+- 모델 설정을 실제 파일 경로로 수정: `/models/qwen2.5-14b-instruct-q4_k_m.gguf`
 
-**현재 상태:**
-- LiteLLM이 포트 4000에서 실행 중
-- 컨테이너 간 통신 문제 가능성
-
-### 2. 환경변수 경고
+### 2. ~~환경변수 경고~~ → **해결됨**
+**이전 문제:**
 ```
 The "CHAT_MODEL" variable is not set. Defaulting to a blank string.
 ```
-- `.env` 파일은 존재하지만 Docker Compose에서 인식 못함
+**해결 방법:**
+- `.env` 파일 정리 및 환경변수 직접 명시
+
+### 3. ~~헬스체크 문제~~ → **분석 및 해결 완료**
+**문제 분석:**
+- API Gateway: LiteLLM 컨테이너에 `curl` 없음, HEAD 메소드 지원 안 함
+- Qdrant: 컨테이너에 HTTP 클라이언트 도구 없음
+
+**해결 방법:**
+- API Gateway: `wget` + GET 요청 방식으로 변경
+- Qdrant: 헬스체크 비활성화 (`disable: true`)
 
 ---
 
-## 🔧 다음 세션에서 우선 해결할 사항
+## 🚀 Phase 3 계획: MCP (Model Context Protocol) 서버
 
-### 1. LiteLLM API Gateway 수정 (우선순위: 높음)
+### 1. MCP 서버 구현 (다음 단계)
 
-**확인할 설정 파일들:**
-- `docker/compose.p1.yml` - 포트 매핑 및 환경변수
-- `services/api-gateway/config.p1.yaml` - LiteLLM 모델 설정
+**목표:**
+- Claude Desktop과의 연동
+- 로컬 파일 시스템 접근
+- 코드 분석 및 실행 도구 제공
 
-**해결 방향:**
-1. LiteLLM 포트 설정 재확인
-2. llamacpp provider 설정 정확성 검증
-3. 네트워크 연결 테스트
-
-### 2. 환경변수 인식 문제 해결
-
-**해결 방법:**
+**구현 예정 기능:**
 ```bash
-# .env 파일 확인
-cat .env
-
-# Docker Compose에서 환경변수 직접 전달 방식 검토
+# MCP 서버 (포트 8020)
+- 파일 시스템 리소스 제공
+- Git 리포지토리 분석
+- 코드 실행 및 테스트 도구
+- RAG 시스템과 통합
 ```
 
-### 3. 완전한 API 테스트 수행
+### 2. AI CLI 도구와 RAG 통합 (현재 진행중)
 
-**테스트할 엔드포인트:**
+**목표:**
+- `ai` 명령어에 RAG 기능 추가
+- 문서 기반 질의응답 지원
+
+**구현 방향:**
 ```bash
-# API Gateway를 통한 테스트 (목표)
-curl http://localhost:8000/v1/models
-curl -X POST http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model": "local-chat", "messages": [{"role": "user", "content": "Hello"}]}'
-
-# VS Code/Cursor 연동 테스트
-# http://localhost:8000/v1 설정
+# RAG 기능 추가
+ai --rag "Python 파일 읽기 방법은?"  # 문서 기반 답변
+ai --index ./docs/                   # 새 문서 인덱싱
+ai --chat "일반 질문"                # 기존 채팅 기능
 ```
+
+### 3. 전체 시스템 최적화
+
+**성능 최적화:**
+- 모델 로딩 시간 단축
+- 임베딩 캐싱 구현
+- 벡터 검색 성능 튜닝
 
 ---
 
@@ -109,54 +148,113 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 ```
 /mnt/e/worktree/issue-1/
-├── .env                                    # 환경변수 설정
-├── Makefile                               # make up-p1, make down 명령
-├── docker/compose.p1.yml                 # Docker Compose 설정
-├── services/api-gateway/config.p1.yaml   # LiteLLM 설정
+├── .env                                      # 환경변수 설정 (Phase 1+2)
+├── Makefile                                 # make up-p1, make up-p2 명령
+├── docker/
+│   ├── compose.p1.yml                       # Phase 1: 기본 AI 서빙
+│   └── compose.p2.yml                       # Phase 2: RAG 시스템
+├── services/
+│   ├── api-gateway/config.p1.yaml          # LiteLLM 설정
+│   ├── embedding/                           # FastEmbed 임베딩 서비스
+│   │   ├── app.py                          # FastAPI 임베딩 API
+│   │   ├── requirements.txt                # PyTorch-free 의존성
+│   │   └── Dockerfile
+│   └── rag/                                # RAG 서비스
+│       ├── app.py                          # 문서 인덱싱 + 질의응답 API
+│       ├── requirements.txt
+│       └── Dockerfile
+├── scripts/
+│   └── ai.py                               # AI CLI 도구 (자동 모델 선택)
 ├── models/
 │   ├── qwen2.5-14b-instruct-q4_k_m.gguf     # 일반 모델 (8.4GB)
 │   └── qwen2.5-coder-14b-instruct-q4_k_m.gguf # 코더 모델 (8.4GB)
-└── docs/progress/v1/ri_1.md              # 원본 계획 문서
+├── documents/                              # RAG 인덱싱 대상 문서들
+│   ├── coding_examples.md                  # 한국어 코딩 예제
+│   └── project_guide.md                    # 프로젝트 가이드
+└── memo.md                                 # 이 파일
 ```
 
 ---
 
-## 🎯 Phase 1 최종 목표 상태
+## 🎯 Phase 2 최종 목표 상태 (완료!)
 
-**완료 기준:**
+**Phase 1 완료 기준:** ✅ ALL COMPLETE
 - [x] `make up-p1` 명령으로 서비스 정상 실행
 - [x] `curl http://localhost:8001/v1/models` 정상 응답 ✅
 - [x] `curl http://localhost:8001/v1/chat/completions` 정상 응답 ✅
-- [ ] `curl http://localhost:8000/v1/models` 정상 응답 (API Gateway)
-- [ ] `curl http://localhost:8000/v1/chat/completions` 정상 응답 (API Gateway)
-- [ ] VS Code/Cursor에서 `http://localhost:8000/v1` 연결 성공
+- [x] `curl http://localhost:8000/v1/models` 정상 응답 (API Gateway) ✅
+- [x] `curl http://localhost:8000/v1/chat/completions` 정상 응답 (API Gateway) ✅
+- [x] VS Code/Cursor에서 `http://localhost:8000/v1` 연결 성공 ✅
+
+**Phase 2 완료 기준:** ✅ ALL COMPLETE
+- [x] FastEmbed 기반 임베딩 서비스 구현 ✅
+- [x] Qdrant 벡터 데이터베이스 설정 ✅
+- [x] 문서 인덱싱 API 구현 ✅
+- [x] RAG 질의응답 API 구현 ✅
+- [x] 한국어 문서 기반 질의응답 검증 ✅
+- [x] 전체 파이프라인 통합 테스트 ✅
 
 **핵심 성과:**
-- 로컬 GGUF 모델 → OpenAI 호환 API 서빙 ✅ (부분 성공)
-- RTX 4050 + WSL2 환경에서 GPU 활용 ✅
-- 한국어 질문/응답 정상 동작 ✅
+- ✅ 로컬 GGUF 모델 → OpenAI 호환 API 서빙 완료
+- ✅ RTX 4050 + WSL2 환경에서 GPU 활용 완료
+- ✅ 한국어 질문/응답 정상 동작 완료
+- ✅ PyTorch-free RAG 시스템 구현 완료
+- ✅ 문서 기반 지식 검색 및 답변 생성 완료
 
 ---
 
 ## 🚀 재시작 명령어
 
+### Phase 1 (기본 AI 서빙)
 ```bash
 # 현재 위치 확인
 cd /mnt/e/worktree/issue-1
 
-# 서비스 상태 확인
-docker ps
-make down
-
-# 설정 수정 후 재시작
-make up-p1
+# Phase 1 시작
+docker-compose -f docker/compose.p1.yml up -d
 
 # 테스트
-curl -s http://localhost:8001/v1/models  # 추론 서버 (동작함)
-curl -s http://localhost:8000/v1/models  # API Gateway (수정 필요)
+curl -s http://localhost:8001/v1/models  # 추론 서버 ✅
+curl -s http://localhost:8000/v1/models  # API Gateway ✅
+```
+
+### Phase 2 (RAG 시스템 전체)
+```bash
+# Phase 2 전체 시작 (Phase 1 포함)
+docker-compose -f docker/compose.p2.yml up -d
+
+# 서비스 확인
+curl -s http://localhost:8001/health    # 추론 서버 ✅
+curl -s http://localhost:8000/health    # API Gateway ✅
+curl -s http://localhost:8003/health    # 임베딩 서비스 ✅
+curl -s http://localhost:6333/collections # Qdrant ✅
+curl -s http://localhost:8002/health    # RAG 서비스 ✅
+
+# RAG 기능 테스트
+curl -X POST http://localhost:8002/index \
+  -H "Content-Type: application/json" \
+  -d '{"collection": "default"}'  # 문서 인덱싱
+
+curl -X POST http://localhost:8002/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Python에서 파일을 읽는 방법", "collection": "default"}'  # RAG 질의
+
+# AI CLI 도구 사용
+python scripts/ai.py "Hello world"      # 일반 채팅
+python scripts/ai.py --code "Python function to read file"  # 코딩 질문
+```
+
+### 서비스 중지
+```bash
+# Phase 2 전체 중지
+docker-compose -f docker/compose.p2.yml down
+
+# Phase 1만 중지
+docker-compose -f docker/compose.p1.yml down
 ```
 
 ---
 
-**⏰ 마지막 업데이트:** 2025-09-22 21:13
-**⏭️ 다음 작업:** LiteLLM API Gateway 설정 수정 및 완전한 OpenAI 호환 API 구현
+**⏰ 마지막 업데이트:** 2025-09-23 12:49
+**✅ 현재 상태:** Phase 2 RAG 시스템 완전 구현 완료
+**⏭️ 다음 작업:** Phase 3 MCP 서버 구현 + AI CLI와 RAG 통합
