@@ -183,7 +183,14 @@
 
         <div class="chat-container" id="chatContainer">
             <div class="message ai-message">
-                <strong>🤖 AI:</strong> 안녕하세요! Local AI Desktop에 오신 것을 환영합니다. 무엇을 도와드릴까요?
+                <strong>🤖 AI:</strong> 안녕하세요! Local AI Desktop에 오신 것을 환영합니다.<br><br>
+                💬 **일반 대화**: 자유롭게 질문하세요<br>
+                💻 **코딩 질문**: 프로그래밍 관련 질문을 하시면 자동으로 코드 모델이 선택됩니다<br>
+                🌐 **웹 도구**: URL과 함께 다음 명령어를 사용하세요:<br>
+                &nbsp;&nbsp;• "https://example.com <strong>스크린샷</strong> 찍어줘"<br>
+                &nbsp;&nbsp;• "https://example.com <strong>내용</strong> 크롤링해줘"<br>
+                &nbsp;&nbsp;• "https://example.com <strong>UI 분석</strong>해줘"<br>
+                &nbsp;&nbsp;• "https://example.com <strong>Notion에 저장</strong>해줘"
             </div>
         </div>
 
@@ -193,6 +200,7 @@
         </div>
     </div>
 
+    <script src="mcp-client.js"></script>
     <script>
         const chatContainer = document.getElementById('chatContainer');
         const messageInput = document.getElementById('messageInput');
@@ -208,6 +216,82 @@
 
         // 웹/Electron 환경 감지
         const isElectron = window.electronAPI !== undefined;
+
+        // MCP 클라이언트 초기화
+        const mcpClient = new MCPClient();
+
+        // MCP 도구 감지 및 실행 함수
+        async function detectAndExecuteMCPTool(message) {
+            const lowerMessage = message.toLowerCase();
+
+            // 웹 스크린샷 감지
+            if (lowerMessage.includes('스크린샷') || lowerMessage.includes('screenshot') || lowerMessage.includes('캡처')) {
+                const urlMatch = message.match(/https?:\/\/[^\s]+/);
+                if (urlMatch) {
+                    try {
+                        addMessage('📸 웹페이지 스크린샷을 촬영하고 있습니다...', false);
+                        const result = await mcpClient.webScreenshot(urlMatch[0]);
+                        addMessage(`✅ 스크린샷 완료!\n이미지가 생성되었습니다: ${result.screenshot_path}`, false);
+                        return true;
+                    } catch (error) {
+                        addMessage(`❌ 스크린샷 실패: ${error.message}`, false);
+                        return false;
+                    }
+                }
+            }
+
+            // 웹 스크래핑 감지
+            if ((lowerMessage.includes('크롤링') || lowerMessage.includes('스크래핑') || lowerMessage.includes('내용') || lowerMessage.includes('텍스트')) &&
+                (lowerMessage.includes('http') || message.match(/https?:\/\/[^\s]+/))) {
+                const urlMatch = message.match(/https?:\/\/[^\s]+/);
+                if (urlMatch) {
+                    try {
+                        addMessage('🔍 웹페이지 내용을 분석하고 있습니다...', false);
+                        const result = await mcpClient.webScrape(urlMatch[0]);
+                        addMessage(`✅ 스크래핑 완료!\n\n**제목:** ${result.title}\n**내용:** ${result.content.substring(0, 500)}...`, false);
+                        return true;
+                    } catch (error) {
+                        addMessage(`❌ 스크래핑 실패: ${error.message}`, false);
+                        return false;
+                    }
+                }
+            }
+
+            // UI 분석 감지
+            if ((lowerMessage.includes('ui') || lowerMessage.includes('디자인') || lowerMessage.includes('색상') || lowerMessage.includes('폰트')) &&
+                (lowerMessage.includes('분석') || lowerMessage.includes('확인'))) {
+                const urlMatch = message.match(/https?:\/\/[^\s]+/);
+                if (urlMatch) {
+                    try {
+                        addMessage('🎨 UI 디자인을 분석하고 있습니다...', false);
+                        const result = await mcpClient.webAnalyzeUI(urlMatch[0]);
+                        addMessage(`✅ UI 분석 완료!\n\n**주요 색상:** ${result.colors.join(', ')}\n**폰트:** ${result.fonts.join(', ')}\n**레이아웃:** ${result.layout}`, false);
+                        return true;
+                    } catch (error) {
+                        addMessage(`❌ UI 분석 실패: ${error.message}`, false);
+                        return false;
+                    }
+                }
+            }
+
+            // Notion 저장 감지
+            if (lowerMessage.includes('notion') || lowerMessage.includes('노션') || lowerMessage.includes('저장')) {
+                const urlMatch = message.match(/https?:\/\/[^\s]+/);
+                if (urlMatch) {
+                    try {
+                        addMessage('📝 Notion에 저장하고 있습니다...', false);
+                        const result = await mcpClient.webToNotion(urlMatch[0]);
+                        addMessage(`✅ Notion 저장 완료!\n페이지가 생성되었습니다: ${result.page_url}`, false);
+                        return true;
+                    } catch (error) {
+                        addMessage(`❌ Notion 저장 실패: ${error.message}`, false);
+                        return false;
+                    }
+                }
+            }
+
+            return false; // MCP 도구를 사용하지 않음
+        }
 
         // 모델 자동 감지 함수
         function detectModelType(message) {
@@ -283,20 +367,34 @@
 
         // 서버 상태 확인
         async function checkServerStatus() {
+            let aiStatus = '🔴 AI 서버 오프라인';
+            let mcpStatus = '🔴 MCP 서버 오프라인';
+
+            // AI 서버 상태 확인
             try {
                 const aiChat = isElectron ? electronAPI.aiChat : webAiChat;
                 const response = await aiChat('테스트', 'qwen2.5-14b-instruct');
                 if (response.success) {
-                    status.textContent = `🟢 서버 연결됨 (${isElectron ? 'Electron' : 'Web'})`;
-                    status.className = 'status online';
-                } else {
-                    status.textContent = '🔴 서버 연결 실패';
-                    status.className = 'status offline';
+                    aiStatus = '🟢 AI 서버 온라인';
                 }
             } catch (error) {
-                status.textContent = '🔴 서버 연결 실패';
-                status.className = 'status offline';
+                console.log('AI 서버 연결 실패:', error);
             }
+
+            // MCP 서버 상태 확인
+            try {
+                const tools = await mcpClient.listTools();
+                if (tools && tools.tools) {
+                    mcpStatus = `🟢 MCP 서버 온라인 (${tools.tools.length}개 도구)`;
+                }
+            } catch (error) {
+                console.log('MCP 서버 연결 실패:', error);
+            }
+
+            // 상태 표시 업데이트
+            const bothOnline = aiStatus.includes('🟢') && mcpStatus.includes('🟢');
+            status.textContent = `${aiStatus} | ${mcpStatus}`;
+            status.className = bothOnline ? 'status online' : 'status offline';
         }
 
         // 코드 복사 함수
@@ -359,22 +457,28 @@
             sendButton.textContent = '전송 중...';
 
             try {
-                // 모델 선택 (자동/수동 모드에 따라)
-                let model;
-                if (isAutoMode) {
-                    model = detectModelType(message);
-                    updateCurrentModelDisplay(model, true);
-                } else {
-                    model = modelSelector.value;
-                }
+                // 1. 먼저 MCP 도구 감지 및 실행
+                const mcpToolExecuted = await detectAndExecuteMCPTool(message);
 
-                const aiChat = isElectron ? electronAPI.aiChat : webAiChat;
-                const response = await aiChat(message, model);
+                // 2. MCP 도구가 실행되지 않았으면 일반 AI 채팅
+                if (!mcpToolExecuted) {
+                    // 모델 선택 (자동/수동 모드에 따라)
+                    let model;
+                    if (isAutoMode) {
+                        model = detectModelType(message);
+                        updateCurrentModelDisplay(model, true);
+                    } else {
+                        model = modelSelector.value;
+                    }
 
-                if (response.success) {
-                    addMessage(response.response);
-                } else {
-                    addMessage('❌ 응답 실패: ' + response.error);
+                    const aiChat = isElectron ? electronAPI.aiChat : webAiChat;
+                    const response = await aiChat(message, model);
+
+                    if (response.success) {
+                        addMessage(response.response);
+                    } else {
+                        addMessage('❌ 응답 실패: ' + response.error);
+                    }
                 }
             } catch (error) {
                 addMessage('❌ 오류 발생: ' + error.message);

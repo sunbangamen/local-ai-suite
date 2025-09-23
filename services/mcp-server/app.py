@@ -73,6 +73,45 @@ app.add_middleware(
 async def health_check():
     return {"status": "ok", "service": "mcp-server"}
 
+# MCP 도구 목록 API 엔드포인트 (올바른 FastMCP 사용법)
+@app.get("/tools")
+async def list_tools():
+    """사용 가능한 MCP 도구 목록 반환"""
+    try:
+        tools_result = await mcp.list_tools()
+        # 도구 정보를 간단한 형태로 변환
+        tools_info = []
+        for tool in tools_result:
+            tools_info.append({
+                "name": tool.name,
+                "description": tool.description or "설명 없음",
+                "inputSchema": tool.inputSchema
+            })
+        return {"tools": tools_info}
+    except Exception as e:
+        return {"error": f"도구 목록 조회 실패: {str(e)}"}
+
+@app.post("/tools/{tool_name}/call")
+async def call_tool(tool_name: str, arguments: dict = None):
+    """MCP 도구 실행"""
+    try:
+        # FastMCP의 call_tool 메서드 사용
+        result = await mcp.call_tool(tool_name, arguments or {})
+
+        # 결과 처리 - FastMCP의 실제 반환 형식에 따라 조정
+        if hasattr(result, 'content') and result.content:
+            # TextContent나 다른 content 타입인 경우
+            if hasattr(result.content[0], 'text'):
+                return {"result": result.content[0].text, "success": True}
+            else:
+                return {"result": str(result.content[0]), "success": True}
+        else:
+            # 직접 결과인 경우
+            return {"result": result, "success": True}
+
+    except Exception as e:
+        return {"error": str(e), "success": False}
+
 # =============================================================================
 # Pydantic Models
 # =============================================================================

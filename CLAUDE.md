@@ -29,8 +29,17 @@ The system implements a progressive deployment strategy:
 - RAG service (port 8002) - Document indexing and query processing
 - Korean document support with contextual answers
 
-**Phase 3 (Planned):**
-- MCP server (port 8020) - File system and Git integration for Claude Desktop
+**Phase 3 (MCP Integration):**
+- MCP server (port 8020) - FastMCP framework with 14 tools
+- Playwright web automation (4 tools) - Screenshots, scraping, UI analysis
+- Notion API integration (3 tools) - Page creation, search, web-to-notion
+- File system and Git integration for Claude Desktop
+
+**Phase 4 (Desktop Application):**
+- Electron-based Claude Desktop-style app
+- Smart model selection (auto/manual modes)
+- Markdown code block rendering with copy functionality
+- Web/Electron environment compatibility
 
 ### Core Components
 
@@ -97,6 +106,13 @@ curl -X POST http://localhost:8002/query \
 python scripts/ai.py "Hello world"
 python scripts/ai.py --code "Create a Python function"
 python scripts/ai.py --interactive
+
+# Test MCP Server (Phase 3)
+curl http://localhost:8020/health
+
+# Test Desktop App (Phase 4)
+cd desktop-app && npm run dev  # Electron app
+python3 -m http.server 3000 --directory desktop-app/src  # Web version
 ```
 
 ### Health Checks
@@ -107,6 +123,7 @@ curl http://localhost:8000/health  # API Gateway
 curl http://localhost:8003/health  # Embedding
 curl http://localhost:8002/health  # RAG
 curl http://localhost:6333/collections  # Qdrant
+curl http://localhost:8020/health  # MCP Server
 ```
 
 ## Key Technical Details
@@ -158,6 +175,44 @@ curl http://localhost:6333/collections  # Qdrant
 - **API Integration**: Modify `API_URL` and model selection logic
 - **Interactive Commands**: Extend command parsing in interactive mode
 
+### MCP Server Tools (Phase 3)
+**File System Tools:**
+- `list_files`: Directory file listing
+- `read_file`: File content reading
+- `write_file`: File writing
+- `create_directory`: Directory creation
+- `search_files`: File searching
+- `run_command`: System command execution
+- `get_system_info`: System information
+
+**Playwright Web Tools:**
+- `web_screenshot`: Web page screenshots
+- `web_scrape`: Web content extraction
+- `web_analyze_ui`: UI/design analysis
+- `web_automate`: Web automation tasks
+
+**Notion Integration Tools:**
+- `notion_create_page`: Create Notion pages
+- `notion_search`: Search Notion workspace
+- `web_to_notion`: Save web content to Notion
+
+### Desktop Application Features (Phase 4)
+**Smart Model Selection:**
+- Auto mode: Intelligent keyword detection for Chat/Code model selection
+- Manual mode: User-controlled model selection
+- Real-time model status display
+
+**UI/UX Features:**
+- Claude Desktop-style dark theme
+- Markdown code block rendering with syntax highlighting
+- Copy-to-clipboard functionality for code blocks
+- Responsive chat interface
+
+**Development Environment:**
+- WSL2 development with web browser testing
+- Electron app for Windows deployment
+- Web/Electron environment compatibility
+
 ## Environment Configuration
 
 ### Required Environment Variables
@@ -167,6 +222,7 @@ API_GATEWAY_PORT=8000
 INFERENCE_PORT=8001
 RAG_PORT=8002
 EMBEDDING_PORT=8003
+MCP_PORT=8020
 
 # Model Files (in models/ directory)
 CHAT_MODEL=qwen2.5-14b-instruct-q4_k_m.gguf
