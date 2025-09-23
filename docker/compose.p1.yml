@@ -8,9 +8,9 @@ services:
       "--host", "0.0.0.0",
       "--port", "8001",
       "--model", "/models/${CHAT_MODEL}",
-      "--parallel", "4",
-      "--ctx-size", "8192",
-      "--n-gpu-layers", "35",
+      "--parallel", "2",
+      "--ctx-size", "4096",
+      "--n-gpu-layers", "24",
       "--timeout", "600"
     ]
     volumes:
