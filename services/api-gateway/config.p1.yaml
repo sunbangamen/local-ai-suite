@@ -1,37 +1,11 @@
+# LiteLLM OpenAI 호환 게이트웨이 설정
+# 클라이언트에서는 model: "local-7b" 로 호출
 model_list:
-  - model_name: "qwen2.5-14b-instruct"
+  - model_name: local-7b
     litellm_params:
-      model: "openai//models/qwen2.5-14b-instruct-q4_k_m.gguf"
-      api_base: "http://inference:8001/v1"
-      api_key: "dummy"
-      timeout: 120
-
-  - model_name: "qwen2.5-coder-14b-instruct"
-    litellm_params:
-      model: "openai//models/qwen2.5-coder-14b-instruct-q4_k_m.gguf"
-      api_base: "http://inference:8001/v1"
-      api_key: "dummy"
-      timeout: 120
-
-  # Alias for compatibility
-  - model_name: "gpt-3.5-turbo"
-    litellm_params:
-      model: "openai//models/qwen2.5-14b-instruct-q4_k_m.gguf"
-      api_base: "http://inference:8001/v1"
-      api_key: "dummy"
-      timeout: 120
-
-# Default parameters for all models
-litellm_settings:
-  drop_params: true  # Drop unsupported parameters
-  success_callback: []
-  failure_callback: []
-
-# Server configuration
-general_settings:
-  master_key: null  # Disable authentication for local use
-  database_url: null
-
-# Logging configuration
-logging:
-  level: "INFO"
+      model: openai/chat/completions
+      api_base: http://inference:8001/v1
+      api_key: sk-noop
+      timeout: 60
+      stream: true
+      max_output_tokens: 256

@@ -131,15 +131,26 @@ curl http://localhost:8020/health  # MCP Server
 ### Model Configuration
 - Models stored in `models/` directory as GGUF files
 - Environment variables in `.env` specify model filenames
-- GPU layers configured for RTX 4050 (35 layers typical)
-- Context size: 8192 tokens, parallel processing: 4
+- **RTX 4050 6GB Optimized Settings (7B Models):**
+  - GPU layers: 999 (auto-maximum)
+  - Context size: 2048 tokens
+  - Parallel processing: 1
+  - Batch size: 256, micro-batch: 128
+- **Available Models:**
+  - 7B models (optimized): 4.4GB each
+  - 14B models (high-performance): 8.4GB each
 
-### RAG Implementation
+### RAG Implementation (ChatGPT Optimized)
 - **FastEmbed**: PyTorch-free embedding using ONNX runtime
 - **Model**: BAAI/bge-small-en-v1.5 (384 dimensions)
-- **Chunking**: Automatic text splitting with overlap
+- **Korean Sentence Splitter**: Regex-based sentence boundary detection
+- **Smart Chunking**: Sliding window with overlap (512 tokens/100 overlap)
+- **Context Budget Management**: 1200 token limit for 7B models
+- **Batch Processing**: 64-item embedding batches
+- **Safety Limits**: Max 1024 texts, 8000 chars per item
 - **Vector Search**: Cosine similarity in Qdrant
-- **LLM Integration**: Context-aware answer generation
+- **LLM Integration**: Environment-tunable timeouts and token limits
+- **Prewarm Support**: Cold start prevention endpoints
 
 ### AI CLI Features
 - **Automatic Detection**: Analyzes query content for model selection

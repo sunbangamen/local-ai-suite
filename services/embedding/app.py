@@ -1,218 +1,155 @@
-#!/usr/bin/env python3
-"""
-Local Embedding Service
-Completely offline embedding service using FastEmbed (PyTorch-free)
-"""
-
 import os
-import logging
-from typing import List, Dict, Any
-import time
+import threading
+from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Body
 from pydantic import BaseModel
-import uvicorn
+
+# FastEmbed: 경량 ONNX 임베딩 (기본 CPU)
 from fastembed import TextEmbedding
-import numpy as np
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+"""
+Embedding Service (FastAPI + FastEmbed)
+- POST /embed  { "texts": ["...","..."] } -> { "embeddings": [[...],[...]] }
+- GET  /health -> 모델/차원/상태
+- POST /reload -> 모델 교체(옵션)
+환경변수:
+  EMBEDDING_MODEL        (기본: BAAI/bge-small-en-v1.5)
+  EMBEDDING_BATCH_SIZE   (기본: 64)
+  EMBEDDING_NORMALIZE    (기본: "true" → L2 normalize)
+  FASTEMBED_CACHE        (기본: ~/.cache/fastembed)
+  EMBEDDING_THREADS      (기본: 0 → auto)
+"""
 
-# Configuration
-MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
-MODEL_CACHE_DIR = "/app/models"
+DEFAULT_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
+BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "64"))
+NORMALIZE = os.getenv("EMBEDDING_NORMALIZE", "true").lower() in {"1", "true", "yes", "y"}
+CACHE_DIR = os.getenv("FASTEMBED_CACHE", None)
+NUM_THREADS = int(os.getenv("EMBEDDING_THREADS", "0"))
 
-# Initialize FastAPI
-app = FastAPI(
-    title="Local Embedding Service",
-    description="Offline embedding service for Local AI Suite",
-    version="1.0.0"
-)
+# 안전 제한 (OOM/타임아웃 방지)
+MAX_TEXTS = int(os.getenv("EMBEDDING_MAX_TEXTS", "1024"))
+MAX_CHARS = int(os.getenv("EMBEDDING_MAX_CHARS", "8000"))
 
-# Global model variable
-embedding_model = None
+app = FastAPI(title="Embedding Service (FastEmbed)", version="1.0.0")
 
-# Pydantic models
+# ---- Global model holder (thread-safe) ----
+_model_lock = threading.Lock()
+_model: Optional[TextEmbedding] = None
+_model_name: str = DEFAULT_MODEL
+_model_dim: Optional[int] = None
+
+
+def _load_model(model_name: str) -> TextEmbedding:
+    kwargs: Dict[str, Any] = {}
+    if CACHE_DIR:
+        kwargs["cache_dir"] = CACHE_DIR
+    if NUM_THREADS and NUM_THREADS > 0:
+        kwargs["threads"] = NUM_THREADS
+    return TextEmbedding(model_name=model_name, **kwargs)
+
+
+def _ensure_model() -> None:
+    global _model, _model_name, _model_dim
+    with _model_lock:
+        if _model is None:
+            _model = _load_model(_model_name)
+            # 차원 파악: 짧은 텍스트 한 개 임베딩
+            sample = list(_model.embed(["dimension probe"], batch_size=1, normalize=NORMALIZE))
+            _model_dim = len(sample[0])
+
+
 class EmbedRequest(BaseModel):
-    inputs: List[str]
-    normalize: bool = True
+    texts: List[str]
+
 
 class EmbedResponse(BaseModel):
     embeddings: List[List[float]]
-    model_name: str
-    dimensions: int
-    processing_time: float
+    model: str
+    dim: int
+    normalize: bool
 
-# Model loading
-def load_model():
-    """Load the embedding model"""
-    global embedding_model
 
-    try:
-        logger.info(f"Loading embedding model: {MODEL_NAME}")
-        logger.info(f"Cache directory: {MODEL_CACHE_DIR}")
-
-        # Create cache directory if it doesn't exist
-        os.makedirs(MODEL_CACHE_DIR, exist_ok=True)
-
-        # Load model with local cache using FastEmbed
-        embedding_model = TextEmbedding(
-            model_name=MODEL_NAME,
-            cache_dir=MODEL_CACHE_DIR
-        )
-
-        logger.info(f"Model loaded successfully")
-
-        # Test to get dimensions
-        test_embedding = list(embedding_model.embed(["test"]))[0]
-        dimensions = len(test_embedding)
-        logger.info(f"Model dimensions: {dimensions}")
-
-    except Exception as e:
-        logger.error(f"Failed to load model: {e}")
-        raise RuntimeError(f"Model loading failed: {e}")
-
-# API Routes
 @app.on_event("startup")
-async def startup_event():
-    """Load model on startup"""
-    load_model()
+def on_startup():
+    # 지연 로딩이지만, 초기 스타트업 시도(캐시/네트워크 미리 당기기 용)
+    try:
+        _ensure_model()
+    except Exception:
+        # 모델 캐시 다운로드가 늦거나 오프라인일 수 있으므로 실패해도 서비스는 기동
+        pass
+
 
 @app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    if embedding_model is None:
-        return {"status": "unhealthy", "error": "Model not loaded"}
-
+def health():
     try:
-        # Test embedding with a simple text
-        test_embedding = list(embedding_model.embed(["test"]))[0]
-        return {
-            "status": "healthy",
-            "model": MODEL_NAME,
-            "dimensions": len(test_embedding),
-            "test_embedding_shape": f"({len(test_embedding)},)"
-        }
-    except Exception as e:
-        return {"status": "unhealthy", "error": str(e)}
-
-@app.get("/info")
-async def model_info():
-    """Get model information"""
-    if embedding_model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
-
-    try:
-        test_embedding = list(embedding_model.embed(["test"]))[0]
-        dimensions = len(test_embedding)
+        _ensure_model()
+        ok = True
     except Exception:
-        dimensions = "unknown"
-
+        ok = False
     return {
-        "model_name": MODEL_NAME,
-        "dimensions": dimensions,
-        "cache_dir": MODEL_CACHE_DIR,
-        "backend": "FastEmbed (ONNX)"
+        "ok": ok,
+        "model": _model_name,
+        "dim": _model_dim,
+        "batch_size": BATCH_SIZE,
+        "normalize": NORMALIZE,
+        "threads": NUM_THREADS,
     }
 
+
 @app.post("/embed", response_model=EmbedResponse)
-async def create_embeddings(request: EmbedRequest):
-    """Create embeddings for input texts"""
-    if embedding_model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
+def embed(req: EmbedRequest = Body(...)):
+    if not req.texts:
+        return EmbedResponse(embeddings=[], model=_model_name, dim=_model_dim or 0, normalize=NORMALIZE)
 
-    if not request.inputs:
-        raise HTTPException(status_code=400, detail="No input texts provided")
+    # 안전 제한: 입력 개수와 길이
+    if len(req.texts) > MAX_TEXTS:
+        req.texts = req.texts[:MAX_TEXTS]
 
-    if len(request.inputs) > 100:  # Prevent memory issues
-        raise HTTPException(status_code=400, detail="Too many inputs (max 100)")
+    # 항목별 길이 제한 (초과분 컷)
+    safe_texts = [t[:MAX_CHARS] if t and len(t) > MAX_CHARS else (t or "") for t in req.texts]
 
-    try:
-        start_time = time.time()
+    _ensure_model()
+    assert _model is not None
 
-        logger.info(f"Processing {len(request.inputs)} texts")
+    # FastEmbed는 제너레이터 형태 -> 리스트로 수집
+    vecs = list(_model.embed(safe_texts, batch_size=BATCH_SIZE, normalize=NORMALIZE))
+    # 안전: float 변환
+    out = [list(map(float, v)) for v in vecs]
 
-        # Generate embeddings using FastEmbed
-        embeddings_generator = embedding_model.embed(request.inputs)
-        embeddings_list = [embedding.tolist() for embedding in embeddings_generator]
+    return EmbedResponse(embeddings=out, model=_model_name, dim=_model_dim or len(out[0]), normalize=NORMALIZE)
 
-        # Apply normalization if requested
-        if request.normalize:
-            embeddings_list = [
-                (np.array(emb) / np.linalg.norm(np.array(emb))).tolist()
-                for emb in embeddings_list
-            ]
 
-        processing_time = time.time() - start_time
+class ReloadRequest(BaseModel):
+    model: str
 
-        logger.info(f"Generated embeddings in {processing_time:.3f}s")
 
-        return EmbedResponse(
-            embeddings=embeddings_list,
-            model_name=MODEL_NAME,
-            dimensions=len(embeddings_list[0]) if embeddings_list else 0,
-            processing_time=processing_time
-        )
+@app.post("/reload")
+def reload_model(req: ReloadRequest):
+    """모델 교체(옵션). 예: {"model": "sentence-transformers/all-MiniLM-L6-v2"}"""
+    global _model, _model_name, _model_dim
+    if not req.model or req.model == _model_name:
+        return {"reloaded": False, "model": _model_name, "dim": _model_dim}
 
-    except Exception as e:
-        logger.error(f"Error generating embeddings: {e}")
-        raise HTTPException(status_code=500, detail=f"Embedding generation failed: {e}")
+    with _model_lock:
+        new_model = _load_model(req.model)
+        # 차원 미리 확인
+        sample = list(new_model.embed(["dimension probe"], batch_size=1, normalize=NORMALIZE))
+        new_dim = len(sample[0])
+        _model = new_model
+        _model_name = req.model
+        _model_dim = new_dim
 
-@app.post("/embed/single")
-async def create_single_embedding(text: str):
-    """Create embedding for a single text (simplified endpoint)"""
-    if embedding_model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
+    return {"reloaded": True, "model": _model_name, "dim": _model_dim}
 
-    try:
-        start_time = time.time()
 
-        # Generate embedding using FastEmbed
-        embedding_generator = embedding_model.embed([text])
-        embedding = list(embedding_generator)[0]
+@app.post("/prewarm")
+def prewarm():
+    """프리워밍: 모델 로딩 및 캐시 준비"""
+    _ensure_model()
+    return {"ok": True, "model": _model_name, "dim": _model_dim}
 
-        # Normalize the embedding
-        embedding_normalized = embedding / np.linalg.norm(embedding)
-        embedding_list = embedding_normalized.tolist()
-
-        processing_time = time.time() - start_time
-
-        return {
-            "embedding": embedding_list,
-            "dimensions": len(embedding_list),
-            "processing_time": processing_time
-        }
-
-    except Exception as e:
-        logger.error(f"Error generating single embedding: {e}")
-        raise HTTPException(status_code=500, detail=f"Embedding generation failed: {e}")
-
-# Utility endpoints
-@app.get("/models/download")
-async def download_model():
-    """Force download/update model (useful for setup)"""
-    try:
-        logger.info("Force downloading model...")
-        global embedding_model
-
-        # Clear existing model
-        embedding_model = None
-
-        # Reload model (will download if not cached)
-        load_model()
-
-        return {
-            "status": "success",
-            "message": "Model downloaded successfully",
-            "model": MODEL_NAME,
-            "cache_dir": MODEL_CACHE_DIR,
-            "backend": "FastEmbed (ONNX)"
-        }
-
-    except Exception as e:
-        logger.error(f"Error downloading model: {e}")
-        raise HTTPException(status_code=500, detail=f"Model download failed: {e}")
 
 if __name__ == "__main__":
+    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8003)

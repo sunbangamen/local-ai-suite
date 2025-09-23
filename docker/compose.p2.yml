@@ -1,148 +1,99 @@
 version: "3.9"
 
 services:
-  # Phase 1 services (inference + api-gateway)
   inference:
-    env_file: ../.env
     image: ghcr.io/ggerganov/llama.cpp:server
-    command: [
-      "--host", "0.0.0.0",
-      "--port", "8001",
-      "--model", "/models/qwen2.5-14b-instruct-q4_k_m.gguf",
-      "--parallel", "2",
-      "--ctx-size", "4096",
-      "--n-gpu-layers", "24",
-      "--timeout", "600"
-    ]
+    restart: unless-stopped
+    ports: ["${INFERENCE_PORT:-8001}:8001"]
     volumes:
-      - /mnt/e/ai-models:/models:ro
-    ports:
-      - "${INFERENCE_PORT:-8001}:8001"
+      - type: bind
+        source: ${MODELS_DIR:-/mnt/e/ai-models}
+        target: /models
+        read_only: true
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     deploy:
       resources:
         reservations:
           devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    environment:
-      - CUDA_VISIBLE_DEVICES=0
+            - capabilities: ["gpu"]
+    command: >
+      --host 0.0.0.0 --port 8001
+      --model /models/${CHAT_MODEL:-Qwen2.5-7B-Instruct-Q4_K_M.gguf}
+      -t ${LLAMA_THREADS:-0}
+      -c ${LLAMA_CTX:-4096}
+      -b ${LLAMA_BATCH:-256}
+      --n-gpu-layers ${LLAMA_N_GPU_LAYERS:-24}
+      --parallel ${LLAMA_PARALLEL:-2}
+      --cont-batching
+      --temp ${LLAMA_TEMP:-0.3}
+      --top-p ${LLAMA_TOP_P:-0.9}
+      --repeat-penalty ${LLAMA_REPEAT_PENALTY:-1.05}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 20s
+      timeout: 5s
       retries: 5
-      start_period: 180s
-    restart: unless-stopped
 
   api-gateway:
-    env_file: ../.env
     image: ghcr.io/berriai/litellm:main-latest
-    command: ["--config", "/app/config.yaml", "--port", "8000", "--host", "0.0.0.0"]
-    environment:
-      - LITELLM_CONFIG=/app/config.yaml
-      - LITELLM_LOG=INFO
+    restart: unless-stopped
+    ports: ["${API_GATEWAY_PORT:-8000}:8000"]
     volumes:
       - ../services/api-gateway/config.p1.yaml:/app/config.yaml:ro
-    ports:
-      - "${API_GATEWAY_PORT:-8000}:8000"
-    depends_on:
-      inference:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:8000/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 60s
-    restart: unless-stopped
-
-  # Phase 2 services (RAG components)
-  qdrant:
-    image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant_data:/qdrant/storage
+    platform: linux/amd64
+    command: ["--config", "/app/config.yaml", "--port", "8000", "--host", "0.0.0.0"]
     environment:
-      - QDRANT__SERVICE__HTTP_PORT=6333
-      - QDRANT__SERVICE__GRPC_PORT=6334
+      - LITELLM_LOG=warning
+      - TIMEOUT=60
+    depends_on:
+      - inference
     healthcheck:
-      disable: true
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  rag:
+    build:
+      context: ../services/rag
+      dockerfile: Dockerfile
     restart: unless-stopped
+    ports: ["${RAG_PORT:-8002}:8002"]
+    environment:
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - EMBEDDING_URL=${EMBEDDING_URL:-http://embedding:8003}
+      # LLM 호출 제한(속도/안정화)
+      - RAG_LLM_TIMEOUT=${RAG_LLM_TIMEOUT:-60}
+      - RAG_LLM_MAX_TOKENS=${RAG_LLM_MAX_TOKENS:-256}
+      - RAG_LLM_TEMPERATURE=${RAG_LLM_TEMPERATURE:-0.3}
+      # 인덱싱/검색 튜닝(권장 시작값)
+      - RAG_TOPK=${RAG_TOPK:-4}
+      - RAG_CHUNK_SIZE=${RAG_CHUNK_SIZE:-512}
+      - RAG_CHUNK_OVERLAP=${RAG_CHUNK_OVERLAP:-100}
+    depends_on:
+      - qdrant
+      - embedding
+      - api-gateway
 
   embedding:
     build:
       context: ../services/embedding
       dockerfile: Dockerfile
-    ports:
-      - "${EMBEDDING_PORT:-8003}:8003"
-    volumes:
-      - embedding_models:/app/models
+    restart: unless-stopped
+    ports: ["${EMBEDDING_PORT:-8003}:8003"]
     environment:
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
-    restart: unless-stopped
 
-  rag-service:
-    build:
-      context: ../services/rag
-      dockerfile: Dockerfile
-    ports:
-      - "${RAG_PORT:-8002}:8002"
-    environment:
-      - QDRANT_URL=http://qdrant:6333
-      - EMBEDDING_URL=http://embedding:8003
-      - LLM_URL=http://api-gateway:8000/v1
-      - LLM_MODEL=qwen2.5-14b-instruct
-    volumes:
-      - ../documents:/app/documents:ro
-    depends_on:
-      - qdrant
-      - embedding
-      - api-gateway
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+  qdrant:
+    image: qdrant/qdrant:latest
     restart: unless-stopped
-
-  # Phase 3: MCP (Model Context Protocol) Server
-  mcp-server:
-    build:
-      context: ../services/mcp-server
-      dockerfile: Dockerfile
     ports:
-      - "${MCP_PORT:-8020}:8020"
-    environment:
-      - PROJECT_ROOT=/workspace
-      - RAG_URL=http://rag-service:8002
-      - API_GATEWAY_URL=http://api-gateway:8000
+      - "6333:6333"
+      - "6334:6334"
     volumes:
-      - ../:/workspace:rw  # 프로젝트 전체를 읽기/쓰기로 마운트
-    depends_on:
-      - rag-service
-      - api-gateway
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8020/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    restart: unless-stopped
+      - qdrant_storage:/qdrant/storage
 
 volumes:
-  qdrant_data:
-  embedding_models:
-
-networks:
-  default:
-    driver: bridge
+  qdrant_storage:

@@ -1,5 +1,39 @@
 # Phase 2 RAG 시스템 구현 완료 상태 및 점검사항
 
+## 🛠 2025-09-23 업데이트: 추론/게이트웨이 기동 오류 해결 및 모델 경로 정정
+
+### 증상
+- inference(8001)가 재시작 루프 → health 미응답, gateway(8000)도 unhealthy.
+- 로그: `invalid argument: --ubatch`, `failed to open GGUF file`(모델 파일 경로/이름 불일치), gateway는 `unexpected extra argument (litellm)`.
+
+### 원인
+- llama.cpp 서버 이미지가 `--ubatch` 플래그 미지원.
+- 컨테이너는 리눅스 대소문자 구분 → 모델 파일명이 설정과 1글자라도 다르면 로딩 실패.
+- api-gateway 엔트리포인트가 이미 `litellm`를 실행하는데 command에 `litellm`를 중복 지정.
+
+### 조치
+- Compose(inference) 수정
+  - `--ubatch` 제거, 안정 파라미터 유지: `--parallel 2 --n-gpu-layers 24 -c 4096`.
+  - 모델 볼륨 고정: `${MODELS_DIR:-/mnt/e/ai-models}:/models:ro`.
+  - 기본 모델 파일명(대소문자 일치): `/models/Qwen2.5-7B-Instruct-Q4_K_M.gguf`.
+- Compose(api-gateway) 수정
+  - command에서 `litellm` 토큰 제거 → `--config /app/config.yaml --port 8000 --host 0.0.0.0`.
+  - 설정 파일 마운트: `../services/api-gateway/config.p1.yaml:/app/config.yaml:ro`.
+- RAG 서비스는 이전에 타임아웃/토큰 환경변수화 및 `/health?llm=true` 스모크 체크 추가 완료.
+
+### 확인 방법
+```bash
+docker compose -f docker/compose.p2.yml up -d
+curl -s http://localhost:8001/health   # inference: ok → 모델 로딩 후 전환
+curl -s http://localhost:8000/health   # gateway: healthy_endpoints에 inference 표시
+curl -s http://localhost:8003/health   # embedding: ok
+curl -s http://localhost:8002/health   # rag: healthy (옵션: ?llm=true)
+```
+
+### 비고
+- 모델 경로/이름은 대소문자까지 정확히 일치해야 합니다. 다른 경로를 쓰면 `.env`의 `MODELS_DIR`로 오버라이드하세요.
+- 4050 기준 성능 튜닝 베이스는 유지(ngl=24, ctx=4096, parallel=2). 필요 시 `scripts/bench_inference.sh`로 비교 측정.
+
 ## 🛠 2025-09-23 업데이트: RAG LLM 타임아웃/토큰 설정 개선
 
 ### 문제
@@ -357,6 +391,53 @@ docker-compose -f docker/compose.p1.yml down
 
 ---
 
-**⏰ 마지막 업데이트:** 2025-09-23 12:49
-**✅ 현재 상태:** Phase 2 RAG 시스템 완전 구현 완료
-**⏭️ 다음 작업:** Phase 3 MCP 서버 구현 + AI CLI와 RAG 통합
+## 🚀 2025-09-23 21:20 업데이트: ChatGPT 최적화 및 7B 모델 전환
+
+### Phase 5B: 7B 모델 최적화 (RTX 4050 6GB 특화)
+
+**문제 인식:**
+- 14B 모델 2개 + RAG 동시 실행 시 RTX 4050 6GB VRAM 부족
+- RAG 서비스 LLM 타임아웃 빈발 (60초+ 소요)
+
+**ChatGPT 제안 적용 완료:**
+
+1. **7B 모델 다운로드 완료** ✅
+   - `Qwen2.5-7B-Instruct-Q4_K_M.gguf` (4.4GB)
+   - `qwen2.5-coder-7b-instruct-q4_k_m.gguf` (4.4GB)
+   - 기존 14B 모델 유지 (향후 업그레이드용)
+
+2. **Docker Compose 최적화** ✅
+   - 컨텍스트 크기: 4096 → 2048
+   - 병렬 처리: 2 → 1
+   - GPU 레이어: 자동 최대 (999)
+   - 배치 최적화: -b 256 --ubatch 128
+
+3. **RAG 서비스 완전 재구현** ✅
+   - 환경변수 기반 튜닝 시스템
+   - 한국어 문장 분할기 추가
+   - 컨텍스트 예산 관리 (1200 토큰)
+   - 슬라이딩 청크 + 배치 임베딩
+
+4. **임베딩 서비스 안전화** ✅
+   - 입력 제한: 최대 1024개 텍스트
+   - 문자 제한: 항목당 8000자
+   - OOM/타임아웃 방지
+
+5. **Prewarm 엔드포인트** ✅
+   - 콜드 스타트 방지
+   - 모델/서비스 사전 로딩
+
+**현재 진행 상황:**
+- Docker 빌드 진행 중 (RAG + 임베딩 서비스)
+- 빌드 완료 후 7B 모델 테스트 예정
+
+**기대 효과:**
+- VRAM 사용량 50% 감소 (14B → 7B)
+- RAG 응답 속도 대폭 개선
+- 시스템 안정성 향상
+
+---
+
+**⏰ 마지막 업데이트:** 2025-09-23 21:20
+**✅ 현재 상태:** ChatGPT 7B 최적화 적용 완료, Docker 빌드 진행 중
+**⏭️ 다음 작업:** 7B 모델 성능 테스트 및 14B vs 7B 비교
