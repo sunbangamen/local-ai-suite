@@ -1,5 +1,33 @@
 # Phase 2 RAG 시스템 구현 완료 상태 및 점검사항
 
+## 🛠 2025-09-23 업데이트: RAG LLM 타임아웃/토큰 설정 개선
+
+### 문제
+- RAG 질의 시 `include_context=true`일 때 14B 모델 응답이 느려 `rag` 서비스 내부 LLM 호출(`httpx` 60초) 타임아웃 발생 → 500 에러.
+
+### 원인
+- 14B q4 모델 + 긴 컨텍스트 + `max_tokens=1000` 고정값 조합이 60초를 초과할 수 있음.
+
+### 조치(근본 수정)
+- `services/rag/app.py`에 LLM 호출 파라미터를 환경변수로 노출:
+  - `RAG_LLM_TIMEOUT` (기본 120)
+  - `RAG_LLM_MAX_TOKENS` (기본 512)
+  - `RAG_LLM_TEMPERATURE` (기본 0.3)
+- 반영 후 재빌드/재기동:
+```bash
+docker compose -f docker/compose.p2.yml build rag-service && \
+docker compose -f docker/compose.p2.yml up -d rag-service
+```
+
+### 검증 결과
+- 인덱싱: `test-run` 컬렉션(문서 2개, 총 6 청크) 성공
+- 질의: `include_context=true`로 정상 응답 수신(프로젝트 설정/실행 요약 반환)
+
+### 추가 팁(성능)
+- llama.cpp 서버 파라미터(4050 권장 시작값):
+  - `--ctx-size 4096`, `--parallel 2-3`, `--n-gpu-layers 22-28`
+- 필요 시 `.env`에 위 RAG_* 변수를 추가해 환경에 맞게 조정
+
 ## 📋 현재 완료된 작업 (2025-09-23 12:49)
 
 ### ✅ Phase 1 + Phase 2 성공적으로 완료된 항목

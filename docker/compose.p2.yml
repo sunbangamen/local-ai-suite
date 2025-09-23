@@ -15,7 +15,7 @@ services:
       "--timeout", "600"
     ]
     volumes:
-      - ../models:/models:ro
+      - /mnt/e/ai-models:/models:ro
     ports:
       - "${INFERENCE_PORT:-8001}:8001"
     deploy:
@@ -104,12 +104,9 @@ services:
     volumes:
       - ../documents:/app/documents:ro
     depends_on:
-      qdrant:
-        condition: service_healthy
-      embedding:
-        condition: service_healthy
-      api-gateway:
-        condition: service_healthy
+      - qdrant
+      - embedding
+      - api-gateway
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
       interval: 30s

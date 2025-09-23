@@ -28,6 +28,10 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://localhost:8003")
 LLM_URL = os.getenv("LLM_URL", "http://localhost:8000/v1")
 LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5-14b-instruct")
+# LLM call behavior (configurable to avoid timeouts on larger models)
+LLM_TIMEOUT_SECONDS = int(os.getenv("RAG_LLM_TIMEOUT", "120"))
+LLM_MAX_TOKENS = int(os.getenv("RAG_LLM_MAX_TOKENS", "512"))
+LLM_TEMPERATURE = float(os.getenv("RAG_LLM_TEMPERATURE", "0.3"))
 DOCUMENTS_DIR = Path("/app/documents")
 
 # Initialize FastAPI
@@ -127,15 +131,16 @@ Answer the following question based on the context above:"""
         {"role": "user", "content": prompt}
     ]
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    # Use a higher timeout and configurable max tokens suitable for 14B models
+    async with httpx.AsyncClient(timeout=LLM_TIMEOUT_SECONDS) as client:
         try:
             response = await client.post(
                 f"{LLM_URL}/chat/completions",
                 json={
                     "model": LLM_MODEL,
                     "messages": messages,
-                    "max_tokens": 1000,
-                    "temperature": 0.3
+                    "max_tokens": LLM_MAX_TOKENS,
+                    "temperature": LLM_TEMPERATURE
                 }
             )
             response.raise_for_status()
