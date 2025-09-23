@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local AI Desktop</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .chat-container {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            min-height: 400px;
+            border: 1px solid #404040;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .user-message {
+            background: #0066cc;
+            text-align: right;
+        }
+        .ai-message {
+            background: #404040;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        .message-input {
+            flex: 1;
+            padding: 15px;
+            border: 1px solid #555;
+            border-radius: 8px;
+            background: #404040;
+            color: #e0e0e0;
+            font-size: 16px;
+        }
+        .send-button {
+            padding: 15px 30px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .send-button:hover {
+            background: #0056b3;
+        }
+        .send-button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .model-selector {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #404040;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            border-radius: 6px;
+        }
+        .mode-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 6px;
+        }
+        .mode-toggle {
+            display: flex;
+            background: #404040;
+            border-radius: 20px;
+            padding: 2px;
+            border: 1px solid #555;
+        }
+        .mode-button {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            color: #e0e0e0;
+            border-radius: 18px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .mode-button.active {
+            background: #0066cc;
+            color: white;
+        }
+        .current-model {
+            font-size: 14px;
+            color: #aaa;
+        }
+        .code-block {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            border-radius: 6px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .code-header {
+            background: #333;
+            padding: 8px 12px;
+            border-bottom: 1px solid #444;
+            font-size: 12px;
+            color: #ccc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .copy-btn {
+            background: #555;
+            border: none;
+            color: #ccc;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .copy-btn:hover {
+            background: #666;
+        }
+        .code-content {
+            padding: 12px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.4;
+            color: #f8f8f2;
+            white-space: pre-wrap;
+        }
+        .inline-code {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            color: #f8f8f2;
+        }
+        .status {
+            text-align: center;
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .status.online { color: #27ca3f; }
+        .status.offline { color: #ff5f56; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Local AI Desktop</h1>
+
+        <div class="status" id="status">서버 연결 확인 중...</div>
+
+        <div class="mode-container">
+            <div class="mode-toggle">
+                <button class="mode-button active" id="autoMode">🤖 자동 모드</button>
+                <button class="mode-button" id="manualMode">👤 수동 모드</button>
+            </div>
+            <div class="current-model" id="currentModel">현재 모델: 💬 Chat Model (자동 감지)</div>
+        </div>
+
+        <select class="model-selector" id="modelSelector" style="display: none;">
+            <option value="qwen2.5-14b-instruct">💬 Chat Model</option>
+            <option value="qwen2.5-coder-14b-instruct">💻 Code Model</option>
+        </select>
+
+        <div class="chat-container" id="chatContainer">
+            <div class="message ai-message">
+                <strong>🤖 AI:</strong> 안녕하세요! Local AI Desktop에 오신 것을 환영합니다. 무엇을 도와드릴까요?
+            </div>
+        </div>
+
+        <div class="input-container">
+            <input type="text" class="message-input" id="messageInput" placeholder="메시지를 입력하세요...">
+            <button class="send-button" id="sendButton">전송</button>
+        </div>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const modelSelector = document.getElementById('modelSelector');
+        const status = document.getElementById('status');
+        const autoModeBtn = document.getElementById('autoMode');
+        const manualModeBtn = document.getElementById('manualMode');
+        const currentModelDisplay = document.getElementById('currentModel');
+
+        let isLoading = false;
+        let isAutoMode = true;
+
+        // 웹/Electron 환경 감지
+        const isElectron = window.electronAPI !== undefined;
+
+        // 모델 자동 감지 함수
+        function detectModelType(message) {
+            const codeKeywords = [
+                'function', 'class', 'import', 'export', 'const', 'let', 'var',
+                'def', 'return', 'if', 'for', 'while', 'try', 'catch', 'async', 'await',
+                '코드', '함수', '프로그래밍', '버그', 'API', 'HTML', 'CSS', 'JavaScript',
+                'Python', 'React', '개발', '구현', '디버그', '스크립트', '라이브러리',
+                'npm', 'pip', 'git', 'docker', '배포', '테스트', '알고리즘',
+                '```', 'console.log', 'print(', 'error', 'exception'
+            ];
+
+            const messageLower = message.toLowerCase();
+            const hasCodeKeywords = codeKeywords.some(keyword =>
+                messageLower.includes(keyword.toLowerCase())
+            );
+
+            return hasCodeKeywords ? 'qwen2.5-coder-14b-instruct' : 'qwen2.5-14b-instruct';
+        }
+
+        // 현재 모델 표시 업데이트
+        function updateCurrentModelDisplay(model, isDetected = false) {
+            const modelName = model === 'qwen2.5-coder-14b-instruct' ? '💻 Code Model' : '💬 Chat Model';
+            const suffix = isAutoMode ? (isDetected ? ' (자동 감지)' : ' (기본값)') : ' (수동 선택)';
+            currentModelDisplay.textContent = `현재 모델: ${modelName}${suffix}`;
+        }
+
+        // 모드 전환 함수
+        function toggleMode(autoMode) {
+            isAutoMode = autoMode;
+
+            if (autoMode) {
+                autoModeBtn.classList.add('active');
+                manualModeBtn.classList.remove('active');
+                modelSelector.style.display = 'none';
+                updateCurrentModelDisplay('qwen2.5-14b-instruct');
+            } else {
+                autoModeBtn.classList.remove('active');
+                manualModeBtn.classList.add('active');
+                modelSelector.style.display = 'block';
+                updateCurrentModelDisplay(modelSelector.value);
+            }
+        }
+
+        // 웹용 AI Chat 함수
+        async function webAiChat(message, model) {
+            const response = await fetch('http://localhost:8000/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [{ role: 'user', content: message }],
+                    max_tokens: 512,
+                    temperature: 0.3
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                return {
+                    success: true,
+                    response: data.choices[0].message.content
+                };
+            } else {
+                return {
+                    success: false,
+                    error: 'API 호출 실패'
+                };
+            }
+        }
+
+        // 서버 상태 확인
+        async function checkServerStatus() {
+            try {
+                const aiChat = isElectron ? electronAPI.aiChat : webAiChat;
+                const response = await aiChat('테스트', 'qwen2.5-14b-instruct');
+                if (response.success) {
+                    status.textContent = `🟢 서버 연결됨 (${isElectron ? 'Electron' : 'Web'})`;
+                    status.className = 'status online';
+                } else {
+                    status.textContent = '🔴 서버 연결 실패';
+                    status.className = 'status offline';
+                }
+            } catch (error) {
+                status.textContent = '🔴 서버 연결 실패';
+                status.className = 'status offline';
+            }
+        }
+
+        // 코드 복사 함수
+        function copyCode(button) {
+            const codeContent = button.parentNode.nextElementSibling.textContent;
+            navigator.clipboard.writeText(codeContent).then(() => {
+                button.textContent = '복사됨!';
+                setTimeout(() => {
+                    button.textContent = '복사';
+                }, 2000);
+            });
+        }
+
+        // Markdown 파싱 함수
+        function parseMarkdown(text) {
+            // 코드 블록 처리 (```language ... ```)
+            text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
+                const lang = language || 'text';
+                const copyId = 'copy_' + Math.random().toString(36).substr(2, 9);
+                return `<div class="code-block">
+                    <div class="code-header">
+                        <span>${lang}</span>
+                        <button class="copy-btn" onclick="copyCode(this)">복사</button>
+                    </div>
+                    <div class="code-content">${code.trim()}</div>
+                </div>`;
+            });
+
+            // 인라인 코드 처리 (`code`)
+            text = text.replace(/`([^`]+)`/g, '<span class="inline-code">$1</span>');
+
+            // 줄바꿈 처리
+            text = text.replace(/\n/g, '<br>');
+
+            return text;
+        }
+
+        // 메시지 추가
+        function addMessage(text, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
+
+            const parsedText = isUser ? text : parseMarkdown(text);
+            messageDiv.innerHTML = `<strong>${isUser ? '👤 사용자' : '🤖 AI'}:</strong> ${parsedText}`;
+
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // 메시지 전송
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || isLoading) return;
+
+            addMessage(message, true);
+            messageInput.value = '';
+
+            isLoading = true;
+            sendButton.disabled = true;
+            sendButton.textContent = '전송 중...';
+
+            try {
+                // 모델 선택 (자동/수동 모드에 따라)
+                let model;
+                if (isAutoMode) {
+                    model = detectModelType(message);
+                    updateCurrentModelDisplay(model, true);
+                } else {
+                    model = modelSelector.value;
+                }
+
+                const aiChat = isElectron ? electronAPI.aiChat : webAiChat;
+                const response = await aiChat(message, model);
+
+                if (response.success) {
+                    addMessage(response.response);
+                } else {
+                    addMessage('❌ 응답 실패: ' + response.error);
+                }
+            } catch (error) {
+                addMessage('❌ 오류 발생: ' + error.message);
+            } finally {
+                isLoading = false;
+                sendButton.disabled = false;
+                sendButton.textContent = '전송';
+            }
+        }
+
+        // 이벤트 리스너
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // 모드 전환 이벤트 리스너
+        autoModeBtn.addEventListener('click', () => toggleMode(true));
+        manualModeBtn.addEventListener('click', () => toggleMode(false));
+
+        // 수동 모드에서 모델 선택 변경 시 표시 업데이트
+        modelSelector.addEventListener('change', () => {
+            if (!isAutoMode) {
+                updateCurrentModelDisplay(modelSelector.value);
+            }
+        });
+
+        // 앱 시작 시 서버 상태 확인
+        checkServerStatus();
+    </script>
+</body>
+</html>
