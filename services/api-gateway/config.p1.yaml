@@ -1,21 +1,18 @@
 model_list:
-  - model_name: "local-chat"
+  - model_name: "qwen2.5-14b-instruct"
     litellm_params:
-      model: "llamacpp/local-chat"
-      api_base: "http://inference:8001"
-      api_key: "dummy-key"
-      temperature: 0.2
-      max_tokens: 2048
+      model: "openai//models/qwen2.5-14b-instruct-q4_k_m.gguf"
+      api_base: "http://inference:8001/v1"
+      api_key: "dummy"
       timeout: 120
 
   # Alias for compatibility
   - model_name: "gpt-3.5-turbo"
     litellm_params:
-      model: "llamacpp/local-chat"
-      api_base: "http://inference:8001"
-      api_key: "dummy-key"
-      temperature: 0.2
-      max_tokens: 2048
+      model: "openai//models/qwen2.5-14b-instruct-q4_k_m.gguf"
+      api_base: "http://inference:8001/v1"
+      api_key: "dummy"
+      timeout: 120
 
 # Default parameters for all models
 litellm_settings:
@@ -25,7 +22,7 @@ litellm_settings:
 
 # Server configuration
 general_settings:
-  master_key: "dummy-master-key"  # Optional for local use
+  master_key: null  # Disable authentication for local use
   database_url: null
 
 # Logging configuration

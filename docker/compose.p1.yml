@@ -2,6 +2,7 @@ version: "3.9"
 
 services:
   inference:
+    env_file: ../.env
     image: ghcr.io/ggerganov/llama.cpp:server
     command: [
       "--host", "0.0.0.0",
@@ -34,11 +35,12 @@ services:
     restart: unless-stopped
 
   api-gateway:
+    env_file: ../.env
     image: ghcr.io/berriai/litellm:main-latest
+    command: ["--config", "/app/config.yaml", "--port", "8000", "--host", "0.0.0.0"]
     environment:
       - LITELLM_CONFIG=/app/config.yaml
       - LITELLM_LOG=INFO
-      - PORT=8000
     volumes:
       - ../services/api-gateway/config.p1.yaml:/app/config.yaml:ro
     ports:
