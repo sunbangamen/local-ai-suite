@@ -115,6 +115,30 @@ services:
       start_period: 60s
     restart: unless-stopped
 
+  # Phase 3: MCP (Model Context Protocol) Server
+  mcp-server:
+    build:
+      context: ../services/mcp-server
+      dockerfile: Dockerfile
+    ports:
+      - "${MCP_PORT:-8020}:8020"
+    environment:
+      - PROJECT_ROOT=/workspace
+      - RAG_URL=http://rag-service:8002
+      - API_GATEWAY_URL=http://api-gateway:8000
+    volumes:
+      - ../:/workspace:rw  # 프로젝트 전체를 읽기/쓰기로 마운트
+    depends_on:
+      - rag-service
+      - api-gateway
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8020/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
 volumes:
   qdrant_data:
   embedding_models:
