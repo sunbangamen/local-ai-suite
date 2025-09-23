@@ -23,10 +23,21 @@ docker compose -f docker/compose.p2.yml up -d rag-service
 - 인덱싱: `test-run` 컬렉션(문서 2개, 총 6 청크) 성공
 - 질의: `include_context=true`로 정상 응답 수신(프로젝트 설정/실행 요약 반환)
 
-### 추가 팁(성능)
-- llama.cpp 서버 파라미터(4050 권장 시작값):
-  - `--ctx-size 4096`, `--parallel 2-3`, `--n-gpu-layers 22-28`
-- 필요 시 `.env`에 위 RAG_* 변수를 추가해 환경에 맞게 조정
+### RTX 4050 최적화 벤치마크 결과 (2025-09-23)
+**벤치마크 테스트:** `scripts/bench_inference.sh` 실행
+- 테스트 대상: n-gpu-layers 22, 24, 26
+- 모델: qwen2.5-14b-instruct-q4_k_m.gguf (Q4_K_M, 8.4GB)
+- 기타 설정: ctx-size=4096, parallel=2
+
+**성능 결과:**
+- `n-gpu-layers=22`: 3.55 tok/s (predicted_per_token_ms=281.6ms)
+- `n-gpu-layers=24`: **6.03 tok/s** (predicted_per_token_ms=165.8ms) ⭐ **최적**
+- `n-gpu-layers=26`: 3.55 tok/s (predicted_per_token_ms=281.6ms)
+
+**최종 권장 설정 (RTX 4050):**
+- `--ctx-size 4096`, `--parallel 2`, `--n-gpu-layers 24`
+- 성능 개선: 70% 향상 (6.03 vs 3.55 tok/s)
+- 현재 시스템에 적용됨 (`docker/compose.p2.yml`)
 
 ## 📋 현재 완료된 작업 (2025-09-23 12:49)
 
