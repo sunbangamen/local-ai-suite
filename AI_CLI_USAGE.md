@@ -35,7 +35,21 @@ ai --code "일반 질문이지만 코딩 관점에서 답변해줘"
 ai --chat "코딩 질문이지만 일반적인 설명으로 답변해줘"
 ```
 
-### 3. 응답 길이 조절
+### 3. RAG (문서 기반 질의응답) 🔍
+```bash
+# 문서 검색을 통한 답변
+ai --rag "Python에서 파일을 읽는 방법은?"
+ai --rag "프로젝트 설치 방법 알려줘"
+
+# 특정 컬렉션에서 검색
+ai --rag --collection myproject "이 프로젝트에서 API 사용법은?"
+
+# 문서 인덱싱 (최초 1회 또는 문서 업데이트 시)
+ai --index                    # default 컬렉션에 인덱싱
+ai --index myproject          # myproject 컬렉션에 인덱싱
+```
+
+### 4. 응답 길이 조절
 ```bash
 ai --tokens 100 "짧게 답해줘"      # 최대 100토큰
 ai --tokens 1000 "자세히 설명해줘"  # 최대 1000토큰 (기본값: 500)
@@ -55,6 +69,8 @@ ai --interactive
 💬 You: 안녕하세요!                    # 일반 질문
 💬 You: :code Python 함수 만들어줘     # 강제 코딩 모드
 💬 You: :chat 코딩을 일반적으로 설명해줘 # 강제 채팅 모드
+💬 You: :rag 파일 읽기 방법은?          # RAG 검색
+💬 You: :index myproject              # 문서 인덱싱
 💬 You: help                          # 도움말
 💬 You: exit                          # 종료
 ```
@@ -110,6 +126,14 @@ ai "JavaScript 배열 정렬 알고리즘 설명해줘"
 ai "SQL 쿼리 최적화 방법 알려줘"
 ```
 
+### RAG 기반 문서 검색
+```bash
+ai --rag "Python에서 파일을 읽는 방법은?"      # 문서에서 파일 읽기 예제 검색
+ai --rag "프로젝트 설치 방법 알려줘"           # 설치 가이드 검색
+ai --rag "Local AI Suite 사용법"           # 프로젝트 사용법 검색
+ai --rag "Docker 설정은 어떻게 해?"         # Docker 설정 관련 검색
+```
+
 ### 일반 대화
 ```bash
 ai "오늘 기분이 좋지 않아"
@@ -150,14 +174,33 @@ pip install requests  # 대부분 이미 설치되어 있음
 
 ### "Cannot connect to local AI server" 오류
 ```bash
-# 서버 시작
+# Phase 1 서버 시작 (기본 AI)
 make up-p1
+
+# Phase 2 서버 시작 (RAG 포함)
+make up-p2
 
 # 서버 상태 확인
 curl http://localhost:8000/v1/models
+curl http://localhost:8002/health     # RAG 서비스 확인
 
 # 서비스 재시작
-make down && make up-p1
+make down && make up-p2
+```
+
+### "Cannot connect to RAG service" 오류
+```bash
+# RAG 시스템이 포함된 Phase 2 시작
+make up-p2
+
+# RAG 서비스 상태 확인
+curl http://localhost:8002/health
+
+# 문서 재인덱싱
+ai --index
+
+# 전체 재시작
+make down && make up-p2
 ```
 
 ### "Request timed out" 오류
@@ -186,10 +229,16 @@ chmod +x scripts/ai
 
 ## 📈 향후 개선 예정 사항
 
-### Phase 2 완료 후 추가될 기능
-- [ ] **문서 검색 기능**: `ai --search "프로젝트에서 설치 방법"`
-- [ ] **RAG 통합**: 업로드된 문서를 참조한 답변
+### Phase 2 완료 ✅
+- [x] **RAG 통합**: `ai --rag "질문"` - 업로드된 문서를 참조한 답변
+- [x] **문서 인덱싱**: `ai --index` - 문서 자동 인덱싱
+- [x] **컬렉션 관리**: `ai --collection name` - 여러 문서 그룹 관리
+- [x] **두 모델 지원**: 채팅용/코딩용 모델 자동 선택
+
+### Phase 3 예정 기능
+- [ ] **MCP 서버**: Claude Desktop과 연동
 - [ ] **컨텍스트 유지**: 이전 대화 기억
+- [ ] **실시간 문서 업데이트**: 파일 변경 감지 및 자동 재인덱싱
 
 ### 일반 개선 사항
 - [ ] **설정 파일**: `~/.ai-config.yaml`로 개인 설정 저장

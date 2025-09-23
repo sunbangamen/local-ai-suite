@@ -9,11 +9,17 @@ import json
 import requests
 import sys
 import re
-from typing import Optional
+import os
+from pathlib import Path
+from typing import Optional, List, Dict, Any
 
 # Configuration
 API_URL = "http://localhost:8000/v1/chat/completions"
-AVAILABLE_MODELS = ["qwen2.5-14b-instruct", "gpt-3.5-turbo"]
+RAG_URL = "http://localhost:8002"
+AVAILABLE_MODELS = {
+    "chat": "qwen2.5-14b-instruct",
+    "code": "qwen2.5-coder-14b-instruct"
+}
 DEFAULT_MODEL = "qwen2.5-14b-instruct"
 
 # Keywords that suggest coding-related queries
@@ -60,6 +66,90 @@ def detect_query_type(query: str) -> str:
 
     return 'chat'
 
+def call_rag_api(query: str, collection: str = "default", include_context: bool = True) -> Optional[str]:
+    """
+    Call RAG service for document-based queries
+    """
+    payload = {
+        "query": query,
+        "collection": collection,
+        "limit": 5,
+        "score_threshold": 0.7,
+        "include_context": include_context
+    }
+
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    try:
+        print(f"🔍 Searching documents in '{collection}' collection...")
+        response = requests.post(f"{RAG_URL}/query", json=payload, headers=headers, timeout=120)
+        response.raise_for_status()
+
+        data = response.json()
+        answer = data.get('answer', 'No answer available')
+        sources = data.get('sources', [])
+
+        # Add source information
+        if sources:
+            source_info = "\n\n📚 Sources:"
+            for i, source in enumerate(sources[:3], 1):  # Show top 3 sources
+                source_info += f"\n{i}. {source['file_path']} (score: {source['score']:.2f})"
+            answer += source_info
+
+        return answer
+
+    except requests.exceptions.ConnectionError:
+        print("❌ Error: Cannot connect to RAG service.")
+        print("💡 Make sure RAG system is running: make up-p2")
+        return None
+    except requests.exceptions.Timeout:
+        print("⏱️ Error: RAG request timed out.")
+        return None
+    except Exception as e:
+        print(f"❌ RAG Error: {e}")
+        return None
+
+def index_documents(collection: str = "default", directory: str = None) -> bool:
+    """
+    Index documents for RAG
+    """
+    payload = {
+        "collection": collection,
+        "chunk_size": 1000,
+        "chunk_overlap": 200
+    }
+
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    try:
+        print(f"📚 Indexing documents into '{collection}' collection...")
+        if directory:
+            print(f"📁 From directory: {directory}")
+
+        response = requests.post(f"{RAG_URL}/index", json=payload, headers=headers, timeout=300)
+        response.raise_for_status()
+
+        data = response.json()
+        print(f"✅ {data['message']}")
+        print(f"📄 Indexed {len(data['indexed_files'])} files, {data['total_chunks']} chunks")
+
+        for file_info in data['indexed_files']:
+            print(f"   - {file_info['file']} ({file_info['chunks']} chunks)")
+
+        return True
+
+    except requests.exceptions.ConnectionError:
+        print("❌ Error: Cannot connect to RAG service.")
+        print("💡 Make sure RAG system is running: make up-p2")
+        return False
+    except Exception as e:
+        print(f"❌ Indexing Error: {e}")
+        return False
+
 def call_api(query: str, model_type: str = 'auto', max_tokens: int = 500) -> Optional[str]:
     """
     Call the API with the available model
@@ -68,8 +158,8 @@ def call_api(query: str, model_type: str = 'auto', max_tokens: int = 500) -> Opt
     if model_type == 'auto':
         model_type = detect_query_type(query)
 
-    # Use the default model (both models point to the same local model for now)
-    model_name = DEFAULT_MODEL
+    # Use appropriate model based on query type
+    model_name = AVAILABLE_MODELS.get(model_type, DEFAULT_MODEL)
 
     # Prepare request with appropriate context
     if model_type == 'code':
@@ -98,7 +188,7 @@ def call_api(query: str, model_type: str = 'auto', max_tokens: int = 500) -> Opt
 
     try:
         print(f"🤖 Using {model_type} model ({model_name})...")
-        response = requests.post(API_URL, json=payload, headers=headers, timeout=60)
+        response = requests.post(API_URL, json=payload, headers=headers, timeout=120)
         response.raise_for_status()
 
         data = response.json()
@@ -125,21 +215,33 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  ai "안녕하세요!"                     # Auto-detect (chat model)
-  ai "Python 함수 만들어줘"            # Auto-detect (code model)
-  ai --code "일반 질문이지만 코딩모델로"   # Force code model
-  ai --chat "코딩 질문이지만 채팅모델로"   # Force chat model
-  ai --tokens 200 "짧은 답변 원함"      # Limit response length
+  ai "안녕하세요!"                        # Auto-detect (chat model)
+  ai "Python 함수 만들어줘"               # Auto-detect (code model)
+  ai --code "일반 질문이지만 코딩모델로"      # Force code model
+  ai --chat "코딩 질문이지만 채팅모델로"      # Force chat model
+  ai --rag "파일 읽기 방법은?"              # Search documents with RAG
+  ai --index                           # Index documents (default collection)
+  ai --index myproject                 # Index documents into 'myproject' collection
+  ai --rag --collection myproject "질문"   # Query specific collection
+  ai --tokens 200 "짧은 답변 원함"         # Limit response length
         """
     )
 
     parser.add_argument("query", nargs='?', help="Your question or prompt")
     parser.add_argument("--code", action="store_true", help="Force use of code model")
     parser.add_argument("--chat", action="store_true", help="Force use of chat model")
+    parser.add_argument("--rag", action="store_true", help="Use RAG (document-based) search")
+    parser.add_argument("--index", metavar="COLLECTION", nargs='?', const="default", help="Index documents for RAG (default collection: 'default')")
+    parser.add_argument("--collection", default="default", help="RAG collection name (default: 'default')")
     parser.add_argument("--tokens", type=int, default=500, help="Maximum tokens in response (default: 500)")
     parser.add_argument("--interactive", "-i", action="store_true", help="Start interactive mode")
 
     args = parser.parse_args()
+
+    # Handle indexing command
+    if args.index is not None:
+        success = index_documents(args.index)
+        sys.exit(0 if success else 1)
 
     # Determine model type
     model_type = 'auto'
@@ -167,19 +269,31 @@ Examples:
                     print("  exit/quit - Exit interactive mode")
                     print("  :code <query> - Force code model")
                     print("  :chat <query> - Force chat model")
+                    print("  :rag <query> - Search documents with RAG")
+                    print("  :index [collection] - Index documents")
                     continue
 
                 # Parse inline commands
                 if query.startswith(':code '):
                     query = query[6:]
                     model_type = 'code'
+                    response = call_api(query, model_type, args.tokens)
                 elif query.startswith(':chat '):
                     query = query[6:]
                     model_type = 'chat'
+                    response = call_api(query, model_type, args.tokens)
+                elif query.startswith(':rag '):
+                    query = query[5:]
+                    response = call_rag_api(query, args.collection)
+                elif query.startswith(':index'):
+                    parts = query.split(' ', 1)
+                    collection = parts[1] if len(parts) > 1 else "default"
+                    index_documents(collection)
+                    continue
                 else:
                     model_type = 'auto'
+                    response = call_api(query, model_type, args.tokens)
 
-                response = call_api(query, model_type, args.tokens)
                 if response:
                     print(f"\n🤖 AI: {response}")
 
@@ -193,7 +307,12 @@ Examples:
         parser.print_help()
         sys.exit(1)
 
-    response = call_api(args.query, model_type, args.tokens)
+    # Handle RAG query
+    if args.rag:
+        response = call_rag_api(args.query, args.collection)
+    else:
+        response = call_api(args.query, model_type, args.tokens)
+
     if response:
         print(response)
     else:
