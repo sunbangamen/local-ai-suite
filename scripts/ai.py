@@ -17,10 +17,10 @@ from typing import Optional, List, Dict, Any
 API_URL = "http://localhost:8000/v1/chat/completions"
 RAG_URL = "http://localhost:8002"
 AVAILABLE_MODELS = {
-    "chat": "qwen2.5-14b-instruct",
-    "code": "qwen2.5-coder-14b-instruct"
+    "chat": "local-7b",
+    "code": "local-7b"
 }
-DEFAULT_MODEL = "qwen2.5-14b-instruct"
+DEFAULT_MODEL = "local-7b"
 
 # Keywords that suggest coding-related queries
 CODE_KEYWORDS = [
@@ -170,7 +170,9 @@ def call_api(query: str, model_type: str = 'auto', max_tokens: int = 500) -> Opt
         ]
         temperature = 0.2
     else:
+        system_prompt = "You are a helpful Korean AI assistant. You must respond ONLY in Korean language. Never use Chinese, English or any other language. 당신은 한국어 AI 어시스턴트입니다. 반드시 한국어로만 답변해주세요. 중국어나 영어를 절대 사용하지 마세요."
         messages = [
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": query}
         ]
         temperature = 0.7

@@ -3,6 +3,8 @@ import glob
 import math
 import asyncio
 import re
+import time
+import hashlib
 from typing import List, Optional, Dict, Any, Tuple
 
 import httpx
@@ -10,6 +12,8 @@ from fastapi import FastAPI, Query
 from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
+
+from database import db
 
 """
 RAG FastAPI (경량/안정화 버전)
@@ -62,6 +66,16 @@ class QueryResponse(BaseModel):
     answer: str
     context: List[Dict[str, Any]]
     usage: Dict[str, Any]
+    cached: Optional[bool] = False
+    response_time_ms: Optional[int] = None
+
+class AnalyticsResponse(BaseModel):
+    total_searches: int
+    avg_response_time: float
+    avg_results_count: float
+    total_tokens: int
+    top_queries: List[Dict[str, Any]]
+    collection_usage: List[Dict[str, Any]]
 
 
 # -------- Utils --------
@@ -289,6 +303,10 @@ async def index(collection: Optional[str] = Query(None, description="컬렉션 �
 
         pid = 0
         for doc_id, text in docs:
+            # Calculate document metadata
+            file_size = len(text.encode('utf-8'))
+            checksum = hashlib.sha256(text.encode()).hexdigest()[:16]
+
             # 너무 큰 문서 방어적 컷(선택)
             if _approx_tokens(text) > 200_000:
                 text = text[:800_000]  # 대략 컷
@@ -303,7 +321,7 @@ async def index(collection: Optional[str] = Query(None, description="컬렉션 �
                 all_chunks.append(ch)
                 payloads.append(
                     {
-                        "point_id": f"{doc_id}::chunk::{i}",
+                        "point_id": pid,  # Use integer ID instead of string
                         "doc_id": doc_id,
                         "chunk_id": i,
                         "text": ch,
@@ -325,6 +343,29 @@ async def index(collection: Optional[str] = Query(None, description="컬렉션 �
 
         _upsert_points(col, embeddings, payloads)
 
+        # Update document metadata for each processed document
+        embedding_model = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
+        doc_chunks = {}
+        for pl in payloads:
+            doc_id = pl['doc_id']
+            if doc_id not in doc_chunks:
+                doc_chunks[doc_id] = 0
+            doc_chunks[doc_id] += 1
+
+        # Find original docs to get metadata
+        for doc_id, text in docs:
+            if doc_id in doc_chunks:
+                file_size = len(text.encode('utf-8'))
+                checksum = hashlib.sha256(text.encode()).hexdigest()[:16]
+                db.update_document_metadata(
+                    doc_id=doc_id,
+                    filename=os.path.basename(doc_id),
+                    file_size=file_size,
+                    chunk_count=doc_chunks[doc_id],
+                    embedding_model=embedding_model,
+                    checksum=checksum
+                )
+
         return IndexResponse(collection=col, chunks=len(all_chunks))
 
 
@@ -332,12 +373,26 @@ async def index(collection: Optional[str] = Query(None, description="컬렉션 �
 async def query(body: QueryRequest):
     """
     질의 → 임베딩 → Qdrant 검색 → 컨텍스트 구성 → LLM 답변
+    Performance optimized with caching and analytics
     """
+    start_time = time.time()
     col = body.collection or COLLECTION_DEFAULT
     topk = body.topk or RAG_TOPK
     q = (body.query or "").strip()
     if not q:
         return QueryResponse(answer="", context=[], usage={"error": "empty query"})
+
+    # Check cache first
+    cached_result = db.get_cached_query(q, col)
+    if cached_result:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        return QueryResponse(
+            answer=cached_result['response'],
+            context=cached_result['context_data'],
+            usage={"cached": True, "cached_at": cached_result['cached_at']},
+            cached=True,
+            response_time_ms=response_time_ms
+        )
 
     async with httpx.AsyncClient() as client:
         # embed dim lazy init
@@ -348,11 +403,15 @@ async def query(body: QueryRequest):
         # ensure collection 존재
         _ensure_collection(col, EMBED_DIM)
 
-        # query embed
+        # Time embedding
+        embed_start = time.time()
         qvec = (await _embed_texts(client, [q]))[0]
+        embed_time_ms = (time.time() - embed_start) * 1000
 
-        # search
+        # Time vector search
+        search_start = time.time()
         hits = _search(col, qvec, topk)
+        search_time_ms = (time.time() - search_start) * 1000
 
         # 컨텍스트 구성(길이 제한 방어)
         ctx_texts = []
@@ -385,12 +444,40 @@ async def query(body: QueryRequest):
             + "\n\nAnswer in Korean."
         )
 
+        # Time LLM response
+        llm_start = time.time()
         answer, usage = await _llm_answer(client, system_msg, user_msg)
+        llm_time_ms = int((time.time() - llm_start) * 1000)
+
+        # Calculate total response time
+        total_time_ms = int((time.time() - start_time) * 1000)
 
         # 응답에 참고 문맥 정보 반환
         ctx_out = [{"score": h.get("score", 0.0), "doc_id": h.get("doc_id"), "chunk_id": h.get("chunk_id")} for h in hits]
 
-        return QueryResponse(answer=answer, context=ctx_out, usage=usage)
+        # Cache the result for future queries
+        db.cache_query(q, col, answer, ctx_out, ttl_hours=6)  # Cache for 6 hours
+
+        # Log search analytics
+        db.log_search(
+            collection=col,
+            query=q,
+            results_count=len(hits),
+            response_time_ms=total_time_ms,
+            llm_tokens_used=usage.get('total_tokens', 0),
+            embedding_time_ms=int(embed_time_ms),
+            vector_search_time_ms=int(search_time_ms),
+            llm_response_time_ms=llm_time_ms,
+            context_length=len('\n'.join(ctx_texts))
+        )
+
+        # Track document access for analytics
+        for h in hits:
+            if h.get('doc_id'):
+                db.track_document_access(h['doc_id'])
+
+        return QueryResponse(answer=answer, context=ctx_out, usage=usage,
+                           cached=False, response_time_ms=total_time_ms)
 
 
 @app.post("/prewarm")
@@ -406,6 +493,47 @@ async def prewarm():
         except Exception:
             pass
     return {"ok": True, "embed_dim": EMBED_DIM}
+
+
+@app.get("/analytics", response_model=AnalyticsResponse)
+async def get_analytics(hours: int = Query(24, description="Hours to look back")):
+    """Get search analytics for the specified time period"""
+    analytics = db.get_search_analytics(hours)
+    return AnalyticsResponse(**analytics)
+
+
+@app.post("/optimize")
+async def optimize_database():
+    """Run database optimization and cleanup"""
+    result = db.optimize_database()
+    return {"message": "Database optimized", **result}
+
+
+@app.get("/cache/stats")
+async def cache_stats():
+    """Get cache statistics"""
+    with db.transaction() as conn:
+        cursor = conn.execute("""
+            SELECT
+                COUNT(*) as total_entries,
+                AVG(accessed_count) as avg_access_count,
+                COUNT(CASE WHEN expires_at > CURRENT_TIMESTAMP THEN 1 END) as active_entries,
+                COUNT(CASE WHEN expires_at <= CURRENT_TIMESTAMP THEN 1 END) as expired_entries
+            FROM query_cache
+        """)
+        stats = dict(cursor.fetchone())
+
+    return stats
+
+
+@app.delete("/cache")
+async def clear_cache():
+    """Clear query cache"""
+    with db.transaction() as conn:
+        cursor = conn.execute("DELETE FROM query_cache")
+        cleared = cursor.rowcount
+
+    return {"message": f"Cleared {cleared} cache entries"}
 
 
 if __name__ == "__main__":

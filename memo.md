@@ -505,8 +505,81 @@ docker-compose -f docker/compose.p1.yml down
 - 🔄 데이터 아키텍처 재구성
 - ⏳ Docker Compose 업데이트 예정
 
+## 🚀 2025-09-24 11:20 업데이트: PostgreSQL 통합 진행 중 (권한 이슈 발생)
+
+### ✅ PostgreSQL 통합 구현 완료 항목
+
+**1. 데이터 구조 생성:**
+```
+/mnt/e/ai-data/
+├── postgresql/data     # PostgreSQL 데이터
+├── vectors/qdrant      # 벡터 DB
+├── documents/          # 원본 문서들
+│   ├── personal/
+│   ├── projects/
+│   ├── knowledge/     # 테스트 문서 이동됨
+│   └── uploads/
+├── cache/             # 처리 캐시
+└── logs/              # 시스템 로그
+```
+
+**2. PostgreSQL 설정:**
+- Docker Compose에 postgres:16-alpine 추가 ✅
+- 환경변수 설정 완료 ✅
+- 포트: 5432, DB: ai_suite, User: ai_user ✅
+
+**3. 데이터베이스 스키마:**
+- 초기화 스크립트 생성: `docker/init-db/01-init-schema.sql` ✅
+- 시드 데이터: `docker/init-db/02-seed-data.sql` ✅
+- 테이블 설계: collections, documents, chunks, search_logs ✅
+- MCP 테이블: mcp_requests, notion_pages, web_scrapes ✅
+- 시스템 테이블: system_settings, user_preferences ✅
+
+### ⚠️ 현재 문제: WSL 권한 이슈
+
+**증상:**
+```bash
+initdb: error: could not change permissions of directory "/var/lib/postgresql/data": Operation not permitted
+Status: Restarting (1)
+```
+
+**원인:**
+- WSL2의 Windows 파일시스템 마운트 권한 문제
+- PostgreSQL 컨테이너(UID 999)가 /mnt/e/ 경로에 쓰기 불가
+- chmod 777 적용해도 WSL-Windows 경계에서 제한
+
+**시도된 해결책:**
+- 수동 권한 변경: `chmod 777` ✅ (하지만 효과 없음)
+- 소유권 변경 시도: `sudo chown 999:999` (실패)
+
+**권장 해결책:**
+1. **Docker named volume 사용** (권장)
+   - WSL 권한 문제 회피
+   - Docker가 자동 권한 관리
+   - 백업/복구 가능
+
+2. **또는 WSL 내부 경로 사용**
+   - `/var/lib/postgresql/data` 등 WSL 네이티브 경로
+
+### 📊 현재 서비스 상태 (2025-09-24 11:20)
+
+**정상 동작:**
+- ✅ inference (port 8001) - 7B 모델 최적화 적용
+- ✅ rag (port 8002) - 문서 볼륨 연결 완료
+- ✅ embedding (port 8003) - 정상 동작
+- ✅ qdrant (port 6333) - 벡터 스토리지 정상
+
+**문제 있음:**
+- ❌ postgres (port 5432) - 권한 문제로 재시작 반복
+- ⚠️ api-gateway (port 8000) - unhealthy 상태
+
+**다음 작업 우선순위:**
+1. PostgreSQL 권한 문제 해결 (Docker volume 전환)
+2. API Gateway 상태 점검
+3. 통합 테스트 및 검증
+
 ---
 
-**⏰ 마지막 업데이트:** 2025-09-24 10:30
-**✅ 현재 상태:** 7B 모델 최적화 완료, PostgreSQL 아키텍처 설계 진행 중
-**⏭️ 다음 작업:** PostgreSQL 통합 및 데이터 구조 구현
+**⏰ 마지막 업데이트:** 2025-09-24 11:20
+**✅ 현재 상태:** PostgreSQL 스키마/설정 완료, WSL 권한 이슈 해결 필요
+**⏭️ 다음 작업:** PostgreSQL Docker volume 전환 및 통합 테스트
