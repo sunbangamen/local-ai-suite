@@ -389,9 +389,13 @@ async def rag_search(query: str, collection: str = "default") -> RAGResult:
         raise Exception(f"RAG 검색 오류: {str(e)}")
 
 @mcp.tool()
-async def ai_chat(message: str, model: str = "qwen2.5-14b-instruct") -> AIResponse:
+async def ai_chat(message: str, model: str = None) -> AIResponse:
     """로컬 AI 모델과 대화"""
     try:
+        # Use environment variable or default to API Gateway compatible model
+        if model is None:
+            model = os.getenv("API_GATEWAY_MODEL", "local-7b")
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_GATEWAY_URL}/v1/chat/completions",
