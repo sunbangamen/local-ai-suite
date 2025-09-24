@@ -116,6 +116,7 @@ services:
       - RAG_URL=${RAG_URL:-http://rag:8002}
       - EMBEDDING_URL=${EMBEDDING_URL:-http://embedding:8003}
       - NOTION_TOKEN=${NOTION_TOKEN:-}  # Optional Notion integration
+      - PROJECT_ROOT=/mnt/workspace  # Align with mount path
       - WORKSPACE_DIR=/mnt/workspace
       - DATA_DIR=/mnt/data
     depends_on:

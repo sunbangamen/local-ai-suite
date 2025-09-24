@@ -33,6 +33,9 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Git 안전 디렉토리 설정 (workspace mount path)
+RUN git config --global --add safe.directory /mnt/workspace
+
 # Playwright 브라우저 설치
 RUN playwright install --with-deps chromium
 

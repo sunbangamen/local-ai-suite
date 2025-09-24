@@ -50,10 +50,11 @@ def init_notion():
             notion_client = Client(auth=notion_token)
     return notion_client
 
-# 환경 변수
-PROJECT_ROOT = os.getenv("PROJECT_ROOT", "/workspace")
-RAG_URL = os.getenv("RAG_URL", "http://rag-service:8002")
+# 환경 변수 (통일된 기본값)
+PROJECT_ROOT = os.getenv("PROJECT_ROOT", os.getenv("WORKSPACE_DIR", "/mnt/workspace"))
+RAG_URL = os.getenv("RAG_URL", "http://rag:8002")
 API_GATEWAY_URL = os.getenv("API_GATEWAY_URL", "http://api-gateway:8000")
+EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://embedding:8003")
 
 # MCP 서버 인스턴스
 mcp = FastMCP("Local AI MCP Server")
