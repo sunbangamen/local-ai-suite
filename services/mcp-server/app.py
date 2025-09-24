@@ -468,6 +468,221 @@ async def git_status(path: str = ".") -> ExecutionResult:
             success=False
         )
 
+@mcp.tool()
+async def git_diff(file_path: str = "", staged: bool = False) -> ExecutionResult:
+    """Git 변경사항 차이 확인 (worktree 호환)"""
+    try:
+        cmd_args = [
+            "git",
+            "--git-dir", GIT_DIR_PATH,
+            "--work-tree", PROJECT_ROOT,
+            "diff"
+        ]
+
+        if staged:
+            cmd_args.append("--cached")
+
+        if file_path:
+            cmd_args.append(file_path)
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=PROJECT_ROOT
+        )
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            return ExecutionResult(
+                command=" ".join(cmd_args),
+                stdout="",
+                stderr=stderr.decode() if stderr else "Git diff 실행 실패",
+                returncode=proc.returncode or 1,
+                success=False
+            )
+
+        diff_output = stdout.decode().strip()
+        if not diff_output:
+            diff_output = "변경사항 없음"
+
+        return ExecutionResult(
+            command=" ".join(cmd_args),
+            stdout=diff_output,
+            stderr="",
+            returncode=0,
+            success=True
+        )
+    except Exception as e:
+        return ExecutionResult(
+            command="git diff",
+            stdout="",
+            stderr=f"Git diff 오류: {str(e)}",
+            returncode=1,
+            success=False
+        )
+
+@mcp.tool()
+async def git_log(max_count: int = 10, oneline: bool = True) -> ExecutionResult:
+    """Git 커밋 히스토리 확인 (worktree 호환)"""
+    try:
+        cmd_args = [
+            "git",
+            "--git-dir", GIT_DIR_PATH,
+            "--work-tree", PROJECT_ROOT,
+            "log",
+            f"--max-count={max_count}"
+        ]
+
+        if oneline:
+            cmd_args.append("--oneline")
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=PROJECT_ROOT
+        )
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            return ExecutionResult(
+                command=" ".join(cmd_args),
+                stdout="",
+                stderr=stderr.decode() if stderr else "Git log 실행 실패",
+                returncode=proc.returncode or 1,
+                success=False
+            )
+
+        log_output = stdout.decode().strip()
+        if not log_output:
+            log_output = "커밋 히스토리 없음"
+
+        return ExecutionResult(
+            command=" ".join(cmd_args),
+            stdout=log_output,
+            stderr="",
+            returncode=0,
+            success=True
+        )
+    except Exception as e:
+        return ExecutionResult(
+            command="git log",
+            stdout="",
+            stderr=f"Git log 오류: {str(e)}",
+            returncode=1,
+            success=False
+        )
+
+@mcp.tool()
+async def git_add(file_paths: str) -> ExecutionResult:
+    """Git 파일 스테이징 (worktree 호환)"""
+    try:
+        # 여러 파일 지원을 위해 공백으로 분리
+        files = file_paths.split() if file_paths.strip() else ["."]
+
+        cmd_args = [
+            "git",
+            "--git-dir", GIT_DIR_PATH,
+            "--work-tree", PROJECT_ROOT,
+            "add"
+        ] + files
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=PROJECT_ROOT
+        )
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            return ExecutionResult(
+                command=" ".join(cmd_args),
+                stdout="",
+                stderr=stderr.decode() if stderr else "Git add 실행 실패",
+                returncode=proc.returncode or 1,
+                success=False
+            )
+
+        return ExecutionResult(
+            command=" ".join(cmd_args),
+            stdout=f"파일 스테이징 완료: {file_paths}",
+            stderr="",
+            returncode=0,
+            success=True
+        )
+    except Exception as e:
+        return ExecutionResult(
+            command="git add",
+            stdout="",
+            stderr=f"Git add 오류: {str(e)}",
+            returncode=1,
+            success=False
+        )
+
+@mcp.tool()
+async def git_commit(message: str, add_all: bool = False) -> ExecutionResult:
+    """Git 커밋 생성 (worktree 호환)"""
+    if not message.strip():
+        return ExecutionResult(
+            command="git commit",
+            stdout="",
+            stderr="커밋 메시지가 필요합니다",
+            returncode=1,
+            success=False
+        )
+
+    try:
+        # add_all이 True면 먼저 모든 변경사항 스테이징
+        if add_all:
+            add_result = await git_add(".")
+            if not add_result.success:
+                return add_result
+
+        cmd_args = [
+            "git",
+            "--git-dir", GIT_DIR_PATH,
+            "--work-tree", PROJECT_ROOT,
+            "commit",
+            "-m", message
+        ]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=PROJECT_ROOT
+        )
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            return ExecutionResult(
+                command=" ".join(cmd_args[:7]) + " [message]",  # 메시지는 숨김
+                stdout="",
+                stderr=stderr.decode() if stderr else "Git commit 실행 실패",
+                returncode=proc.returncode or 1,
+                success=False
+            )
+
+        commit_output = stdout.decode().strip()
+
+        return ExecutionResult(
+            command=" ".join(cmd_args[:7]) + " [message]",  # 메시지는 숨김
+            stdout=f"커밋 완료: {commit_output}",
+            stderr="",
+            returncode=0,
+            success=True
+        )
+    except Exception as e:
+        return ExecutionResult(
+            command="git commit",
+            stdout="",
+            stderr=f"Git commit 오류: {str(e)}",
+            returncode=1,
+            success=False
+        )
+
 # =============================================================================
 # Playwright 웹 자동화 도구
 # =============================================================================
