@@ -26,6 +26,7 @@ The system implements a progressive deployment strategy:
 **Phase 2 (RAG System):**
 - FastEmbed embedding service (port 8003) - PyTorch-free embedding generation
 - Qdrant vector database (port 6333) - High-performance vector storage
+- PostgreSQL database (port 5432) - Metadata and search logs
 - RAG service (port 8002) - Document indexing and query processing
 - Korean document support with contextual answers
 
@@ -133,12 +134,38 @@ curl http://localhost:8020/health  # MCP Server
 - Environment variables in `.env` specify model filenames
 - **RTX 4050 6GB Optimized Settings (7B Models):**
   - GPU layers: 999 (auto-maximum)
-  - Context size: 2048 tokens
+  - Context size: 1024 tokens (speed optimized)
   - Parallel processing: 1
-  - Batch size: 256, micro-batch: 128
+  - Batch size: 128
+  - CPU threads: 4 (limited)
+  - CPU limit: 4.0 cores (Docker)
 - **Available Models:**
   - 7B models (optimized): 4.4GB each
   - 14B models (high-performance): 8.4GB each
+
+### Data Architecture (1TB External SSD)
+**Unified Structure:**
+```
+/mnt/e/
+├── ai-models/          # AI models (8GB+)
+├── ai-data/           # All persistent data
+│   ├── postgresql/    # Metadata DB
+│   ├── vectors/       # Vector storage (Qdrant)
+│   ├── documents/     # Original documents
+│   ├── cache/         # Processing cache
+│   └── logs/          # System logs
+└── worktree/         # Temporary Git worktrees
+```
+
+**PostgreSQL Schema:**
+- **RAG Tables**: collections, documents, chunks, search_logs
+- **MCP Tables**: mcp_requests, notion_pages, web_scrapes
+- **System Tables**: system_settings, user_preferences
+
+**Data Separation Strategy:**
+- Worktrees: Temporary code (deleted after merge)
+- Shared Data: Models, DB, vectors, documents (permanent)
+- Scalability: Independent component management
 
 ### RAG Implementation (ChatGPT Optimized)
 - **FastEmbed**: PyTorch-free embedding using ONNX runtime
@@ -234,10 +261,21 @@ INFERENCE_PORT=8001
 RAG_PORT=8002
 EMBEDDING_PORT=8003
 MCP_PORT=8020
+POSTGRES_PORT=5432
 
-# Model Files (in models/ directory)
-CHAT_MODEL=qwen2.5-14b-instruct-q4_k_m.gguf
-CODE_MODEL=qwen2.5-coder-14b-instruct-q4_k_m.gguf
+# Model Files (optimized for 7B)
+CHAT_MODEL=Qwen2.5-7B-Instruct-Q4_K_M.gguf
+CODE_MODEL=qwen2.5-coder-7b-instruct-q4_k_m.gguf
+
+# Data Paths (external SSD)
+MODELS_DIR=/mnt/e/ai-models
+DATA_DIR=/mnt/e/ai-data
+
+# Database Configuration
+POSTGRES_HOST=postgres
+POSTGRES_DB=ai_suite
+POSTGRES_USER=ai_user
+POSTGRES_PASSWORD=ai_secure_pass
 
 # RAG Configuration
 EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
