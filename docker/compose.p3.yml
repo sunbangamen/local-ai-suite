@@ -110,6 +110,7 @@ services:
       - ${DATA_DIR:-/mnt/e/ai-data}:/mnt/data:rw
       - ${MODELS_DIR:-/mnt/e/ai-models}:/mnt/models:ro
       - ../:/mnt/workspace:rw  # Workspace access for Git and file operations
+      - /mnt/e/local-ai-suite/.git:/mnt/workspace/.git-main:rw  # Main repo .git for worktree
     environment:
       - API_GATEWAY_URL=${API_GATEWAY_URL:-http://api-gateway:8000}
       - API_GATEWAY_MODEL=${API_GATEWAY_MODEL:-local-7b}
@@ -119,6 +120,7 @@ services:
       - PROJECT_ROOT=/mnt/workspace  # Align with mount path
       - WORKSPACE_DIR=/mnt/workspace
       - DATA_DIR=/mnt/data
+      - GIT_DIR_PATH=/mnt/workspace/.git-main  # Main repo .git for worktree
     depends_on:
       - api-gateway
       - rag

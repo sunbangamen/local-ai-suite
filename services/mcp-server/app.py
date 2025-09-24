@@ -55,6 +55,7 @@ PROJECT_ROOT = os.getenv("PROJECT_ROOT", os.getenv("WORKSPACE_DIR", "/mnt/worksp
 RAG_URL = os.getenv("RAG_URL", "http://rag:8002")
 API_GATEWAY_URL = os.getenv("API_GATEWAY_URL", "http://api-gateway:8000")
 EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://embedding:8003")
+GIT_DIR_PATH = os.getenv("GIT_DIR_PATH", "/mnt/workspace/.git-main")
 
 # MCP 서버 인스턴스
 mcp = FastMCP("Local AI MCP Server")
@@ -422,16 +423,19 @@ async def ai_chat(message: str, model: str = None) -> AIResponse:
 
 @mcp.tool()
 async def git_status(path: str = ".") -> ExecutionResult:
-    """Git 저장소 상태 확인"""
+    """Git 저장소 상태 확인 (worktree 호환)"""
     repo_path = Path(PROJECT_ROOT) / path
 
     try:
-        # git status 실행
+        # Git worktree를 위한 --git-dir, --work-tree 사용
         proc = await asyncio.create_subprocess_exec(
-            "git", "status", "--porcelain",
+            "git",
+            "--git-dir", GIT_DIR_PATH,
+            "--work-tree", PROJECT_ROOT,
+            "status", "--porcelain",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=str(repo_path)
+            cwd=PROJECT_ROOT
         )
         stdout, stderr = await proc.communicate()
 
