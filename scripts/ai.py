@@ -19,6 +19,7 @@ from typing import Optional, List, Dict, Any
 # Configuration
 API_URL = "http://localhost:8000/v1/chat/completions"
 RAG_URL = "http://localhost:8002"
+MCP_URL = "http://localhost:8020"
 AVAILABLE_MODELS = {
     "chat": "local-7b",
     "code": "local-7b"
@@ -79,6 +80,235 @@ def detect_query_type(query: str) -> str:
             return 'code'
 
     return 'chat'
+
+def call_mcp_tool(tool_name: str, **kwargs) -> Optional[Dict[str, Any]]:
+    """
+    Call MCP server tool
+    """
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    try:
+        print(f"🔧 Calling MCP tool: {tool_name}...")
+        response = requests.post(f"{MCP_URL}/tools/{tool_name}/call", json=kwargs, headers=headers, timeout=60)
+        response.raise_for_status()
+
+        data = response.json()
+        return data
+
+    except requests.exceptions.ConnectionError:
+        print("❌ Error: Cannot connect to MCP server.")
+        print("💡 Make sure MCP server is running: make up-p3")
+        return None
+    except requests.exceptions.Timeout:
+        print("⏱️ Error: MCP request timed out.")
+        return None
+    except Exception as e:
+        print(f"❌ MCP Error: {e}")
+        return None
+
+def analyze_query_for_mcp_tools(query: str) -> List[Dict[str, Any]]:
+    """
+    Analyze user query to determine if MCP tools should be used
+    Returns list of suggested tools with arguments
+    """
+    suggestions = []
+    query_lower = query.lower()
+
+    # File operations
+    if any(keyword in query_lower for keyword in ['파일', '읽어', 'read file', '파일 내용', '텍스트']):
+        if '읽' in query_lower or 'read' in query_lower:
+            suggestions.append({
+                'tool': 'read_file',
+                'reason': 'File reading operation detected',
+                'confidence': 0.8
+            })
+
+    if any(keyword in query_lower for keyword in ['파일 생성', '파일 쓰기', 'write file', '저장']):
+        suggestions.append({
+            'tool': 'write_file',
+            'reason': 'File writing operation detected',
+            'confidence': 0.8
+        })
+
+    # Web operations
+    if any(keyword in query_lower for keyword in ['웹사이트', '스크린샷', 'screenshot', 'website', 'url']):
+        suggestions.append({
+            'tool': 'web_screenshot',
+            'reason': 'Web screenshot request detected',
+            'confidence': 0.9
+        })
+
+    if any(keyword in query_lower for keyword in ['크롤링', 'scrape', '웹 데이터', 'web data']):
+        suggestions.append({
+            'tool': 'web_scrape',
+            'reason': 'Web scraping request detected',
+            'confidence': 0.9
+        })
+
+    # Code execution
+    if any(keyword in query_lower for keyword in ['파이썬 실행', 'python run', '코드 실행', 'execute']):
+        suggestions.append({
+            'tool': 'execute_python',
+            'reason': 'Python code execution detected',
+            'confidence': 0.8
+        })
+
+    if any(keyword in query_lower for keyword in ['명령어', 'command', 'bash', '터미널']):
+        suggestions.append({
+            'tool': 'execute_bash',
+            'reason': 'Bash command execution detected',
+            'confidence': 0.8
+        })
+
+    # Git operations
+    if any(keyword in query_lower for keyword in ['git', '깃', '저장소', 'repository']):
+        suggestions.append({
+            'tool': 'git_status',
+            'reason': 'Git repository operation detected',
+            'confidence': 0.7
+        })
+
+    # RAG search
+    if any(keyword in query_lower for keyword in ['검색', 'search', '문서', 'document', '찾기']):
+        suggestions.append({
+            'tool': 'rag_search',
+            'reason': 'Document search request detected',
+            'confidence': 0.8
+        })
+
+    # Notion operations
+    if any(keyword in query_lower for keyword in ['notion', '노션', '노트']):
+        suggestions.append({
+            'tool': 'notion_search',
+            'reason': 'Notion operation detected',
+            'confidence': 0.7
+        })
+
+    return suggestions
+
+def auto_execute_mcp_tools(query: str, max_tools: int = 2) -> str:
+    """
+    Automatically execute relevant MCP tools based on query analysis
+    Returns enhanced response with tool results
+    """
+    suggestions = analyze_query_for_mcp_tools(query)
+
+    # Filter high-confidence suggestions
+    high_conf_suggestions = [s for s in suggestions if s['confidence'] >= 0.8]
+
+    if not high_conf_suggestions:
+        return ""
+
+    # Sort by confidence and limit
+    high_conf_suggestions.sort(key=lambda x: x['confidence'], reverse=True)
+    selected_tools = high_conf_suggestions[:max_tools]
+
+    tool_results = []
+    for suggestion in selected_tools:
+        tool_name = suggestion['tool']
+        print(f"🤖 Auto-executing MCP tool: {tool_name} (confidence: {suggestion['confidence']:.1%})")
+
+        try:
+            # Extract parameters from query based on tool type
+            args = extract_tool_args_from_query(query, tool_name)
+            result = call_mcp_tool(tool_name, **args)
+
+            if result and result.get('success'):
+                tool_results.append({
+                    'tool': tool_name,
+                    'result': result.get('result', ''),
+                    'success': True
+                })
+            else:
+                print(f"⚠️ MCP tool {tool_name} failed or returned no results")
+
+        except Exception as e:
+            print(f"❌ Error executing MCP tool {tool_name}: {e}")
+
+    # Format results for inclusion in AI response
+    if tool_results:
+        formatted_results = "\n\n🔧 MCP 도구 실행 결과:\n"
+        for i, result in enumerate(tool_results, 1):
+            tool_name = result['tool']
+            formatted_results += f"{i}. {tool_name}: "
+
+            # Format result based on tool type
+            if tool_name == 'web_screenshot':
+                formatted_results += "스크린샷이 성공적으로 촬영되었습니다."
+            elif tool_name == 'read_file':
+                formatted_results += "파일을 성공적으로 읽었습니다."
+            elif tool_name == 'rag_search':
+                formatted_results += "문서 검색이 완료되었습니다."
+            else:
+                formatted_results += "실행 완료"
+            formatted_results += "\n"
+
+        return formatted_results
+
+    return ""
+
+def extract_tool_args_from_query(query: str, tool_name: str) -> Dict[str, Any]:
+    """
+    Extract tool arguments from user query
+    """
+    args = {}
+    query_lower = query.lower()
+
+    if tool_name == 'web_screenshot':
+        # Try to extract URL from query
+        import re
+        url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+        urls = re.findall(url_pattern, query)
+        if urls:
+            args['url'] = urls[0]
+        else:
+            # Default URL if none found
+            args['url'] = 'https://www.google.com'
+
+    elif tool_name == 'read_file':
+        # Try to extract file path from query
+        words = query.split()
+        for word in words:
+            if '.' in word and ('/' in word or '\\' in word or word.endswith('.txt') or word.endswith('.py') or word.endswith('.md')):
+                args['path'] = word
+                break
+        if 'path' not in args:
+            args['path'] = 'README.md'  # Default file
+
+    elif tool_name == 'rag_search':
+        # Use the query itself for RAG search
+        args['query'] = query
+
+    elif tool_name == 'execute_python':
+        # Extract Python code if present
+        if 'print(' in query or 'def ' in query or 'import ' in query:
+            # Find code block
+            code_start = query.find('```')
+            if code_start != -1:
+                code_end = query.find('```', code_start + 3)
+                if code_end != -1:
+                    args['code'] = query[code_start+3:code_end].strip()
+            else:
+                args['code'] = f'print("Hello from auto-generated code!")'
+        else:
+            args['code'] = f'print("Query: {query}")'
+
+    return args
+
+def get_mcp_tools() -> Optional[List[Dict[str, Any]]]:
+    """
+    Get available MCP tools list
+    """
+    try:
+        response = requests.get(f"{MCP_URL}/tools", timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        return data.get('tools', [])
+    except Exception as e:
+        print(f"❌ Error getting MCP tools: {e}")
+        return None
 
 def call_rag_api(query: str, collection: str = "default", include_context: bool = True) -> Optional[str]:
     """
@@ -220,7 +450,25 @@ def call_api(query: str, model_type: str = 'auto', max_tokens: int = 500) -> Opt
     }
 
     try:
+        # Check if MCP tools should be auto-executed
+        mcp_results = ""
+        mcp_suggestions = analyze_query_for_mcp_tools(query)
+        if mcp_suggestions:
+            high_conf = [s for s in mcp_suggestions if s['confidence'] >= 0.8]
+            if high_conf:
+                print(f"🔍 Detected {len(high_conf)} high-confidence MCP tool(s) for this query")
+                mcp_results = auto_execute_mcp_tools(query)
+
         print(f"🤖 Using {model_type} model ({model_name})...")
+
+        # Enhance query with MCP results if available
+        enhanced_query = query
+        if mcp_results:
+            enhanced_query = f"{query}{mcp_results}"
+            # Update the user message in payload
+            messages[-1]["content"] = enhanced_query
+            payload["messages"] = messages
+
         response = requests.post(API_URL, json=payload, headers=headers, timeout=120)
         response.raise_for_status()
 
@@ -334,6 +582,10 @@ Examples:
     parser.add_argument("--interactive", "-i", action="store_true", help="Start interactive mode")
     parser.add_argument("--analytics", action="store_true", help="Show analytics dashboard")
     parser.add_argument("--optimize", action="store_true", help="Run database optimization")
+    parser.add_argument("--mcp", metavar="TOOL", help="Call MCP tool directly")
+    parser.add_argument("--mcp-args", metavar="ARGS", help="Arguments for MCP tool (JSON format)")
+    parser.add_argument("--mcp-list", action="store_true", help="List available MCP tools")
+    parser.add_argument("--tools", action="store_true", help="Enable AI to use MCP tools automatically")
 
     args = parser.parse_args()
 
@@ -356,6 +608,16 @@ Examples:
             print("❌ Analytics not available. ai_analytics.py not found.")
             sys.exit(1)
         run_optimization()
+        sys.exit(0)
+
+    # Handle MCP tools list
+    if args.mcp_list:
+        show_mcp_tools()
+        sys.exit(0)
+
+    # Handle direct MCP tool call
+    if args.mcp:
+        handle_mcp_call(args.mcp, args.mcp_args)
         sys.exit(0)
 
     # Determine model type
@@ -388,6 +650,8 @@ Examples:
                     print("  :index [collection] - Index documents")
                     print("  :analytics - Show usage analytics")
                     print("  :optimize - Run database optimization")
+                    print("  :mcp-list - Show available MCP tools")
+                    print("  :mcp <tool> [args] - Call MCP tool directly")
                     continue
 
                 # Parse inline commands
@@ -418,6 +682,15 @@ Examples:
                         run_optimization()
                     else:
                         print("❌ Analytics not available")
+                    continue
+                elif query.startswith(':mcp-list'):
+                    show_mcp_tools()
+                    continue
+                elif query.startswith(':mcp '):
+                    parts = query[5:].split(' ', 1)
+                    tool_name = parts[0]
+                    args_json = parts[1] if len(parts) > 1 else None
+                    handle_mcp_call(tool_name, args_json)
                     continue
                 else:
                     model_type = 'auto'
@@ -511,6 +784,74 @@ def run_optimization():
         print(f"  Database size: {result['database_size_mb']:.1f}MB")
     except Exception as e:
         print(f"❌ Error during optimization: {e}")
+
+def show_mcp_tools():
+    """Show available MCP tools"""
+    print("🔧 Available MCP Tools")
+    print("=" * 30)
+
+    tools = get_mcp_tools()
+    if not tools:
+        print("❌ No MCP tools available or server unreachable")
+        return
+
+    for tool in tools:
+        name = tool.get('name', 'Unknown')
+        desc = tool.get('description', 'No description')
+        print(f"\n🔨 {name}")
+        print(f"   {desc}")
+
+        # Show required arguments
+        schema = tool.get('inputSchema', {})
+        required = schema.get('required', [])
+        if required:
+            print(f"   Required: {', '.join(required)}")
+
+def handle_mcp_call(tool_name: str, args_json: str = None):
+    """Handle direct MCP tool call"""
+    try:
+        # Parse arguments if provided
+        kwargs = {}
+        if args_json:
+            import json
+            import ast
+            # Handle potential encoding issues with Korean characters and shell escapes
+            try:
+                # First try direct parsing
+                kwargs = json.loads(args_json)
+            except json.JSONDecodeError:
+                try:
+                    # Try with literal_eval for safer parsing of shell-escaped strings
+                    # Replace common shell escapes
+                    cleaned_json = args_json.replace('\\!', '!')
+                    kwargs = json.loads(cleaned_json)
+                except (json.JSONDecodeError, ValueError):
+                    # Final fallback - try to parse as Python literal
+                    try:
+                        kwargs = ast.literal_eval(args_json.replace('\\!', '!'))
+                        if not isinstance(kwargs, dict):
+                            kwargs = {"value": kwargs}
+                    except (ValueError, SyntaxError):
+                        print(f"⚠️ Cannot parse arguments: {args_json}")
+                        print("💡 Try using double quotes and proper JSON format")
+                        return
+
+        # Call the tool
+        result = call_mcp_tool(tool_name, **kwargs)
+        if result:
+            print(f"✅ MCP Tool Result:")
+            if isinstance(result, dict):
+                for key, value in result.items():
+                    if isinstance(value, str) and len(value) > 200:
+                        print(f"  {key}: {value[:200]}...")
+                    else:
+                        print(f"  {key}: {value}")
+            else:
+                print(f"  {result}")
+    except json.JSONDecodeError as e:
+        print(f"❌ Invalid JSON in --mcp-args: {e}")
+    except Exception as e:
+        print(f"❌ Error calling MCP tool: {e}")
 
 if __name__ == "__main__":
     main()

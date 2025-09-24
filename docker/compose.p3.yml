@@ -1,0 +1,132 @@
+services:
+  inference:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    restart: unless-stopped
+    ports: ["${INFERENCE_PORT:-8001}:8001"]
+    volumes:
+      - type: bind
+        source: ${MODELS_DIR:-/mnt/e/ai-models}
+        target: /models
+        read_only: true
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+    command: >
+      --host 0.0.0.0 --port 8001
+      --model /models/${CHAT_MODEL:-Qwen2.5-7B-Instruct-Q4_K_M.gguf}
+      -t 4
+      -c 1024
+      -b 128
+      --n-gpu-layers ${LLAMA_N_GPU_LAYERS:-999}
+      --parallel ${LLAMA_PARALLEL:-1}
+      --cont-batching
+      --temp ${LLAMA_TEMP:-0.3}
+      --top-p ${LLAMA_TOP_P:-0.9}
+      --repeat-penalty ${LLAMA_REPEAT_PENALTY:-1.05}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  api-gateway:
+    image: ghcr.io/berriai/litellm:main-latest
+    restart: unless-stopped
+    ports: ["${API_GATEWAY_PORT:-8000}:8000"]
+    volumes:
+      - ../services/api-gateway/config.p1.yaml:/app/config.yaml:ro
+    platform: linux/amd64
+    command: ["--config", "/app/config.yaml", "--port", "8000", "--host", "0.0.0.0"]
+    environment:
+      - LITELLM_LOG=warning
+      - TIMEOUT=60
+    depends_on:
+      - inference
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  rag:
+    build:
+      context: ../services/rag
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports: ["${RAG_PORT:-8002}:8002"]
+    volumes:
+      - ${DATA_DIR:-/mnt/e/ai-data}/documents:/app/documents:ro
+    environment:
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - EMBEDDING_URL=${EMBEDDING_URL:-http://embedding:8003}
+      # LLM 호출 제한(속도/안정화)
+      - RAG_LLM_TIMEOUT=${RAG_LLM_TIMEOUT:-120}
+      - RAG_LLM_MAX_TOKENS=${RAG_LLM_MAX_TOKENS:-256}
+      - RAG_LLM_TEMPERATURE=${RAG_LLM_TEMPERATURE:-0.3}
+      # 인덱싱/검색 튜닝(권장 시작값)
+      - RAG_TOPK=${RAG_TOPK:-4}
+      - RAG_CHUNK_SIZE=${RAG_CHUNK_SIZE:-512}
+      - RAG_CHUNK_OVERLAP=${RAG_CHUNK_OVERLAP:-100}
+    depends_on:
+      - qdrant
+      - embedding
+      - api-gateway
+
+  embedding:
+    build:
+      context: ../services/embedding
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports: ["${EMBEDDING_PORT:-8003}:8003"]
+    environment:
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ${DATA_DIR:-/mnt/e/ai-data}/vectors/qdrant:/qdrant/storage
+
+  mcp-server:
+    build:
+      context: ../services/mcp-server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports: ["${MCP_PORT:-8020}:8020"]
+    volumes:
+      # File system access for MCP tools
+      - ${DATA_DIR:-/mnt/e/ai-data}:/mnt/data:rw
+      - ${MODELS_DIR:-/mnt/e/ai-models}:/mnt/models:ro
+      - ../:/mnt/workspace:rw  # Workspace access for Git and file operations
+    environment:
+      - API_GATEWAY_URL=${API_GATEWAY_URL:-http://api-gateway:8000}
+      - RAG_URL=${RAG_URL:-http://rag:8002}
+      - EMBEDDING_URL=${EMBEDDING_URL:-http://embedding:8003}
+      - NOTION_TOKEN=${NOTION_TOKEN:-}  # Optional Notion integration
+      - WORKSPACE_DIR=/mnt/workspace
+      - DATA_DIR=/mnt/data
+    depends_on:
+      - api-gateway
+      - rag
+      - embedding
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8020/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# No named volumes needed - using external SSD host paths
+# SQLite databases are stored as files in ${DATA_DIR}/sqlite/
