@@ -1,0 +1,22 @@
+# LiteLLM OpenAI 호환 게이트웨이 설정 (Phase 2: 단일 inference 서버)
+model_list:
+  # 채팅 모델 (일반 대화용) - 같은 서버 사용
+  - model_name: chat-7b
+    litellm_params:
+      model: openai/chat/completions
+      api_base: http://inference:8001/v1
+      api_key: sk-noop
+      timeout: 60
+      stream: true
+      max_output_tokens: 512
+
+  # 코딩 모델 (프로그래밍 전용) - 같은 서버 사용
+  - model_name: code-7b
+    litellm_params:
+      model: openai/chat/completions
+      api_base: http://inference:8001/v1
+      api_key: sk-noop
+      timeout: 60
+      stream: true
+      max_output_tokens: 1024
+

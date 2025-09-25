@@ -1,0 +1,49 @@
+services:
+  inference:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    restart: unless-stopped
+    ports:
+      - "${INFERENCE_PORT:-8001}:8001"
+    volumes:
+      - ${MODELS_DIR:-./models}:/models:ro
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+    # docker compose 최신이면 아래도 가능: gpus: all
+    command: >
+      --host 0.0.0.0 --port 8001
+      --model /models/${CHAT_GGUF:-qwen2.5-7b-instruct-q4_k_m.gguf}
+      -t ${LLAMA_THREADS:-0}
+      -c ${LLAMA_CTX:-2048}
+      -b ${LLAMA_BATCH:-256}
+      --ubatch ${LLAMA_UBATCH:-128}
+      --n-gpu-layers ${LLAMA_N_GPU_LAYERS:-999}
+      --parallel ${LLAMA_PARALLEL:-1}
+      --cont-batching
+      --temp ${LLAMA_TEMP:-0.3}
+      --top-p ${LLAMA_TOP_P:-0.9}
+      --repeat-penalty ${LLAMA_REPEAT_PENALTY:-1.05}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  api-gateway:
+    image: ghcr.io/berriai/litellm:latest
+    restart: unless-stopped
+    ports:
+      - "${API_GATEWAY_PORT:-8000}:8000"
+    volumes:
+      - ./services/api-gateway:/app
+    command: ["--config", "/app/config.p2.yaml"]
+    environment:
+      - LITELLM_LOG=warning
+      - TIMEOUT=60
+    depends_on:
+      - inference

@@ -1,0 +1,10 @@
+mcp
+fastapi
+uvicorn[standard]
+httpx
+aiofiles
+gitpython
+playwright
+beautifulsoup4
+notion-client
+pillow

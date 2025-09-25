@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local AI Desktop</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .chat-container {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            min-height: 400px;
+            border: 1px solid #404040;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .user-message {
+            background: #0066cc;
+            text-align: right;
+        }
+        .ai-message {
+            background: #404040;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        .message-input {
+            flex: 1;
+            padding: 15px;
+            border: 1px solid #555;
+            border-radius: 8px;
+            background: #404040;
+            color: #e0e0e0;
+            font-size: 16px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            resize: vertical;
+            min-height: 50px;
+            max-height: 150px;
+        }
+        .send-button {
+            padding: 15px 30px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .send-button:hover {
+            background: #0056b3;
+        }
+        .send-button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .model-selector {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #404040;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            border-radius: 6px;
+        }
+        .mode-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 6px;
+        }
+        .mode-toggle {
+            display: flex;
+            background: #404040;
+            border-radius: 20px;
+            padding: 2px;
+            border: 1px solid #555;
+        }
+        .mode-button {
+            padding: 8px 16px;
+            border: none;
+            background: transparent;
+            color: #e0e0e0;
+            border-radius: 18px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .mode-button.active {
+            background: #0066cc;
+            color: white;
+        }
+        .current-model {
+            font-size: 14px;
+            color: #aaa;
+        }
+        .code-block {
+            background: #1e1e1e;
+            border: 1px solid #444;
+            border-radius: 6px;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .code-header {
+            background: #333;
+            padding: 8px 12px;
+            border-bottom: 1px solid #444;
+            font-size: 12px;
+            color: #ccc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .copy-btn {
+            background: #555;
+            border: none;
+            color: #ccc;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .copy-btn:hover {
+            background: #666;
+        }
+        .code-content {
+            padding: 12px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.4;
+            color: #f8f8f2;
+            white-space: pre-wrap;
+        }
+        .inline-code {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            color: #f8f8f2;
+        }
+        .status {
+            text-align: center;
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .status.online { color: #27ca3f; }
+        .status.offline { color: #ff5f56; }
+
+        .clear-chat-btn {
+            background: #666;
+            color: #e0e0e0;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-left: 10px;
+        }
+        .clear-chat-btn:hover {
+            background: #777;
+        }
+
+        .shortcuts-info {
+            font-size: 12px;
+            color: #999;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .message-stats {
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+            text-align: right;
+        }
+        .typing-indicator {
+            opacity: 0.7;
+            font-style: italic;
+        }
+        .typing-indicator::after {
+            content: '...';
+            animation: typing 1.5s infinite;
+        }
+        @keyframes typing {
+            0%, 60% { opacity: 1; }
+            30% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Local AI Desktop</h1>
+
+        <div class="status" id="status">서버 연결 확인 중...</div>
+
+        <div class="mode-container">
+            <div class="mode-toggle">
+                <button class="mode-button active" id="autoMode">🤖 자동 모드</button>
+                <button class="mode-button" id="manualMode">👤 수동 모드</button>
+            </div>
+            <div class="current-model" id="currentModel">현재 모델: 💬 Chat Model (자동 감지)</div>
+            <button class="clear-chat-btn" onclick="clearChat()">🗑️ 대화 지우기</button>
+        </div>
+
+        <select class="model-selector" id="modelSelector" style="display: none;">
+            <option value="chat-7b">💬 Chat Model</option>
+            <option value="code-7b">💻 Code Model</option>
+        </select>
+
+        <div class="chat-container" id="chatContainer">
+            <div class="message ai-message">
+                <strong>🤖 AI:</strong> 안녕하세요! Local AI Desktop에 오신 것을 환영합니다.<br><br>
+                💬 **일반 대화**: 자유롭게 질문하세요<br>
+                💻 **코딩 질문**: 프로그래밍 관련 질문을 하시면 자동으로 코드 모델이 선택됩니다<br>
+                🌐 **웹 도구**: URL과 함께 다음 명령어를 사용하세요:<br>
+                &nbsp;&nbsp;• "https://example.com <strong>스크린샷</strong> 찍어줘"<br>
+                &nbsp;&nbsp;• "https://example.com <strong>내용</strong> 크롤링해줘"<br>
+                &nbsp;&nbsp;• "https://example.com <strong>UI 분석</strong>해줘"<br>
+                &nbsp;&nbsp;• "https://example.com <strong>Notion에 저장</strong>해줘"
+            </div>
+        </div>
+
+        <div class="shortcuts-info">
+            💡 <strong>Enter</strong>: 전송 | <strong>Ctrl+Enter</strong>: 줄바꿈 | <strong>ESC</strong>: 응답 중단 | <strong>Ctrl+L</strong>: 대화 지우기 | <strong>Ctrl+/</strong>: 모드 전환
+        </div>
+
+        <div class="input-container">
+            <textarea class="message-input" id="messageInput" placeholder="메시지를 입력하세요..." rows="1"></textarea>
+            <button class="send-button" id="sendButton">전송</button>
+        </div>
+    </div>
+
+    <script src="mcp-client.js"></script>
+    <script>
+        // DOM 요소들
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const modelSelector = document.getElementById('modelSelector');
+        const status = document.getElementById('status');
+        const autoModeBtn = document.getElementById('autoMode');
+        const manualModeBtn = document.getElementById('manualMode');
+        const currentModelDisplay = document.getElementById('currentModel');
+
+        let isLoading = false;
+        let isAutoMode = true;
+        let abortController = null; // 응답 중단을 위한 컨트롤러
+
+        // 웹/Electron 환경 감지
+        const isElectron = window.electronAPI !== undefined;
+
+        // MCP 클라이언트 초기화 (지연 초기화)
+        let mcpClient = null;
+
+        // MCP 클라이언트 초기화 (지연 로딩)
+        function initializeMCPClient() {
+            try {
+                if (window.MCPClient) {
+                    mcpClient = new MCPClient();
+                    console.log('MCP 클라이언트가 성공적으로 초기화되었습니다.');
+                    return true;
+                } else {
+                    console.log('MCPClient가 아직 로드되지 않았습니다. 재시도 중...');
+                    return false;
+                }
+            } catch (error) {
+                console.error('MCP 클라이언트 초기화 실패:', error);
+                return false;
+            }
+        }
+
+        // DOM 로드 완료 후 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM 로드 완료');
+
+            // MCP 클라이언트 초기화 시도 (최대 5회)
+            let initAttempts = 0;
+            const maxAttempts = 5;
+
+            const tryInitMCP = () => {
+                initAttempts++;
+                if (initializeMCPClient()) {
+                    checkServerStatus();
+                } else if (initAttempts < maxAttempts) {
+                    console.log(`MCP 클라이언트 초기화 재시도 (${initAttempts}/${maxAttempts})`);
+                    setTimeout(tryInitMCP, 500);
+                } else {
+                    console.error('MCP 클라이언트 초기화 최종 실패');
+                    status.textContent = '❌ MCP 클라이언트 로드 실패';
+                    status.className = 'status offline';
+                }
+            };
+
+            tryInitMCP();
+        });
+
+        // MCP 도구 감지 및 실행 함수
+        async function detectAndExecuteMCPTool(message) {
+            // MCP 클라이언트가 초기화되지 않았으면 false 반환
+            if (!mcpClient) {
+                console.log('MCP 클라이언트가 초기화되지 않아 MCP 도구를 사용할 수 없습니다.');
+                return false;
+            }
+
+            const lowerMessage = message.toLowerCase();
+
+            // 웹 스크린샷 감지
+            if (lowerMessage.includes('스크린샷') || lowerMessage.includes('screenshot') || lowerMessage.includes('캡처')) {
+                const urlMatch = message.match(/https?:\/\/[^\s]+/);
+                if (urlMatch) {
+                    try {
+                        addMessage('📸 웹페이지 스크린샷을 촬영하고 있습니다...', false);
+                        const result = await mcpClient.webScreenshot(urlMatch[0]);
+                        addMessage(`✅ 스크린샷 완료!\n이미지가 생성되었습니다: ${result.screenshot_path}`, false);
+                        return true;
+                    } catch (error) {
+                        addMessage(`❌ 스크린샷 실패: ${error.message}`, false);
+                        return false;
+                    }
+                }
+            }
+
+            // 웹 스크래핑 감지
+            if ((lowerMessage.includes('크롤링') || lowerMessage.includes('스크래핑') || lowerMessage.includes('내용') || lowerMessage.includes('텍스트')) &&
+                (lowerMessage.includes('http') || message.match(/https?:\/\/[^\s]+/))) {
+                const urlMatch = message.match(/https?:\/\/[^\s]+/);
+                if (urlMatch) {
+                    try {
+                        addMessage('🔍 웹페이지 내용을 분석하고 있습니다...', false);
+                        const result = await mcpClient.webScrape(urlMatch[0]);
+                        addMessage(`✅ 스크래핑 완료!\n\n**제목:** ${result.title}\n**내용:** ${result.content.substring(0, 500)}...`, false);
+                        return true;
+                    } catch (error) {
+                        addMessage(`❌ 스크래핑 실패: ${error.message}`, false);
+                        return false;
+                    }
+                }
+            }
+
+            // UI 분석 감지
+            if ((lowerMessage.includes('ui') || lowerMessage.includes('디자인') || lowerMessage.includes('색상') || lowerMessage.includes('폰트')) &&
+                (lowerMessage.includes('분석') || lowerMessage.includes('확인'))) {
+                const urlMatch = message.match(/https?:\/\/[^\s]+/);
+                if (urlMatch) {
+                    try {
+                        addMessage('🎨 UI 디자인을 분석하고 있습니다...', false);
+                        const result = await mcpClient.webAnalyzeUI(urlMatch[0]);
+                        addMessage(`✅ UI 분석 완료!\n\n**주요 색상:** ${result.colors.join(', ')}\n**폰트:** ${result.fonts.join(', ')}\n**레이아웃:** ${result.layout}`, false);
+                        return true;
+                    } catch (error) {
+                        addMessage(`❌ UI 분석 실패: ${error.message}`, false);
+                        return false;
+                    }
+                }
+            }
+
+            // Notion 저장 감지
+            if (lowerMessage.includes('notion') || lowerMessage.includes('노션') || lowerMessage.includes('저장')) {
+                const urlMatch = message.match(/https?:\/\/[^\s]+/);
+                if (urlMatch) {
+                    try {
+                        addMessage('📝 Notion에 저장하고 있습니다...', false);
+                        const result = await mcpClient.webToNotion(urlMatch[0]);
+                        addMessage(`✅ Notion 저장 완료!\n페이지가 생성되었습니다: ${result.page_url}`, false);
+                        return true;
+                    } catch (error) {
+                        addMessage(`❌ Notion 저장 실패: ${error.message}`, false);
+                        return false;
+                    }
+                }
+            }
+
+            return false; // MCP 도구를 사용하지 않음
+        }
+
+        // 모델 자동 감지 함수
+        function detectModelType(message) {
+            const codeKeywords = [
+                'function', 'class', 'import', 'export', 'const', 'let', 'var',
+                'def', 'return', 'if', 'for', 'while', 'try', 'catch', 'async', 'await',
+                '코드', '함수', '프로그래밍', '버그', 'API', 'HTML', 'CSS', 'JavaScript',
+                'Python', 'React', '개발', '구현', '디버그', '스크립트', '라이브러리',
+                'npm', 'pip', 'git', 'docker', '배포', '테스트', '알고리즘',
+                '```', 'console.log', 'print(', 'error', 'exception'
+            ];
+
+            const messageLower = message.toLowerCase();
+            const hasCodeKeywords = codeKeywords.some(keyword =>
+                messageLower.includes(keyword.toLowerCase())
+            );
+
+            return hasCodeKeywords ? 'code-7b' : 'chat-7b';
+        }
+
+        // 현재 모델 표시 업데이트
+        function updateCurrentModelDisplay(model, isDetected = false) {
+            const modelName = model === 'code-7b' ? '💻 Code Model' : '💬 Chat Model';
+            const suffix = isAutoMode ? (isDetected ? ' (자동 감지)' : ' (기본값)') : ' (수동 선택)';
+            currentModelDisplay.textContent = `현재 모델: ${modelName}${suffix}`;
+        }
+
+        // 모드 전환 함수
+        function toggleMode(autoMode) {
+            isAutoMode = autoMode;
+
+            if (autoMode) {
+                autoModeBtn.classList.add('active');
+                manualModeBtn.classList.remove('active');
+                modelSelector.style.display = 'none';
+                updateCurrentModelDisplay('chat-7b');
+            } else {
+                autoModeBtn.classList.remove('active');
+                manualModeBtn.classList.add('active');
+                modelSelector.style.display = 'block';
+                updateCurrentModelDisplay(modelSelector.value);
+            }
+        }
+
+        // 웹용 AI Chat 함수 (스트리밍 지원)
+        async function webAiChat(messageText, modelName, streamingMessageDiv = null) {
+            const response = await fetch('http://localhost:8000/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: modelName,
+                    messages: [{ role: 'user', content: messageText }],
+                    max_tokens: 512,
+                    temperature: 0.3,
+                    stream: streamingMessageDiv ? true : false  // 스트리밍 div가 있으면 스트리밍 활성화
+                }),
+                signal: abortController.signal
+            });
+
+            if (!response.ok) {
+                return {
+                    success: false,
+                    error: `HTTP ${response.status}: ${response.statusText}`
+                };
+            }
+
+            if (!streamingMessageDiv) {
+                // 스트리밍 없이 전체 응답 반환 (기존 호환성)
+                const data = await response.json();
+                return {
+                    success: true,
+                    response: data.choices[0].message.content
+                };
+            }
+
+            // 스트리밍 처리
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let fullResponse = '';
+            let buffer = '';
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || ''; // 마지막 불완전한 줄은 버퍼에 보관
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
+
+                            try {
+                                const parsed = JSON.parse(data);
+                                const content = parsed.choices[0]?.delta?.content;
+                                if (content) {
+                                    fullResponse += content;
+                                    // 실시간으로 화면 업데이트
+                                    const parsedContent = parseMarkdown(fullResponse);
+                                    streamingMessageDiv.innerHTML = `<strong>🤖 AI:</strong> ${parsedContent}`;
+                                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                                }
+                            } catch (e) {
+                                // JSON 파싱 에러 무시
+                            }
+                        }
+                    }
+                }
+
+                return {
+                    success: true,
+                    response: fullResponse
+                };
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    return {
+                        success: false,
+                        error: 'Request was aborted'
+                    };
+                }
+                throw error;
+            } finally {
+                reader.releaseLock();
+            }
+        }
+
+        // 서버 상태 확인
+        async function checkServerStatus() {
+            let aiStatus = '🔴 AI 서버 오프라인';
+            let mcpStatus = '🔴 MCP 서버 오프라인';
+
+            console.log('서버 상태 확인 시작...');
+
+            // AI 서버 상태 확인
+            try {
+                abortController = new AbortController();
+                const aiChat = isElectron ? electronAPI.aiChat : webAiChat;
+                const response = await aiChat('테스트', 'chat-7b');
+                if (response.success) {
+                    aiStatus = '🟢 AI 서버 온라인';
+                }
+            } catch (error) {
+                console.log('AI 서버 연결 실패:', error);
+            }
+
+            // MCP 서버 상태 확인
+            try {
+                if (mcpClient) {
+                    const tools = await mcpClient.listTools();
+                    if (tools && tools.tools) {
+                        mcpStatus = `🟢 MCP 서버 온라인 (${tools.tools.length}개 도구)`;
+                    }
+                } else {
+                    mcpStatus = '⚠️ MCP 클라이언트 미초기화';
+                }
+            } catch (error) {
+                console.log('MCP 서버 연결 실패:', error);
+            }
+
+            // 상태 표시 업데이트
+            const bothOnline = aiStatus.includes('🟢') && mcpStatus.includes('🟢');
+            status.textContent = `${aiStatus} | ${mcpStatus}`;
+            status.className = bothOnline ? 'status online' : 'status offline';
+
+            console.log('서버 상태 확인 완료:', status.textContent);
+        }
+
+        // 코드 복사 함수
+        function copyCode(button) {
+            const codeContent = button.parentNode.nextElementSibling.textContent;
+            navigator.clipboard.writeText(codeContent).then(() => {
+                button.textContent = '복사됨!';
+                setTimeout(() => {
+                    button.textContent = '복사';
+                }, 2000);
+            });
+        }
+
+        // Markdown 파싱 함수
+        function parseMarkdown(text) {
+            // 코드 블록 처리 (```language ... ```)
+            text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, language, code) => {
+                const lang = language || 'text';
+                const copyId = 'copy_' + Math.random().toString(36).substr(2, 9);
+                return `<div class="code-block">
+                    <div class="code-header">
+                        <span>${lang}</span>
+                        <button class="copy-btn" onclick="copyCode(this)">복사</button>
+                    </div>
+                    <div class="code-content">${code.trim()}</div>
+                </div>`;
+            });
+
+            // 인라인 코드 처리 (`code`)
+            text = text.replace(/`([^`]+)`/g, '<span class="inline-code">$1</span>');
+
+            // 줄바꿈 처리
+            text = text.replace(/\n/g, '<br>');
+
+            return text;
+        }
+
+        // 메시지 추가
+        function addMessage(text, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
+
+            const parsedText = isUser ? text : parseMarkdown(text);
+            messageDiv.innerHTML = `<strong>${isUser ? '👤 사용자' : '🤖 AI'}:</strong> ${parsedText}`;
+
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // 대화 지우기
+        function clearChat() {
+            chatContainer.innerHTML = `
+                <div class="message ai-message">
+                    <strong>🤖 AI:</strong> 안녕하세요! Local AI Desktop에 오신 것을 환영합니다.<br><br>
+                    💬 **일반 대화**: 자유롭게 질문하세요<br>
+                    💻 **코딩 질문**: 프로그래밍 관련 질문을 하시면 자동으로 코드 모델이 선택됩니다<br>
+                    🌐 **웹 도구**: URL과 함께 다음 명령어를 사용하세요:<br>
+                    &nbsp;&nbsp;• "https://example.com <strong>스크린샷</strong> 찍어줘"<br>
+                    &nbsp;&nbsp;• "https://example.com <strong>내용</strong> 크롤링해줘"<br>
+                    &nbsp;&nbsp;• "https://example.com <strong>UI 분석</strong>해줘"<br>
+                    &nbsp;&nbsp;• "https://example.com <strong>Notion에 저장</strong>해줘"
+                </div>
+            `;
+            localStorage.removeItem('ai-desktop-chat');
+        }
+
+        // 응답 중단 함수
+        function cancelResponse() {
+            if (abortController && isLoading) {
+                abortController.abort();
+                addMessage('⚠️ 응답이 중단되었습니다.', false);
+                resetSendButton();
+            }
+        }
+
+        // 전송 버튼 상태 초기화
+        function resetSendButton() {
+            isLoading = false;
+            sendButton.disabled = false;
+            sendButton.textContent = '전송';
+            abortController = null;
+        }
+
+        // 메시지 전송
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            // 이전 요청 중단
+            if (isLoading && abortController) {
+                cancelResponse();
+            }
+
+            const startTime = Date.now();
+            addMessage(message, true);
+            messageInput.value = '';
+
+            isLoading = true;
+            sendButton.disabled = true;
+            sendButton.textContent = '응답 중... (ESC: 중단)';
+            abortController = new AbortController();
+
+            try {
+                // 1. 먼저 MCP 도구 감지 및 실행
+                const mcpToolExecuted = await detectAndExecuteMCPTool(message);
+
+                // 2. MCP 도구가 실행되지 않았으면 일반 AI 채팅
+                if (!mcpToolExecuted) {
+                    // 모델 선택 (자동/수동 모드에 따라)
+                    let model;
+                    if (isAutoMode) {
+                        model = detectModelType(message);
+                        updateCurrentModelDisplay(model, true);
+                    } else {
+                        model = modelSelector.value;
+                    }
+
+                    // 스트리밍용 메시지 DIV 생성
+                    const streamingMessageDiv = document.createElement('div');
+                    streamingMessageDiv.className = 'message ai-message';
+                    streamingMessageDiv.innerHTML = '<strong>🤖 AI:</strong> <span class="typing-indicator">생각하는 중...</span>';
+                    chatContainer.appendChild(streamingMessageDiv);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+                    const aiChat = isElectron ? electronAPI.aiChat : webAiChat;
+                    const response = await aiChat(message, model, streamingMessageDiv);
+
+                    const endTime = Date.now();
+                    const responseTime = ((endTime - startTime) / 1000).toFixed(1);
+
+                    if (response.success) {
+                        const responseText = response.response;
+                        const tokenEstimate = Math.ceil(responseText.length / 4);
+
+                        // 최종 응답으로 업데이트 (통계 포함)
+                        const parsedContent = parseMarkdown(responseText);
+                        const statsText = `<div class="message-stats">⏱️ ${responseTime}초 | 📊 ~${tokenEstimate} 토큰</div>`;
+                        streamingMessageDiv.innerHTML = `<strong>🤖 AI:</strong> ${parsedContent}${statsText}`;
+                    } else {
+                        streamingMessageDiv.innerHTML = '<strong>🤖 AI:</strong> ❌ 응답 실패: ' + response.error;
+                    }
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    // 사용자가 중단한 경우는 이미 메시지가 표시됨
+                    return;
+                }
+                addMessage('❌ 오류 발생: ' + error.message);
+            } finally {
+                resetSendButton();
+            }
+        }
+
+        // 통계와 함께 메시지 추가
+        function addMessageWithStats(text, isUser = false, responseTime = null, tokens = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
+
+            const parsedText = isUser ? text : parseMarkdown(text);
+            let statsText = '';
+            if (!isUser && (responseTime || tokens)) {
+                statsText = `<div class="message-stats">⏱️ ${responseTime}초${tokens ? ` | 📊 ~${tokens} 토큰` : ''}</div>`;
+            }
+
+            messageDiv.innerHTML = `<strong>${isUser ? '👤 사용자' : '🤖 AI'}:</strong> ${parsedText}${statsText}`;
+
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            saveChatHistory();
+        }
+
+        // 이벤트 리스너
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.ctrlKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+            // Ctrl+Enter는 기본 동작(줄바꿈)을 허용
+        });
+
+        // 전역 단축키
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+Enter: 전송
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                sendMessage();
+            }
+            // Ctrl+L: 대화 지우기
+            else if (e.ctrlKey && e.key === 'l') {
+                e.preventDefault();
+                if (confirm('모든 대화 내용을 지우시겠습니까?')) {
+                    clearChat();
+                }
+            }
+            // Ctrl+/: 모드 전환
+            else if (e.ctrlKey && e.key === '/') {
+                e.preventDefault();
+                toggleMode(!isAutoMode);
+            }
+            // Escape: 응답 중단 또는 입력창 포커스
+            else if (e.key === 'Escape') {
+                if (isLoading) {
+                    cancelResponse();
+                } else {
+                    messageInput.focus();
+                }
+            }
+        });
+
+        // 모드 전환 이벤트 리스너
+        autoModeBtn.addEventListener('click', () => toggleMode(true));
+        manualModeBtn.addEventListener('click', () => toggleMode(false));
+
+        // 수동 모드에서 모델 선택 변경 시 표시 업데이트
+        modelSelector.addEventListener('change', () => {
+            if (!isAutoMode) {
+                updateCurrentModelDisplay(modelSelector.value);
+            }
+        });
+
+        // 설정 저장/로드
+        function saveSettings() {
+            const settings = {
+                isAutoMode: isAutoMode,
+                selectedModel: modelSelector.value
+            };
+            localStorage.setItem('ai-desktop-settings', JSON.stringify(settings));
+        }
+
+        function loadSettings() {
+            try {
+                const settings = JSON.parse(localStorage.getItem('ai-desktop-settings'));
+                if (settings) {
+                    toggleMode(settings.isAutoMode);
+                    if (!settings.isAutoMode) {
+                        modelSelector.value = settings.selectedModel;
+                        updateCurrentModelDisplay(settings.selectedModel);
+                    }
+                }
+            } catch (error) {
+                console.log('설정 로드 실패:', error);
+            }
+        }
+
+        // 채팅 히스토리 저장/로드
+        function saveChatHistory() {
+            const messages = Array.from(chatContainer.children).map(msg => ({
+                content: msg.innerHTML,
+                className: msg.className
+            }));
+            localStorage.setItem('ai-desktop-chat', JSON.stringify(messages));
+        }
+
+        function loadChatHistory() {
+            try {
+                const history = JSON.parse(localStorage.getItem('ai-desktop-chat'));
+                if (history && history.length > 1) { // 초기 메시지 제외
+                    chatContainer.innerHTML = '';
+                    history.forEach(msg => {
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = msg.className;
+                        messageDiv.innerHTML = msg.content;
+                        chatContainer.appendChild(messageDiv);
+                    });
+                }
+            } catch (error) {
+                console.log('채팅 히스토리 로드 실패:', error);
+            }
+        }
+
+        // 설정 변경 시 저장
+        function toggleMode(autoMode) {
+            isAutoMode = autoMode;
+
+            if (autoMode) {
+                autoModeBtn.classList.add('active');
+                manualModeBtn.classList.remove('active');
+                modelSelector.style.display = 'none';
+                updateCurrentModelDisplay('chat-7b');
+            } else {
+                autoModeBtn.classList.remove('active');
+                manualModeBtn.classList.add('active');
+                modelSelector.style.display = 'block';
+                updateCurrentModelDisplay(modelSelector.value);
+            }
+
+            saveSettings(); // 설정 저장
+        }
+
+        // 메시지 추가 시 히스토리 저장
+        function addMessage(text, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
+
+            const parsedText = isUser ? text : parseMarkdown(text);
+            messageDiv.innerHTML = `<strong>${isUser ? '👤 사용자' : '🤖 AI'}:</strong> ${parsedText}`;
+
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            saveChatHistory(); // 히스토리 저장
+        }
+
+        // 앱 시작 시 설정과 히스토리 로드, 서버 상태 확인
+        loadSettings();
+        loadChatHistory();
+        checkServerStatus();
+    </script>
+</body>
+</html>

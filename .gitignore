@@ -41,3 +41,26 @@ logs/
 
 # Docker volumes
 volumes/
+
+# Node.js (Desktop App)
+desktop-app/node_modules/
+desktop-app/dist/
+desktop-app/.electron/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+.cache/
