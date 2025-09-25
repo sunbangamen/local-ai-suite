@@ -401,10 +401,11 @@ def index_documents(collection: str = "default", directory: str = None) -> bool:
         print(f"❌ Indexing Error: {e}")
         return False
 
-def call_api(query: str, model_type: str = 'auto', max_tokens: int = 500) -> Optional[str]:
+def call_api(query: str, model_type: str = 'auto', max_tokens: int = 500, streaming: bool = True) -> Optional[str]:
     """
     Call the API with the available model
     Enhanced with analytics and smart optimization
+    Now supports streaming responses like ChatGPT/Claude Code
     """
     start_time = time.time()
 
@@ -449,7 +450,8 @@ def call_api(query: str, model_type: str = 'auto', max_tokens: int = 500) -> Opt
         "model": model_name,
         "messages": messages,
         "max_tokens": max_tokens,
-        "temperature": temperature
+        "temperature": temperature,
+        "stream": streaming
     }
 
     headers = {
@@ -476,17 +478,47 @@ def call_api(query: str, model_type: str = 'auto', max_tokens: int = 500) -> Opt
             messages[-1]["content"] = enhanced_query
             payload["messages"] = messages
 
-        response = requests.post(API_URL, json=payload, headers=headers, timeout=120)
+        response = requests.post(API_URL, json=payload, headers=headers, timeout=120, stream=streaming)
         response.raise_for_status()
 
-        data = response.json()
-        content = data['choices'][0]['message']['content']
+        full_content = ""
+        tokens_used = 0
+
+        if streaming:
+            print(f"\n🤖 AI: ", end='', flush=True)
+
+            # Process streaming response
+            for line in response.iter_lines():
+                if line:
+                    line_str = line.decode('utf-8')
+                    if line_str.startswith('data: '):
+                        data_str = line_str[6:]  # Remove 'data: ' prefix
+                        if data_str.strip() == '[DONE]':
+                            break
+                        try:
+                            data = json.loads(data_str)
+                            if 'choices' in data and data['choices']:
+                                choice = data['choices'][0]
+                                if 'delta' in choice and 'content' in choice['delta']:
+                                    content_chunk = choice['delta']['content']
+                                    print(content_chunk, end='', flush=True)
+                                    full_content += content_chunk
+                                if 'usage' in data:
+                                    tokens_used = data['usage'].get('total_tokens', 0)
+                        except json.JSONDecodeError:
+                            continue
+
+            print()  # New line after streaming completes
+        else:
+            # Non-streaming response
+            data = response.json()
+            full_content = data['choices'][0]['message']['content']
+            tokens_used = data.get('usage', {}).get('total_tokens', 0)
 
         # Log analytics
         if ANALYTICS_ENABLED and analytics:
             try:
                 response_time_ms = int((time.time() - start_time) * 1000)
-                tokens_used = data.get('usage', {}).get('total_tokens', 0)
                 analytics.log_usage(
                     query=query,
                     query_type=model_type,
@@ -500,7 +532,7 @@ def call_api(query: str, model_type: str = 'auto', max_tokens: int = 500) -> Opt
             except Exception:
                 pass  # Don't fail on analytics errors
 
-        return content
+        return full_content
 
     except requests.exceptions.ConnectionError:
         error_msg = "Cannot connect to local AI server"
@@ -567,10 +599,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  ai "안녕하세요!"                        # Auto-detect (chat model)
-  ai "Python 함수 만들어줘"               # Auto-detect (code model)
+  ai "안녕하세요!"                        # Auto-detect (chat model, streaming)
+  ai "Python 함수 만들어줘"               # Auto-detect (code model, streaming)
   ai --code "일반 질문이지만 코딩모델로"      # Force code model
   ai --chat "코딩 질문이지만 채팅모델로"      # Force chat model
+  ai --no-stream "한번에 보여줘"           # Disable streaming (show all at once)
   ai --rag "파일 읽기 방법은?"              # Search documents with RAG
   ai --index                           # Index documents (default collection)
   ai --index myproject                 # Index documents into 'myproject' collection
@@ -593,6 +626,7 @@ Examples:
     parser.add_argument("--mcp-args", metavar="ARGS", help="Arguments for MCP tool (JSON format)")
     parser.add_argument("--mcp-list", action="store_true", help="List available MCP tools")
     parser.add_argument("--tools", action="store_true", help="Enable AI to use MCP tools automatically")
+    parser.add_argument("--no-stream", action="store_true", help="Disable streaming responses (show all at once)")
 
     args = parser.parse_args()
 
@@ -627,19 +661,24 @@ Examples:
         handle_mcp_call(args.mcp, args.mcp_args)
         sys.exit(0)
 
-    # Determine model type
+    # Determine model type and streaming preference
     model_type = 'auto'
     if args.code:
         model_type = 'code'
     elif args.chat:
         model_type = 'chat'
 
+    use_streaming = not args.no_stream
+
     # Interactive mode
     if args.interactive:
         print("🤖 Local AI Interactive Mode")
         print("Type 'exit' or 'quit' to exit, 'help' for commands")
+        stream_status = "ON" if use_streaming else "OFF"
+        print(f"Streaming: {stream_status} (use :stream to toggle)")
         print("-" * 50)
 
+        current_streaming = use_streaming
         while True:
             try:
                 query = input("\n💬 You: ").strip()
@@ -659,17 +698,24 @@ Examples:
                     print("  :optimize - Run database optimization")
                     print("  :mcp-list - Show available MCP tools")
                     print("  :mcp <tool> [args] - Call MCP tool directly")
+                    print("  :stream - Toggle streaming mode")
+                    continue
+
+                if query.startswith(':stream'):
+                    current_streaming = not current_streaming
+                    status = "ON" if current_streaming else "OFF"
+                    print(f"🔄 Streaming mode: {status}")
                     continue
 
                 # Parse inline commands
                 if query.startswith(':code '):
                     query = query[6:]
                     model_type = 'code'
-                    response = call_api(query, model_type, args.tokens)
+                    response = call_api(query, model_type, args.tokens, current_streaming)
                 elif query.startswith(':chat '):
                     query = query[6:]
                     model_type = 'chat'
-                    response = call_api(query, model_type, args.tokens)
+                    response = call_api(query, model_type, args.tokens, current_streaming)
                 elif query.startswith(':rag '):
                     query = query[5:]
                     response = call_rag_api(query, args.collection)
@@ -701,9 +747,10 @@ Examples:
                     continue
                 else:
                     model_type = 'auto'
-                    response = call_api(query, model_type, args.tokens)
+                    response = call_api(query, model_type, args.tokens, current_streaming)
 
-                if response:
+                # For non-streaming mode, show the response with AI prefix
+                if response and not current_streaming:
                     print(f"\n🤖 AI: {response}")
 
             except KeyboardInterrupt:
@@ -742,11 +789,12 @@ Examples:
 
         response = call_rag_api(args.query, args.collection or "current", working_dir=current_dir)
     else:
-        response = call_api(args.query, model_type, args.tokens)
+        response = call_api(args.query, model_type, args.tokens, use_streaming)
 
-    if response:
+    # For non-streaming single query mode, show the response without prefix since it's already shown during streaming
+    if response and not use_streaming:
         print(response)
-    else:
+    elif not response:
         sys.exit(1)
 
 def show_analytics_dashboard():

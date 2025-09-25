@@ -5,7 +5,9 @@
   "main": "src/main.js",
   "scripts": {
     "start": "./node_modules/electron/dist/electron .",
-    "dev": "./node_modules/electron/dist/electron . --dev"
+    "dev": "./node_modules/electron/dist/electron . --dev",
+    "web": "cd src && python3 -m http.server 3000",
+    "rebuild": "npm rebuild --runtime=electron"
   },
   "keywords": [
     "electron",
