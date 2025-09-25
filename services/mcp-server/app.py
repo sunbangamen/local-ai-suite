@@ -406,13 +406,29 @@ async def rag_search(query: str, collection: str = "default") -> RAGResult:
     except Exception as e:
         raise Exception(f"RAG 검색 오류: {str(e)}")
 
+def _detect_model_for_message(message: str) -> str:
+    """메시지 내용 분석하여 적절한 모델 선택"""
+    code_keywords = [
+        'function', 'class', 'import', 'export', 'const', 'let', 'var',
+        'def', 'return', 'if', 'for', 'while', 'try', 'catch', 'async', 'await',
+        '코드', '함수', '프로그래밍', '버그', 'API', 'HTML', 'CSS', 'JavaScript',
+        'Python', 'React', '개발', '구현', '디버그', '스크립트', '라이브러리',
+        'npm', 'pip', 'git', 'docker', '배포', '테스트', '알고리즘',
+        '```', 'console.log', 'print(', 'error', 'exception', '코딩', '프로그램'
+    ]
+
+    message_lower = message.lower()
+    has_code_keywords = any(keyword.lower() in message_lower for keyword in code_keywords)
+
+    return 'code-7b' if has_code_keywords else 'chat-7b'
+
 @mcp.tool()
 async def ai_chat(message: str, model: str = None) -> AIResponse:
-    """로컬 AI 모델과 대화"""
+    """로컬 AI 모델과 대화 (자동 모델 선택)"""
     try:
-        # Use environment variable or default to API Gateway compatible model
+        # 모델이 지정되지 않으면 메시지 내용 분석하여 자동 선택
         if model is None:
-            model = os.getenv("API_GATEWAY_MODEL", "local-7b")
+            model = _detect_model_for_message(message)
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -1020,6 +1036,163 @@ async def web_to_notion(url: str, database_id: str, title_selector: str = "h1", 
 
     except Exception as e:
         raise Exception(f"웹→Notion 저장 오류: {str(e)}")
+
+# =============================================================================
+# 모델 관리 도구
+# =============================================================================
+
+class ModelSwitchResult(BaseModel):
+    success: bool
+    message: str
+    current_model: str
+    switch_time_seconds: Optional[float] = None
+
+@mcp.tool()
+async def switch_model(model_type: str) -> ModelSwitchResult:
+    """
+    AI 모델을 동적으로 교체합니다 (메모리 효율성을 위해)
+
+    Args:
+        model_type: 'chat' 또는 'code' 모델 선택
+
+    Returns:
+        ModelSwitchResult: 교체 결과와 현재 모델 정보
+    """
+    import time
+    start_time = time.time()
+
+    try:
+        # 환경변수에서 모델 파일명 가져오기
+        if model_type == 'chat':
+            target_model = os.getenv('CHAT_MODEL', 'Qwen2.5-7B-Instruct-Q4_K_M.gguf')
+        elif model_type == 'code':
+            target_model = os.getenv('CODE_MODEL', 'qwen2.5-coder-7b-instruct-q4_k_m.gguf')
+        else:
+            return ModelSwitchResult(
+                success=False,
+                message=f"지원하지 않는 모델 타입: {model_type}",
+                current_model="unknown"
+            )
+
+        # 현재 로드된 모델 확인
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get("http://inference:8001/v1/models", timeout=10)
+                current_models = response.json()
+                current_model_path = current_models['data'][0]['id'] if current_models['data'] else "unknown"
+                current_model_name = current_model_path.split('/')[-1] if '/' in current_model_path else current_model_path
+
+                # 이미 원하는 모델이 로드된 경우
+                if target_model == current_model_name:
+                    return ModelSwitchResult(
+                        success=True,
+                        message=f"이미 {model_type} 모델({target_model})이 로드되어 있습니다.",
+                        current_model=target_model,
+                        switch_time_seconds=0.0
+                    )
+
+            except Exception as e:
+                print(f"현재 모델 확인 실패: {e}")
+
+        # Docker 컨테이너 재시작으로 모델 교체
+        # inference 컨테이너의 환경변수를 변경하고 재시작
+        switch_command = [
+            'docker', 'compose', '-f', '/mnt/workspace/docker/compose.p3.yml',
+            'stop', 'inference'
+        ]
+
+        print(f"🔄 inference 컨테이너 중지 중...")
+        result = subprocess.run(switch_command, capture_output=True, text=True, cwd='/mnt/workspace')
+        if result.returncode != 0:
+            return ModelSwitchResult(
+                success=False,
+                message=f"inference 컨테이너 중지 실패: {result.stderr}",
+                current_model="unknown"
+            )
+
+        # 환경변수 설정하여 컨테이너 재시작
+        env = os.environ.copy()
+        env['CHAT_MODEL'] = target_model  # 동적으로 모델 변경
+
+        start_command = [
+            'docker', 'compose', '-f', '/mnt/workspace/docker/compose.p3.yml',
+            'up', '-d', 'inference'
+        ]
+
+        print(f"🚀 {target_model} 모델로 inference 컨테이너 시작 중...")
+        result = subprocess.run(start_command, capture_output=True, text=True,
+                              cwd='/mnt/workspace', env=env)
+        if result.returncode != 0:
+            return ModelSwitchResult(
+                success=False,
+                message=f"inference 컨테이너 시작 실패: {result.stderr}",
+                current_model="unknown"
+            )
+
+        # 서버가 준비될 때까지 대기 (최대 30초)
+        print("⏳ 새 모델 로딩 대기 중...")
+        for attempt in range(30):
+            await asyncio.sleep(1)
+            try:
+                async with httpx.AsyncClient() as client:
+                    health_response = await client.get("http://inference:8001/health", timeout=5)
+                    if health_response.status_code == 200:
+                        print(f"✅ 모델 교체 완료 (시도 {attempt + 1}/30)")
+                        break
+            except:
+                continue
+        else:
+            return ModelSwitchResult(
+                success=False,
+                message="모델 교체 후 서버가 응답하지 않습니다 (30초 타임아웃)",
+                current_model="unknown"
+            )
+
+        end_time = time.time()
+        switch_time = end_time - start_time
+
+        return ModelSwitchResult(
+            success=True,
+            message=f"{model_type} 모델({target_model})로 성공적으로 교체되었습니다.",
+            current_model=target_model,
+            switch_time_seconds=round(switch_time, 1)
+        )
+
+    except Exception as e:
+        return ModelSwitchResult(
+            success=False,
+            message=f"모델 교체 중 오류 발생: {str(e)}",
+            current_model="unknown"
+        )
+
+@mcp.tool()
+async def get_current_model() -> Dict[str, Any]:
+    """현재 로드된 모델 정보를 조회합니다."""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get("http://inference:8001/v1/models", timeout=10)
+            models_data = response.json()
+
+            if models_data.get('data'):
+                model_info = models_data['data'][0]
+                model_path = model_info['id']
+                model_name = model_path.split('/')[-1] if '/' in model_path else model_path
+
+                # 모델 타입 추정
+                model_type = 'code' if 'coder' in model_name.lower() else 'chat'
+
+                return {
+                    "current_model": model_name,
+                    "model_type": model_type,
+                    "model_path": model_path,
+                    "size_gb": round(model_info.get('meta', {}).get('size', 0) / (1024**3), 1),
+                    "parameters": model_info.get('meta', {}).get('n_params', 0)
+                }
+            else:
+                return {"error": "모델 정보를 가져올 수 없습니다."}
+
+    except Exception as e:
+        return {"error": f"모델 정보 조회 실패: {str(e)}"}
 
 # =============================================================================
 # 서버 실행

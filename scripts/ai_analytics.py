@@ -8,6 +8,7 @@ import sqlite3
 import json
 import time
 import hashlib
+import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
@@ -15,9 +16,24 @@ import threading
 from contextlib import contextmanager
 
 class AIAnalytics:
-    def __init__(self, db_path: str = "/mnt/e/ai-data/sqlite/ai_analytics.db"):
+    def __init__(self, db_path: str = None):
+        # Use environment variable or fallback to writable location
+        if db_path is None:
+            db_path = os.getenv(
+                'AI_ANALYTICS_DB',
+                os.path.expanduser('~/.local/share/ai-suite/ai_analytics.db')
+            )
+
         self.db_path = db_path
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        try:
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            # If external path is read-only, fall back to home directory
+            fallback_path = os.path.expanduser('~/.local/share/ai-suite/ai_analytics.db')
+            print(f"Warning: Cannot write to {db_path} ({e}). Using fallback: {fallback_path}")
+            self.db_path = fallback_path
+            Path(fallback_path).parent.mkdir(parents=True, exist_ok=True)
+
         self._local = threading.local()
         self._init_schema()
 

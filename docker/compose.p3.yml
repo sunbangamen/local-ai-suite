@@ -1,5 +1,6 @@
 services:
-  inference:
+  # Chat 모델 서버 (일반 대화용)
+  inference-chat:
     image: ghcr.io/ggerganov/llama.cpp:server
     restart: unless-stopped
     ports: ["${INFERENCE_PORT:-8001}:8001"]
@@ -15,13 +16,52 @@ services:
       resources:
         limits:
           cpus: '4.0'
-          memory: 8G
+          memory: 6G
         reservations:
           devices:
             - capabilities: ["gpu"]
     command: >
       --host 0.0.0.0 --port 8001
       --model /models/${CHAT_MODEL:-Qwen2.5-7B-Instruct-Q4_K_M.gguf}
+      -t 4
+      -c 1024
+      -b 128
+      --n-gpu-layers ${LLAMA_N_GPU_LAYERS:-999}
+      --parallel ${LLAMA_PARALLEL:-1}
+      --cont-batching
+      --temp ${LLAMA_TEMP:-0.3}
+      --top-p ${LLAMA_TOP_P:-0.9}
+      --repeat-penalty ${LLAMA_REPEAT_PENALTY:-1.05}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  # Code 모델 서버 (프로그래밍 전용)
+  inference-code:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    restart: unless-stopped
+    ports: ["8004:8001"]
+    volumes:
+      - type: bind
+        source: ${MODELS_DIR:-/mnt/e/ai-models}
+        target: /models
+        read_only: true
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 6G
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+    command: >
+      --host 0.0.0.0 --port 8001
+      --model /models/${CODE_MODEL:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}
       -t 4
       -c 1024
       -b 128
@@ -49,7 +89,8 @@ services:
       - LITELLM_LOG=warning
       - TIMEOUT=60
     depends_on:
-      - inference
+      - inference-chat
+      - inference-code
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8000/health"]
       interval: 30s
@@ -112,6 +153,8 @@ services:
       - ${DATA_DIR:-/mnt/e/ai-data}:/mnt/data:rw
       - ${MODELS_DIR:-/mnt/e/ai-models}:/mnt/models:ro
       - /mnt/e/local-ai-suite/.git:/mnt/workspace/.git-main:rw  # Main repo .git for worktree
+      # Docker socket access for dynamic model switching
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - API_GATEWAY_URL=${API_GATEWAY_URL:-http://api-gateway:8000}
       - API_GATEWAY_MODEL=${API_GATEWAY_MODEL:-local-7b}

@@ -13,6 +13,8 @@ import re
 import os
 import time
 import uuid
+import signal
+import threading
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -21,10 +23,10 @@ API_URL = "http://localhost:8000/v1/chat/completions"
 RAG_URL = "http://localhost:8002"
 MCP_URL = "http://localhost:8020"
 AVAILABLE_MODELS = {
-    "chat": "local-7b",
-    "code": "local-7b"
+    "chat": "chat-7b",
+    "code": "code-7b"
 }
-DEFAULT_MODEL = "local-7b"
+DEFAULT_MODEL = "chat-7b"
 
 # Analytics integration
 try:

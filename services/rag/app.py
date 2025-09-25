@@ -27,7 +27,7 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant:6333")
 EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://embedding:8003")
 
 RAG_LLM_API_BASE = os.getenv("RAG_LLM_API_BASE", "http://api-gateway:8000/v1")
-RAG_LLM_MODEL = os.getenv("RAG_LLM_MODEL", "local-7b")
+RAG_LLM_MODEL = os.getenv("RAG_LLM_MODEL", "chat-7b")
 RAG_LLM_TIMEOUT = float(os.getenv("RAG_LLM_TIMEOUT", "60"))
 RAG_LLM_MAX_TOKENS = int(os.getenv("RAG_LLM_MAX_TOKENS", "256"))
 RAG_LLM_TEMPERATURE = float(os.getenv("RAG_LLM_TEMPERATURE", "0.3"))
@@ -142,9 +142,28 @@ async def _embed_texts(client: httpx.AsyncClient, texts: List[str]) -> List[List
     return data["embeddings"]
 
 
+def _detect_model_for_query(query: str) -> str:
+    """쿼리 내용 분석하여 적절한 모델 선택"""
+    code_keywords = [
+        'function', 'class', 'import', 'export', 'const', 'let', 'var',
+        'def', 'return', 'if', 'for', 'while', 'try', 'catch', 'async', 'await',
+        '코드', '함수', '프로그래밍', '버그', 'API', 'HTML', 'CSS', 'JavaScript',
+        'Python', 'React', '개발', '구현', '디버그', '스크립트', '라이브러리',
+        'npm', 'pip', 'git', 'docker', '배포', '테스트', '알고리즘',
+        '```', 'console.log', 'print(', 'error', 'exception', '코딩', '프로그램'
+    ]
+
+    query_lower = query.lower()
+    has_code_keywords = any(keyword.lower() in query_lower for keyword in code_keywords)
+
+    return 'code-7b' if has_code_keywords else 'chat-7b'
+
 async def _llm_answer(client: httpx.AsyncClient, system: str, user: str) -> Tuple[str, Dict[str, Any]]:
+    # 쿼리 내용에 따라 적절한 모델 선택
+    selected_model = _detect_model_for_query(user)
+
     payload = {
-        "model": RAG_LLM_MODEL,
+        "model": selected_model,
         "temperature": RAG_LLM_TEMPERATURE,
         "max_tokens": RAG_LLM_MAX_TOKENS,
         "stream": False,

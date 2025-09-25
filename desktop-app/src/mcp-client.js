@@ -58,10 +58,10 @@ class MCPClient {
     }
 
     // 도구 실행
-    async callTool(name, arguments) {
+    async callTool(name, toolArguments) {
         return await this.sendRequest('tools/call', {
             name: name,
-            arguments: arguments
+            arguments: toolArguments
         });
     }
 
