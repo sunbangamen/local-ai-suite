@@ -118,6 +118,8 @@ services:
       - RAG_TOPK=${RAG_TOPK:-4}
       - RAG_CHUNK_SIZE=${RAG_CHUNK_SIZE:-512}
       - RAG_CHUNK_OVERLAP=${RAG_CHUNK_OVERLAP:-100}
+      - API_GATEWAY_CHAT_MODEL=${API_GATEWAY_CHAT_MODEL:-chat-7b}
+      - API_GATEWAY_CODE_MODEL=${API_GATEWAY_CODE_MODEL:-code-7b}
     depends_on:
       - qdrant
       - embedding
@@ -164,6 +166,8 @@ services:
       - WORKSPACE_DIR=/mnt/workspace
       - DATA_DIR=/mnt/data
       - GIT_DIR_PATH=/mnt/workspace/.git-main  # Main repo .git for worktree
+      - API_GATEWAY_CHAT_MODEL=${API_GATEWAY_CHAT_MODEL:-chat-7b}
+      - API_GATEWAY_CODE_MODEL=${API_GATEWAY_CODE_MODEL:-code-7b}
     depends_on:
       - api-gateway
       - rag

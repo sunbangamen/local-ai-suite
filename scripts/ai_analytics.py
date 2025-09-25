@@ -15,6 +15,9 @@ from pathlib import Path
 import threading
 from contextlib import contextmanager
 
+
+DEFAULT_CHAT_MODEL = os.getenv("API_GATEWAY_CHAT_MODEL", "chat-7b")
+
 class AIAnalytics:
     def __init__(self, db_path: str = None):
         # Use environment variable or fallback to writable location
@@ -259,7 +262,7 @@ class AIAnalytics:
 
             # Fallback to overall best model
             return {
-                'recommended_model': 'local-7b',
+                'recommended_model': DEFAULT_CHAT_MODEL,
                 'confidence': 0.5,
                 'reason': 'Default model (insufficient data for optimization)'
             }

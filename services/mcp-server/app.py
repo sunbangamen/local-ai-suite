@@ -59,6 +59,9 @@ API_GATEWAY_URL = os.getenv("API_GATEWAY_URL", "http://api-gateway:8000")
 EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://embedding:8003")
 GIT_DIR_PATH = os.getenv("GIT_DIR_PATH", "/mnt/workspace/.git-main")
 
+CHAT_MODEL_NAME = os.getenv("API_GATEWAY_CHAT_MODEL", "chat-7b")
+CODE_MODEL_NAME = os.getenv("API_GATEWAY_CODE_MODEL", "code-7b")
+
 def resolve_path(path: str, working_dir: Optional[str] = None) -> Path:
     """
     Resolve path to actual filesystem location
@@ -420,7 +423,7 @@ def _detect_model_for_message(message: str) -> str:
     message_lower = message.lower()
     has_code_keywords = any(keyword.lower() in message_lower for keyword in code_keywords)
 
-    return 'code-7b' if has_code_keywords else 'chat-7b'
+    return CODE_MODEL_NAME if has_code_keywords else CHAT_MODEL_NAME
 
 @mcp.tool()
 async def ai_chat(message: str, model: str = None) -> AIResponse:

@@ -41,7 +41,7 @@ services:
       - "${API_GATEWAY_PORT:-8000}:8000"
     volumes:
       - ./services/api-gateway:/app
-    command: ["--config", "/app/config.p1.yaml"]
+    command: ["--config", "/app/config.p2.yaml"]
     environment:
       - LITELLM_LOG=warning
       - TIMEOUT=60

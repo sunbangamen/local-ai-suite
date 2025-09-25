@@ -5,6 +5,7 @@ import asyncio
 import re
 import time
 import hashlib
+import logging
 from typing import List, Optional, Dict, Any, Tuple
 
 import httpx
@@ -14,6 +15,14 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 
 from database import db
+
+
+logger = logging.getLogger(__name__)
+
+CHAT_MODEL_NAME = os.getenv("API_GATEWAY_CHAT_MODEL", "chat-7b")
+CODE_MODEL_NAME = os.getenv("API_GATEWAY_CODE_MODEL", "code-7b")
+
+RAG_LLM_MODEL = os.getenv("RAG_LLM_MODEL", CHAT_MODEL_NAME)
 
 """
 RAG FastAPI (경량/안정화 버전)
@@ -27,7 +36,6 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant:6333")
 EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://embedding:8003")
 
 RAG_LLM_API_BASE = os.getenv("RAG_LLM_API_BASE", "http://api-gateway:8000/v1")
-RAG_LLM_MODEL = os.getenv("RAG_LLM_MODEL", "chat-7b")
 RAG_LLM_TIMEOUT = float(os.getenv("RAG_LLM_TIMEOUT", "60"))
 RAG_LLM_MAX_TOKENS = int(os.getenv("RAG_LLM_MAX_TOKENS", "256"))
 RAG_LLM_TEMPERATURE = float(os.getenv("RAG_LLM_TEMPERATURE", "0.3"))
@@ -156,7 +164,7 @@ def _detect_model_for_query(query: str) -> str:
     query_lower = query.lower()
     has_code_keywords = any(keyword.lower() in query_lower for keyword in code_keywords)
 
-    return 'code-7b' if has_code_keywords else 'chat-7b'
+    return CODE_MODEL_NAME if has_code_keywords else CHAT_MODEL_NAME
 
 async def _llm_answer(client: httpx.AsyncClient, system: str, user: str) -> Tuple[str, Dict[str, Any]]:
     # 쿼리 내용에 따라 적절한 모델 선택

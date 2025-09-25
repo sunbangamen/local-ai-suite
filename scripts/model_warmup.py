@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
-"""
-Model Warmup and Preoptimization System
-- Prewarming models based on usage patterns
-- Performance optimization recommendations
-- Automatic model switching suggestions
-"""
+"""Model Warmup and Preoptimization System."""
+import os
 import requests
 import time
 import json
@@ -14,6 +10,13 @@ from ai_analytics import analytics
 
 API_URL = "http://localhost:8000/v1/chat/completions"
 RAG_URL = "http://localhost:8002"
+
+CHAT_MODEL_NAME = os.getenv("API_GATEWAY_CHAT_MODEL", "chat-7b")
+CODE_MODEL_NAME = os.getenv("API_GATEWAY_CODE_MODEL", "code-7b")
+MODEL_NAME_BY_TYPE = {
+    'chat': CHAT_MODEL_NAME,
+    'code': CODE_MODEL_NAME,
+}
 
 class ModelWarmer:
     def __init__(self):
@@ -92,7 +95,7 @@ class ModelWarmer:
                 else:
                     # Warmup LLM
                     payload = {
-                        "model": "local-7b",
+                        "model": MODEL_NAME_BY_TYPE.get(model_type, CHAT_MODEL_NAME),
                         "messages": [{"role": "user", "content": query}],
                         "max_tokens": 10,
                         "temperature": 0.1
