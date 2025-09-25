@@ -490,16 +490,25 @@ async def git_status(path: str = ".", working_dir: Optional[str] = None) -> Exec
         )
 
 @mcp.tool()
-async def git_diff(file_path: str = "", staged: bool = False) -> ExecutionResult:
-    """Git 변경사항 차이 확인 (worktree 호환)"""
-    try:
+async def git_diff(
+    file_path: str = "",
+    staged: bool = False,
+    working_dir: Optional[str] = None,
+) -> ExecutionResult:
+    """Git 변경사항 차이 확인 (worktree 및 전역 디렉터리 지원)"""
+    if working_dir:
+        git_cwd = str(resolve_path(".", working_dir))
+        cmd_args = ["git", "diff"]
+    else:
+        git_cwd = PROJECT_ROOT
         cmd_args = [
             "git",
             "--git-dir", GIT_DIR_PATH,
             "--work-tree", PROJECT_ROOT,
-            "diff"
+            "diff",
         ]
 
+    try:
         if staged:
             cmd_args.append("--cached")
 
@@ -510,7 +519,7 @@ async def git_diff(file_path: str = "", staged: bool = False) -> ExecutionResult
             *cmd_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=PROJECT_ROOT
+            cwd=git_cwd,
         )
         stdout, stderr = await proc.communicate()
 
@@ -520,7 +529,7 @@ async def git_diff(file_path: str = "", staged: bool = False) -> ExecutionResult
                 stdout="",
                 stderr=stderr.decode() if stderr else "Git diff 실행 실패",
                 returncode=proc.returncode or 1,
-                success=False
+                success=False,
             )
 
         diff_output = stdout.decode().strip()
@@ -532,7 +541,7 @@ async def git_diff(file_path: str = "", staged: bool = False) -> ExecutionResult
             stdout=diff_output,
             stderr="",
             returncode=0,
-            success=True
+            success=True,
         )
     except Exception as e:
         return ExecutionResult(
@@ -540,7 +549,7 @@ async def git_diff(file_path: str = "", staged: bool = False) -> ExecutionResult
             stdout="",
             stderr=f"Git diff 오류: {str(e)}",
             returncode=1,
-            success=False
+            success=False,
         )
 
 @mcp.tool()
