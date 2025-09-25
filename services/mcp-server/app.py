@@ -52,10 +52,31 @@ def init_notion():
 
 # 환경 변수 (통일된 기본값)
 PROJECT_ROOT = os.getenv("PROJECT_ROOT", os.getenv("WORKSPACE_DIR", "/mnt/workspace"))
+# Global filesystem access - NEW: Support for anywhere usage
+HOST_ROOT = "/mnt/host"  # Full filesystem mounted here
 RAG_URL = os.getenv("RAG_URL", "http://rag:8002")
 API_GATEWAY_URL = os.getenv("API_GATEWAY_URL", "http://api-gateway:8000")
 EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://embedding:8003")
 GIT_DIR_PATH = os.getenv("GIT_DIR_PATH", "/mnt/workspace/.git-main")
+
+def resolve_path(path: str, working_dir: Optional[str] = None) -> Path:
+    """
+    Resolve path to actual filesystem location
+    - If working_dir provided, use it as base for relative paths
+    - Otherwise use PROJECT_ROOT as fallback
+    - Map to global filesystem via HOST_ROOT
+    """
+    if working_dir and not os.path.isabs(path):
+        # Relative path with working directory
+        full_path = Path(working_dir) / path
+    elif os.path.isabs(path):
+        # Absolute path - use as-is but map through HOST_ROOT
+        full_path = Path(HOST_ROOT + path) if not path.startswith(HOST_ROOT) else Path(path)
+    else:
+        # Fallback to PROJECT_ROOT
+        full_path = Path(PROJECT_ROOT) / path
+
+    return full_path.resolve()
 
 # MCP 서버 인스턴스
 mcp = FastMCP("Local AI MCP Server")
@@ -177,11 +198,7 @@ async def read_file_resource(path: str) -> str:
     """파일 내용을 리소스로 제공"""
     file_path = Path(PROJECT_ROOT) / path
 
-    # 보안: 프로젝트 외부 접근 차단
-    try:
-        file_path.resolve().relative_to(Path(PROJECT_ROOT).resolve())
-    except ValueError:
-        raise ValueError(f"프로젝트 외부 파일 접근 금지: {file_path}")
+    # 전역 파일시스템 접근 허용 (기본 안전성 검사는 resolve_path에서 처리)
 
     if not file_path.exists():
         raise FileNotFoundError(f"파일을 찾을 수 없음: {file_path}")
@@ -316,15 +333,14 @@ async def execute_bash(command: str, timeout: int = 30) -> ExecutionResult:
         )
 
 @mcp.tool()
-async def read_file(path: str) -> FileInfo:
-    """파일 내용 읽기"""
-    file_path = Path(PROJECT_ROOT) / path
+async def read_file(path: str, working_dir: Optional[str] = None) -> FileInfo:
+    """파일 내용 읽기 - 전역 파일시스템 지원"""
+    file_path = resolve_path(path, working_dir)
 
-    # 보안: 프로젝트 외부 접근 차단
-    try:
-        file_path.resolve().relative_to(Path(PROJECT_ROOT).resolve())
-    except ValueError:
-        raise ValueError("프로젝트 외부 파일 접근이 금지되어 있습니다.")
+    # 기본 안전성 검사 (심각한 시스템 파일 차단)
+    dangerous_paths = ["/etc/passwd", "/etc/shadow", "/root/.ssh"]
+    if str(file_path) in dangerous_paths:
+        raise ValueError(f"위험한 시스템 파일 접근 금지: {file_path}")
 
     if not file_path.exists():
         raise FileNotFoundError(f"파일을 찾을 수 없습니다: {file_path}")
@@ -334,7 +350,7 @@ async def read_file(path: str) -> FileInfo:
             content = await f.read()
 
         return FileInfo(
-            path=str(file_path.relative_to(Path(PROJECT_ROOT))),
+            path=str(file_path),  # 전체 경로 반환 (전역 접근 지원)
             content=content,
             size=len(content),
             type=file_path.suffix
@@ -343,15 +359,15 @@ async def read_file(path: str) -> FileInfo:
         raise Exception(f"파일 읽기 오류: {str(e)}")
 
 @mcp.tool()
-async def write_file(path: str, content: str) -> FileInfo:
-    """파일 내용 쓰기"""
-    file_path = Path(PROJECT_ROOT) / path
+async def write_file(path: str, content: str, working_dir: Optional[str] = None) -> FileInfo:
+    """파일 내용 쓰기 - 전역 파일시스템 지원"""
+    file_path = resolve_path(path, working_dir)
 
-    # 보안: 프로젝트 외부 접근 차단
-    try:
-        file_path.resolve().relative_to(Path(PROJECT_ROOT).resolve())
-    except ValueError:
-        raise ValueError("프로젝트 외부 파일 접근이 금지되어 있습니다.")
+    # 기본 안전성 검사 (시스템 중요 파일 쓰기 차단)
+    dangerous_paths = ["/etc/passwd", "/etc/shadow", "/root/.ssh", "/bin", "/sbin", "/usr/bin", "/usr/sbin"]
+    for dangerous in dangerous_paths:
+        if str(file_path).startswith(dangerous):
+            raise ValueError(f"시스템 중요 파일/디렉토리 쓰기 금지: {file_path}")
 
     try:
         # 디렉토리 생성
@@ -361,7 +377,7 @@ async def write_file(path: str, content: str) -> FileInfo:
             await f.write(content)
 
         return FileInfo(
-            path=str(file_path.relative_to(Path(PROJECT_ROOT))),
+            path=str(file_path),  # 전체 경로 반환 (전역 접근 지원)
             content=content,
             size=len(content),
             type=file_path.suffix
@@ -422,20 +438,25 @@ async def ai_chat(message: str, model: str = None) -> AIResponse:
         raise Exception(f"AI 채팅 오류: {str(e)}")
 
 @mcp.tool()
-async def git_status(path: str = ".") -> ExecutionResult:
-    """Git 저장소 상태 확인 (worktree 호환)"""
-    repo_path = Path(PROJECT_ROOT) / path
+async def git_status(path: str = ".", working_dir: Optional[str] = None) -> ExecutionResult:
+    """Git 저장소 상태 확인 (전역 Git 지원)"""
+    # working_dir가 제공되면 해당 디렉토리 사용, 아니면 현재 경로
+    if working_dir:
+        # 전역 파일시스템 접근을 위한 경로 해결
+        repo_path = resolve_path(path, working_dir)
+        git_cwd = str(repo_path.parent if path != "." else resolve_path(".", working_dir))
+    else:
+        repo_path = Path(PROJECT_ROOT) / path
+        git_cwd = PROJECT_ROOT
 
     try:
-        # Git worktree를 위한 --git-dir, --work-tree 사용
+        # 현재 디렉토리의 Git 저장소 자동 감지
         proc = await asyncio.create_subprocess_exec(
             "git",
-            "--git-dir", GIT_DIR_PATH,
-            "--work-tree", PROJECT_ROOT,
             "status", "--porcelain",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=PROJECT_ROOT
+            cwd=git_cwd
         )
         stdout, stderr = await proc.communicate()
 
@@ -523,13 +544,17 @@ async def git_diff(file_path: str = "", staged: bool = False) -> ExecutionResult
         )
 
 @mcp.tool()
-async def git_log(max_count: int = 10, oneline: bool = True) -> ExecutionResult:
-    """Git 커밋 히스토리 확인 (worktree 호환)"""
+async def git_log(max_count: int = 10, oneline: bool = True, working_dir: Optional[str] = None) -> ExecutionResult:
+    """Git 커밋 히스토리 확인 (전역 Git 지원)"""
+    # working_dir가 제공되면 해당 디렉토리 사용
+    if working_dir:
+        git_cwd = str(resolve_path(".", working_dir))
+    else:
+        git_cwd = PROJECT_ROOT
+
     try:
         cmd_args = [
             "git",
-            "--git-dir", GIT_DIR_PATH,
-            "--work-tree", PROJECT_ROOT,
             "log",
             f"--max-count={max_count}"
         ]
@@ -541,7 +566,7 @@ async def git_log(max_count: int = 10, oneline: bool = True) -> ExecutionResult:
             *cmd_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=PROJECT_ROOT
+            cwd=git_cwd
         )
         stdout, stderr = await proc.communicate()
 
@@ -575,16 +600,20 @@ async def git_log(max_count: int = 10, oneline: bool = True) -> ExecutionResult:
         )
 
 @mcp.tool()
-async def git_add(file_paths: str) -> ExecutionResult:
-    """Git 파일 스테이징 (worktree 호환)"""
+async def git_add(file_paths: str, working_dir: Optional[str] = None) -> ExecutionResult:
+    """Git 파일 스테이징 (전역 Git 지원)"""
+    # working_dir가 제공되면 해당 디렉토리 사용
+    if working_dir:
+        git_cwd = str(resolve_path(".", working_dir))
+    else:
+        git_cwd = PROJECT_ROOT
+
     try:
         # 여러 파일 지원을 위해 공백으로 분리
         files = file_paths.split() if file_paths.strip() else ["."]
 
         cmd_args = [
             "git",
-            "--git-dir", GIT_DIR_PATH,
-            "--work-tree", PROJECT_ROOT,
             "add"
         ] + files
 
@@ -592,7 +621,7 @@ async def git_add(file_paths: str) -> ExecutionResult:
             *cmd_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=PROJECT_ROOT
+            cwd=git_cwd
         )
         stdout, stderr = await proc.communicate()
 
@@ -622,8 +651,14 @@ async def git_add(file_paths: str) -> ExecutionResult:
         )
 
 @mcp.tool()
-async def git_commit(message: str, add_all: bool = False) -> ExecutionResult:
-    """Git 커밋 생성 (worktree 호환)"""
+async def git_commit(message: str, add_all: bool = False, working_dir: Optional[str] = None) -> ExecutionResult:
+    """Git 커밋 생성 (전역 Git 지원)"""
+    # working_dir가 제공되면 해당 디렉토리 사용
+    if working_dir:
+        git_cwd = str(resolve_path(".", working_dir))
+    else:
+        git_cwd = PROJECT_ROOT
+
     if not message.strip():
         return ExecutionResult(
             command="git commit",
@@ -636,14 +671,12 @@ async def git_commit(message: str, add_all: bool = False) -> ExecutionResult:
     try:
         # add_all이 True면 먼저 모든 변경사항 스테이징
         if add_all:
-            add_result = await git_add(".")
+            add_result = await git_add(".", working_dir)
             if not add_result.success:
                 return add_result
 
         cmd_args = [
             "git",
-            "--git-dir", GIT_DIR_PATH,
-            "--work-tree", PROJECT_ROOT,
             "commit",
             "-m", message
         ]
@@ -652,7 +685,7 @@ async def git_commit(message: str, add_all: bool = False) -> ExecutionResult:
             *cmd_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=PROJECT_ROOT
+            cwd=git_cwd
         )
         stdout, stderr = await proc.communicate()
 

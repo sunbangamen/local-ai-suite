@@ -83,14 +83,19 @@ def detect_query_type(query: str) -> str:
 
 def call_mcp_tool(tool_name: str, **kwargs) -> Optional[Dict[str, Any]]:
     """
-    Call MCP server tool
+    Call MCP server tool with current working directory support
     """
     headers = {
         "Content-Type": "application/json"
     }
 
+    # Add current working directory to kwargs for path-based tools
+    current_dir = os.getcwd()
+    if 'working_dir' not in kwargs and tool_name in ['read_file', 'write_file', 'list_files', 'git_status', 'git_diff', 'git_add', 'git_commit']:
+        kwargs['working_dir'] = current_dir
+
     try:
-        print(f"🔧 Calling MCP tool: {tool_name}...")
+        print(f"🔧 Calling MCP tool: {tool_name} (working_dir: {current_dir})...")
         response = requests.post(f"{MCP_URL}/tools/{tool_name}/call", json=kwargs, headers=headers, timeout=60)
         response.raise_for_status()
 
@@ -310,9 +315,9 @@ def get_mcp_tools() -> Optional[List[Dict[str, Any]]]:
         print(f"❌ Error getting MCP tools: {e}")
         return None
 
-def call_rag_api(query: str, collection: str = "default", include_context: bool = True) -> Optional[str]:
+def call_rag_api(query: str, collection: str = "default", include_context: bool = True, working_dir: Optional[str] = None) -> Optional[str]:
     """
-    Call RAG service for document-based queries
+    Call RAG service for document-based queries with current directory support
     """
     payload = {
         "query": query,
@@ -711,7 +716,29 @@ Examples:
 
     # Handle RAG query
     if args.rag:
-        response = call_rag_api(args.query, args.collection)
+        # Auto-index current directory if it contains documents
+        current_dir = os.getcwd()
+        doc_extensions = ['.md', '.txt', '.py', '.js', '.html', '.css', '.json', '.yaml', '.yml']
+        has_docs = any(
+            any(f.endswith(ext) for ext in doc_extensions)
+            for f in os.listdir(current_dir)
+            if os.path.isfile(os.path.join(current_dir, f))
+        )
+
+        if has_docs:
+            print(f"📁 Auto-indexing current directory: {current_dir}")
+            try:
+                index_response = requests.post(f"{RAG_URL}/index",
+                    params={"collection": args.collection or "current", "path": current_dir},
+                    timeout=60)
+                if index_response.status_code == 200:
+                    print("✅ Directory indexed successfully")
+                else:
+                    print(f"⚠️ Indexing failed: {index_response.status_code}")
+            except Exception as e:
+                print(f"⚠️ Auto-indexing error: {e}")
+
+        response = call_rag_api(args.query, args.collection or "current", working_dir=current_dir)
     else:
         response = call_api(args.query, model_type, args.tokens)
 

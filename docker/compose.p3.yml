@@ -65,6 +65,7 @@ services:
     ports: ["${RAG_PORT:-8002}:8002"]
     volumes:
       - ${DATA_DIR:-/mnt/e/ai-data}/documents:/app/documents:ro
+      - /:/mnt/host:ro  # Global filesystem access for anywhere document indexing
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - EMBEDDING_URL=${EMBEDDING_URL:-http://embedding:8003}
@@ -106,10 +107,10 @@ services:
     restart: unless-stopped
     ports: ["${MCP_PORT:-8020}:8020"]
     volumes:
-      # File system access for MCP tools
+      # File system access for MCP tools - GLOBAL ACCESS
+      - /:/mnt/host:rw  # Full filesystem access for anywhere usage
       - ${DATA_DIR:-/mnt/e/ai-data}:/mnt/data:rw
       - ${MODELS_DIR:-/mnt/e/ai-models}:/mnt/models:ro
-      - ../:/mnt/workspace:rw  # Workspace access for Git and file operations
       - /mnt/e/local-ai-suite/.git:/mnt/workspace/.git-main:rw  # Main repo .git for worktree
     environment:
       - API_GATEWAY_URL=${API_GATEWAY_URL:-http://api-gateway:8000}

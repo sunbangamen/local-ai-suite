@@ -38,6 +38,8 @@ RAG_CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "100"))
 
 DOCUMENTS_DIR = os.getenv("DOCUMENTS_DIR", "./documents")
 COLLECTION_DEFAULT = os.getenv("RAG_DEFAULT_COLLECTION", "myproj")
+# Global filesystem support
+HOST_ROOT = "/mnt/host"
 
 # 게이트웨이 스트리밍은 클라이언트에서 설정, 여기서는 비스트림 기본
 OPENAI_CHAT_COMPLETIONS = f"{RAG_LLM_API_BASE}/chat/completions"
@@ -277,12 +279,27 @@ async def health(llm: bool = Query(False, description="LLM까지 점검하려면
 
 
 @app.post("/index", response_model=IndexResponse)
-async def index(collection: Optional[str] = Query(None, description="컬렉션 이름")):
+async def index(
+    collection: Optional[str] = Query(None, description="컬렉션 이름"),
+    path: Optional[str] = Query(None, description="인덱싱할 경로 (절대경로 또는 상대경로)")
+):
     """
-    ./documents 아래 md/txt를 읽어 chunk → embed → Qdrant upsert
+    지정된 경로의 문서들을 인덱싱 - 전역 파일시스템 지원
     """
     col = collection or COLLECTION_DEFAULT
-    docs = _read_documents(DOCUMENTS_DIR)
+
+    # 경로 결정: path가 주어지면 해당 경로, 아니면 기본 DOCUMENTS_DIR
+    if path:
+        if os.path.isabs(path):
+            # 절대경로면 HOST_ROOT를 통해 접근
+            target_dir = os.path.join(HOST_ROOT, path.lstrip('/'))
+        else:
+            # 상대경로면 현재 작업 디렉토리 기준 (추후 working_dir 지원)
+            target_dir = path
+    else:
+        target_dir = DOCUMENTS_DIR
+
+    docs = _read_documents(target_dir)
 
     if not docs:
         return IndexResponse(collection=col, chunks=0)
