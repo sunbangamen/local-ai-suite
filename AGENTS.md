@@ -1,34 +1,38 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `docker/`: Compose stacks for Phase 1/2; use `compose.p1.yml` and `compose.p2.yml` targets, note `up-p3` has no companion file yet.
-- `services/`: Core applications — `api-gateway/` (LiteLLM proxy), `embedding/` (FastAPI + FastEmbed on port 8003), `rag/` (Qdrant-backed RAG API on port 8002).
-- `models/`: Read-only mount for local GGUF models consumed by inference containers.
-- `documents/`: Source content for RAG indexing runs.
-- `scripts/`: CLI helpers such as `ai`, `ai.py`, and `download-models.sh`.
-- `data/`, `docs/`: Generated artifacts and reference documentation.
+- `docker/`: Compose stacks (`compose.p1.yml` single-model, `compose.p2.yml` standard stack, `compose.p3.yml` dual-model + MCP). Phase-specific configs live in `services/api-gateway/`.
+- `services/`: Core backends — `api-gateway/` (LiteLLM), `embedding/`, `rag/`, `mcp-server/`, plus inference Dockerfiles.
+- `scripts/`: CLI tooling (`ai`, `ai.py`, `model_warmup.py`, analytics helpers) and install scripts.
+- `desktop-app/`: Electron UI; `docs/`, `documents/`, `models/` hold reference material, indexed content, and GGUF weights.
+- Tests live beside each service (e.g., `services/rag/tests/`); create directories if absent.
 
 ## Build, Test, and Development Commands
-- `make up-p1`: Launch inference and API gateway services; verify with `curl http://localhost:8000/health`.
-- `make up-p2`: Start Phase 1 stack plus Qdrant, embedding, and RAG services; index with `curl -X POST "http://localhost:8002/index?collection=myproj"` and query via `curl -H 'Content-Type: application/json' -d '{"query":"...","collection":"myproj"}' http://localhost:8002/query`.
-- `make down`: Stop all services cleanly; `make logs`: Follow combined stack logs for troubleshooting.
+- `make up-p1`: Launch single inference + gateway; good for quick sanity checks.
+- `make up-p2`: Bring up inference, gateway, embedding, Qdrant, and RAG (default dev stack).
+- `make up-p3`: Run full dual-model + MCP + desktop stack for end-to-end flows.
+- `make down`: Stop all containers; `make logs`: Tail combined Docker logs.
+- `ai --mcp ...`: Invoke MCP tools (respects `working_dir`).
 
 ## Coding Style & Naming Conventions
-- Python 3.11 across services; prefer explicit type hints and Pydantic models for request/response schemas.
-- Format with Black and lint with Ruff; keep lines ≤100 characters and use 4-space indentation.
-- Naming: modules, functions, and variables in `snake_case`; classes in `PascalCase`; constants in `UPPER_SNAKE`.
+- Python 3.11 with FastAPI; enforce 4-space indentation and ≤100-character lines.
+- Use type hints, Pydantic models, and descriptive docstrings where logic is non-trivial.
+- Naming: modules/functions/variables `snake_case`, classes `PascalCase`, constants `UPPER_SNAKE`.
+- Format with Black, lint with Ruff; pin dependencies in each service’s `requirements.txt`.
 
 ## Testing Guidelines
-- Use `pytest -q`; locate tests next to the relevant service (e.g., `services/rag/tests/`).
-- Name files `test_*.py` and functions `test_*`; cover both success and failure paths for new endpoints.
-- Employ `httpx.AsyncClient` when exercising FastAPI routes.
+- Primary framework: `pytest`; target asynchronous routes with `httpx.AsyncClient`.
+- Place tests near their services (`services/<service>/tests/test_*.py`).
+- Cover success/error paths for new endpoints; snapshot regression is acceptable for CLI output.
+- Run `pytest -q` inside the relevant container (Phase 2/3) to ensure dependencies match production images.
 
 ## Commit & Pull Request Guidelines
-- Follow Conventional Commits, e.g., `feat(rag): add query route`.
-- PRs must describe context, list affected services/paths, and link issues (`Closes #123`).
-- Document local validation steps (`make up-p2`, sample `curl` runs) and highlight any configuration changes such as `.env` updates, ports, or models.
+- Follow Conventional Commits (`feat(rag): add query route`, `fix(mcp): handle working_dir`).
+- PRs should describe context, impacted services, linked issues (e.g., `Closes #123`), and validation steps (`make up-p2`, sample curls/MCP calls).
+- Document env/config changes (`.env`, ports, model names) explicitly and include screenshots/log snippets for UI edits.
 
 ## Security & Configuration Tips
-- Bind services to localhost only and avoid exposing containers publicly.
-- Manage secrets via `.env`; never commit credentials. Store GGUF weights under `models/`.
-- Confirm GPU settings in Docker Desktop/WSL when enabling `llama.cpp` acceleration.
+- Keep services bound to localhost; never expose Docker ports publicly.
+- Store secrets in `.env` or host keychains; avoid committing credentials or analytics databases.
+- Ensure GGUF models stay under `models/`; verify GPU passthrough before enabling high-load inference.
+- RAG/MCP rely on `API_GATEWAY_CHAT_MODEL` / `API_GATEWAY_CODE_MODEL`; confirm these match LiteLLM config before deployment.
