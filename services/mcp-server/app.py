@@ -430,6 +430,8 @@ async def ai_chat(message: str, model: str = None) -> AIResponse:
         if model is None:
             model = _detect_model_for_message(message)
 
+        print(f"[MCP] AI Chat 모델 선택: {model} (메시지: {message[:50]}...)")
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_GATEWAY_URL}/v1/chat/completions",

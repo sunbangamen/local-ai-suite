@@ -157,7 +157,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - API_GATEWAY_URL=${API_GATEWAY_URL:-http://api-gateway:8000}
-      - API_GATEWAY_MODEL=${API_GATEWAY_MODEL:-local-7b}
       - RAG_URL=${RAG_URL:-http://rag:8002}
       - EMBEDDING_URL=${EMBEDDING_URL:-http://embedding:8003}
       - NOTION_TOKEN=${NOTION_TOKEN:-}  # Optional Notion integration

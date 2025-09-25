@@ -42,7 +42,7 @@ services:
     restart: unless-stopped
     ports: ["${API_GATEWAY_PORT:-8000}:8000"]
     volumes:
-      - ../services/api-gateway/config.p1.yaml:/app/config.yaml:ro
+      - ../services/api-gateway/config.p2.yaml:/app/config.yaml:ro
     platform: linux/amd64
     command: ["--config", "/app/config.yaml", "--port", "8000", "--host", "0.0.0.0"]
     environment:

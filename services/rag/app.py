@@ -161,6 +161,7 @@ def _detect_model_for_query(query: str) -> str:
 async def _llm_answer(client: httpx.AsyncClient, system: str, user: str) -> Tuple[str, Dict[str, Any]]:
     # 쿼리 내용에 따라 적절한 모델 선택
     selected_model = _detect_model_for_query(user)
+    logger.info(f"RAG 모델 선택: {selected_model} (쿼리: {user[:50]}...)")
 
     payload = {
         "model": selected_model,
