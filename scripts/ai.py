@@ -85,10 +85,10 @@ def detect_query_type(query: str) -> str:
 
 def call_mcp_tool(tool_name: str, **kwargs) -> Optional[Dict[str, Any]]:
     """
-    Call MCP server tool with current working directory support
+    Call MCP server tool with current working directory support (UTF-8 enhanced)
     """
     headers = {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json; charset=utf-8"
     }
 
     # Add current working directory to kwargs for path-based tools
@@ -98,7 +98,16 @@ def call_mcp_tool(tool_name: str, **kwargs) -> Optional[Dict[str, Any]]:
 
     try:
         print(f"🔧 Calling MCP tool: {tool_name} (working_dir: {current_dir})...")
-        response = requests.post(f"{MCP_URL}/tools/{tool_name}/call", json=kwargs, headers=headers, timeout=60)
+
+        # JSON 데이터를 UTF-8로 명시적 인코딩
+        json_data = json.dumps(kwargs, ensure_ascii=False).encode('utf-8')
+
+        response = requests.post(
+            f"{MCP_URL}/tools/{tool_name}/call",
+            data=json_data,
+            headers=headers,
+            timeout=60
+        )
         response.raise_for_status()
 
         data = response.json()
@@ -330,7 +339,7 @@ def call_rag_api(query: str, collection: str = "default", include_context: bool 
     }
 
     headers = {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json; charset=utf-8"
     }
 
     try:
@@ -373,7 +382,7 @@ def index_documents(collection: str = "default", directory: str = None) -> bool:
     }
 
     headers = {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json; charset=utf-8"
     }
 
     try:
@@ -455,7 +464,7 @@ def call_api(query: str, model_type: str = 'auto', max_tokens: int = 500, stream
     }
 
     headers = {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json; charset=utf-8"
     }
 
     try:

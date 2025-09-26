@@ -20,3 +20,6 @@ model_list:
       stream: true
       max_output_tokens: 1024
 
+router:
+  health_check:
+    enabled: true
