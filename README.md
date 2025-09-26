@@ -38,6 +38,32 @@ make up-p3
 curl http://localhost:8020/health
 ```
 
+### 보안 기능 세부사항
+
+**차단되는 위험한 코드:**
+```python
+import subprocess  # ❌ 차단
+import ctypes      # ❌ 차단
+import socket      # ❌ 차단
+importlib.import_module('subprocess')  # ❌ 우회 차단
+```
+
+**허용되는 안전한 코드:**
+```python
+import os          # ✅ 허용
+import sys         # ✅ 허용
+import pathlib     # ✅ 허용
+import json        # ✅ 허용
+```
+
+**차단되는 위험한 경로:**
+```bash
+/etc/passwd                    # ❌ 차단
+C:/Windows/System32/config/SAM  # ❌ 차단 (슬래시)
+C:\Windows\System32            # ❌ 차단 (백슬래시)
+../../../etc/shadow            # ❌ 경로 탈출 차단
+```
+
 ## 폴더 요약
 
 * `docker/compose.p1.yml` : 추론서버 + API 게이트웨이(litellm)
@@ -48,6 +74,31 @@ curl http://localhost:8020/health
 
 * 모든 서비스는 로컬호스트만 노출 권장.
 * 외부 포트 개방 금지. 토큰/키 필요 없음(완전 로컬 전제).
+
+### 보안 테스트 실행
+
+MCP 서버의 보안 시스템을 검증하려면 자동화된 테스트를 실행할 수 있습니다:
+
+```bash
+# pytest 설치 (한 번만)
+pip install pytest
+
+# 보안 테스트 실행
+pytest tests/security_tests.py -q
+
+# 또는 직접 기본 보안 테스트 실행
+python3 tests/security_tests.py
+```
+
+**테스트 항목:**
+- ✅ AST 기반 코드 보안 검증
+- ✅ 동적 import 우회 시도 차단 (`importlib.import_module` 등)
+- ✅ 절대 경로 매핑 보안 (경로 탈출 방지)
+- ✅ Windows/Linux 멀티플랫폼 경로 보안
+- ✅ 슬래시/백슬래시 혼합 경로 차단
+- ✅ 시스템 파일 및 민감 디렉터리 접근 방지
+
+**기대 결과:** 모든 보안 테스트가 통과해야 하며, 실패 시 보안 취약점이 있음을 의미합니다.
 
 ## 트러블슈팅
 

@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
@@ -27,6 +27,15 @@ import base64
 import tempfile
 from io import BytesIO
 from PIL import Image
+
+# 새로운 보안 모듈 임포트
+try:
+    from .security import get_security_validator, get_secure_executor, SecurityError
+    from .safe_api import get_safe_file_api, get_safe_command_executor, secure_resolve_path
+except ImportError:
+    # 개발/테스트 환경에서의 절대 임포트
+    from security import get_security_validator, get_secure_executor, SecurityError
+    from safe_api import get_safe_file_api, get_safe_command_executor, secure_resolve_path
 
 # Playwright와 Notion 임포트 (지연 로딩)
 playwright = None
@@ -64,22 +73,14 @@ CODE_MODEL_NAME = os.getenv("API_GATEWAY_CODE_MODEL", "code-7b")
 
 def resolve_path(path: str, working_dir: Optional[str] = None) -> Path:
     """
-    Resolve path to actual filesystem location
-    - If working_dir provided, use it as base for relative paths
-    - Otherwise use PROJECT_ROOT as fallback
-    - Map to global filesystem via HOST_ROOT
+    DEPRECATED: Use secure_resolve_path from safe_api module instead
+    This function is kept for backward compatibility but delegates to secure implementation
     """
-    if working_dir and not os.path.isabs(path):
-        # Relative path with working directory
-        full_path = Path(working_dir) / path
-    elif os.path.isabs(path):
-        # Absolute path - use as-is but map through HOST_ROOT
-        full_path = Path(HOST_ROOT + path) if not path.startswith(HOST_ROOT) else Path(path)
-    else:
-        # Fallback to PROJECT_ROOT
-        full_path = Path(PROJECT_ROOT) / path
-
-    return full_path.resolve()
+    try:
+        return secure_resolve_path(path, working_dir)
+    except SecurityError as e:
+        # For backward compatibility, convert SecurityError to ValueError
+        raise ValueError(str(e))
 
 # MCP 서버 인스턴스
 mcp = FastMCP("Local AI MCP Server")
@@ -94,6 +95,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def ensure_utf8_content_type(request: Request, call_next):
+    """모든 응답에 UTF-8 charset 부여"""
+    response = await call_next(request)
+    if "content-type" not in response.headers:
+        response.headers["content-type"] = "application/json; charset=utf-8"
+    elif "application/json" in response.headers["content-type"] and "charset" not in response.headers["content-type"]:
+        response.headers["content-type"] = "application/json; charset=utf-8"
+    return response
 
 @app.get("/health")
 async def health_check():
@@ -243,150 +254,124 @@ async def list_project_files() -> str:
 
 @mcp.tool()
 async def execute_python(code: str, timeout: int = 30) -> ExecutionResult:
-    """Python 코드 실행"""
-    # 보안: 위험한 모듈 임포트 차단
-    dangerous_imports = ["os", "sys", "subprocess", "shutil", "requests"]
-    if any(f"import {module}" in code or f"from {module}" in code for module in dangerous_imports):
-        return ExecutionResult(
-            command=f"python -c '{code[:50]}...'",
-            stdout="",
-            stderr="보안상 위험한 모듈 사용이 감지되어 실행을 차단했습니다.",
-            returncode=1,
-            success=False
-        )
-
+    """보안이 강화된 Python 코드 실행"""
     try:
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-c", code,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=PROJECT_ROOT
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        # 새로운 보안 실행 환경 사용
+        secure_executor = get_secure_executor()
+        result = secure_executor.execute_python_code(code, timeout)
 
         return ExecutionResult(
             command=f"python -c '{code[:50]}...'",
-            stdout=stdout.decode() if stdout else "",
-            stderr=stderr.decode() if stderr else "",
-            returncode=proc.returncode or 0,
-            success=proc.returncode == 0
-        )
-    except asyncio.TimeoutError:
-        return ExecutionResult(
-            command=f"python -c '{code[:50]}...'",
-            stdout="",
-            stderr=f"타임아웃 ({timeout}초)",
-            returncode=124,
-            success=False
+            stdout=result["stdout"],
+            stderr=result["stderr"],
+            returncode=result["returncode"],
+            success=result["success"]
         )
     except Exception as e:
         return ExecutionResult(
             command=f"python -c '{code[:50]}...'",
             stdout="",
-            stderr=f"실행 오류: {str(e)}",
+            stderr=f"보안 실행 환경 오류: {str(e)}",
             returncode=1,
             success=False
         )
 
 @mcp.tool()
-async def execute_bash(command: str, timeout: int = 30) -> ExecutionResult:
-    """Bash 명령어 실행"""
-    # 보안: 위험한 명령어 차단
-    dangerous_commands = ["rm", "sudo", "chmod", "chown", "mv"]
-    if any(cmd in command.split() for cmd in dangerous_commands):
-        return ExecutionResult(
-            command=command,
-            stdout="",
-            stderr="보안상 위험한 명령어가 감지되어 실행을 차단했습니다.",
-            returncode=1,
-            success=False
-        )
-
+async def execute_bash(command: str, timeout: int = 30, working_dir: Optional[str] = None) -> ExecutionResult:
+    """보안이 강화된 Bash 명령어 실행"""
     try:
-        proc = await asyncio.create_subprocess_shell(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=PROJECT_ROOT
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        # 새로운 안전한 명령어 실행기 사용
+        safe_executor = get_safe_command_executor()
+        result = await safe_executor.execute_command(command, working_dir, timeout)
 
         return ExecutionResult(
-            command=command,
-            stdout=stdout.decode() if stdout else "",
-            stderr=stderr.decode() if stderr else "",
-            returncode=proc.returncode or 0,
-            success=proc.returncode == 0
+            command=result["command"],
+            stdout=result["stdout"],
+            stderr=result["stderr"],
+            returncode=result["returncode"],
+            success=result["success"]
         )
-    except asyncio.TimeoutError:
+    except SecurityError as e:
         return ExecutionResult(
             command=command,
             stdout="",
-            stderr=f"타임아웃 ({timeout}초)",
-            returncode=124,
+            stderr=f"보안 검증 실패: {str(e)}",
+            returncode=1,
             success=False
         )
     except Exception as e:
         return ExecutionResult(
             command=command,
             stdout="",
-            stderr=f"실행 오류: {str(e)}",
+            stderr=f"명령어 실행 오류: {str(e)}",
             returncode=1,
             success=False
         )
 
 @mcp.tool()
 async def read_file(path: str, working_dir: Optional[str] = None) -> FileInfo:
-    """파일 내용 읽기 - 전역 파일시스템 지원"""
-    file_path = resolve_path(path, working_dir)
-
-    # 기본 안전성 검사 (심각한 시스템 파일 차단)
-    dangerous_paths = ["/etc/passwd", "/etc/shadow", "/root/.ssh"]
-    if str(file_path) in dangerous_paths:
-        raise ValueError(f"위험한 시스템 파일 접근 금지: {file_path}")
-
-    if not file_path.exists():
-        raise FileNotFoundError(f"파일을 찾을 수 없습니다: {file_path}")
-
+    """보안이 강화된 파일 내용 읽기 - 전역 파일시스템 지원"""
     try:
-        async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
-            content = await f.read()
+        # 새로운 안전한 파일 API 사용
+        safe_file_api = get_safe_file_api()
+        content = safe_file_api.read_text(path, working_dir)
+
+        # 실제 경로 정보 가져오기 (보안 검증 후)
+        safe_path = secure_resolve_path(path, working_dir)
 
         return FileInfo(
-            path=str(file_path),  # 전체 경로 반환 (전역 접근 지원)
+            path=str(safe_path),
             content=content,
             size=len(content),
-            type=file_path.suffix
+            type=safe_path.suffix
         )
-    except Exception as e:
+    except SecurityError as e:
+        raise ValueError(f"보안 검증 실패: {str(e)}")
+    except (FileNotFoundError, IOError) as e:
         raise Exception(f"파일 읽기 오류: {str(e)}")
 
 @mcp.tool()
 async def write_file(path: str, content: str, working_dir: Optional[str] = None) -> FileInfo:
-    """파일 내용 쓰기 - 전역 파일시스템 지원"""
-    file_path = resolve_path(path, working_dir)
-
-    # 기본 안전성 검사 (시스템 중요 파일 쓰기 차단)
-    dangerous_paths = ["/etc/passwd", "/etc/shadow", "/root/.ssh", "/bin", "/sbin", "/usr/bin", "/usr/sbin"]
-    for dangerous in dangerous_paths:
-        if str(file_path).startswith(dangerous):
-            raise ValueError(f"시스템 중요 파일/디렉토리 쓰기 금지: {file_path}")
-
+    """보안이 강화된 파일 내용 쓰기 - 전역 파일시스템 지원"""
     try:
-        # 디렉토리 생성
-        file_path.parent.mkdir(parents=True, exist_ok=True)
+        # 새로운 안전한 파일 API 사용
+        safe_file_api = get_safe_file_api()
+        safe_file_api.write_text(path, content, working_dir)
 
-        async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
-            await f.write(content)
+        # 실제 경로 정보 가져오기 (보안 검증 후)
+        safe_path = secure_resolve_path(path, working_dir)
 
         return FileInfo(
-            path=str(file_path),  # 전체 경로 반환 (전역 접근 지원)
+            path=str(safe_path),
             content=content,
             size=len(content),
-            type=file_path.suffix
+            type=safe_path.suffix
         )
-    except Exception as e:
+    except SecurityError as e:
+        raise ValueError(f"보안 검증 실패: {str(e)}")
+    except IOError as e:
         raise Exception(f"파일 쓰기 오류: {str(e)}")
+
+@mcp.tool()
+async def list_files(path: str = ".", working_dir: Optional[str] = None) -> Dict[str, Any]:
+    """보안이 강화된 디렉토리 파일 목록 조회"""
+    try:
+        # 새로운 안전한 파일 API 사용
+        safe_file_api = get_safe_file_api()
+        file_list = safe_file_api.list_directory(path, working_dir)
+
+        # 실제 경로 정보 가져오기 (보안 검증 후)
+        safe_path = secure_resolve_path(path, working_dir)
+
+        return {
+            "path": str(safe_path),
+            "files": file_list,
+            "count": len(file_list)
+        }
+    except SecurityError as e:
+        raise ValueError(f"보안 검증 실패: {str(e)}")
+    except (FileNotFoundError, IOError) as e:
+        raise Exception(f"디렉토리 목록 조회 오류: {str(e)}")
 
 @mcp.tool()
 async def rag_search(query: str, collection: str = "default") -> RAGResult:
