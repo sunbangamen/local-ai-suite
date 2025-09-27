@@ -36,6 +36,15 @@ except ImportError:
     ANALYTICS_ENABLED = False
     analytics = None
 
+# Memory system integration
+try:
+    from memory_system import get_memory_system, set_memory_system, MemorySystem
+    from memory_utils import get_current_project_info, init_project_memory, show_memory_status
+    MEMORY_ENABLED = True
+except ImportError:
+    MEMORY_ENABLED = False
+    print("⚠️ Memory system not available. Install memory_system.py for conversation memory.")
+
 # Session ID for tracking related queries
 SESSION_ID = str(uuid.uuid4())[:8]
 
@@ -541,6 +550,57 @@ def call_api(query: str, model_type: str = 'auto', max_tokens: int = 500, stream
             except Exception:
                 pass  # Don't fail on analytics errors
 
+        # Save to memory system
+        if MEMORY_ENABLED and full_content:
+            try:
+                ms = get_memory_system()
+                project_info = get_current_project_info()
+                if project_info["has_memory"]:
+                    project_id = project_info["project_id"]
+                    response_time_ms = int((time.time() - start_time) * 1000)
+
+                    ms.save_conversation(
+                        project_id=project_id,
+                        user_query=query,
+                        ai_response=full_content,
+                        model_used=model_name,
+                        session_id=SESSION_ID,
+                        token_count=tokens_used,
+                        response_time_ms=response_time_ms,
+                        context={
+                            "model_type": model_type,
+                            "detected_type": detected_type,
+                            "original_model_type": original_model_type,
+                            "streaming": streaming,
+                            "mcp_enhanced": bool(mcp_results)
+                        }
+                    )
+                else:
+                    # 메모리가 초기화되지 않은 경우 자동 초기화
+                    project_id = init_project_memory()
+                    response_time_ms = int((time.time() - start_time) * 1000)
+
+                    ms.save_conversation(
+                        project_id=project_id,
+                        user_query=query,
+                        ai_response=full_content,
+                        model_used=model_name,
+                        session_id=SESSION_ID,
+                        token_count=tokens_used,
+                        response_time_ms=response_time_ms,
+                        context={
+                            "model_type": model_type,
+                            "detected_type": detected_type,
+                            "original_model_type": original_model_type,
+                            "streaming": streaming,
+                            "mcp_enhanced": bool(mcp_results),
+                            "auto_initialized": True
+                        }
+                    )
+            except Exception as e:
+                # 메모리 저장 실패해도 응답은 반환
+                print(f"⚠️ Memory save failed: {e}")
+
         return full_content
 
     except requests.exceptions.ConnectionError:
@@ -637,6 +697,15 @@ Examples:
     parser.add_argument("--tools", action="store_true", help="Enable AI to use MCP tools automatically")
     parser.add_argument("--no-stream", action="store_true", help="Disable streaming responses (show all at once)")
 
+    # Memory system commands
+    parser.add_argument("--memory", action="store_true", help="Show memory system status")
+    parser.add_argument("--memory-init", action="store_true", help="Initialize project memory")
+    parser.add_argument("--memory-search", metavar="QUERY", help="Search conversations in memory")
+    parser.add_argument("--memory-cleanup", action="store_true", help="Clean up expired conversations")
+    parser.add_argument("--memory-backup", metavar="PATH", nargs='?', const=None, help="Export memory backup")
+    parser.add_argument("--memory-stats", action="store_true", help="Show detailed memory statistics")
+    parser.add_argument("--memory-dir", metavar="DIR", help="Override memory storage directory")
+
     args = parser.parse_args()
 
     # Handle indexing command
@@ -658,6 +727,23 @@ Examples:
             print("❌ Analytics not available. ai_analytics.py not found.")
             sys.exit(1)
         run_optimization()
+        sys.exit(0)
+
+    # Handle memory commands
+    if any([args.memory, args.memory_init, args.memory_search, args.memory_cleanup,
+            args.memory_backup is not None, args.memory_stats]) or args.memory_dir:
+        if not MEMORY_ENABLED:
+            print("❌ Memory system not available. Install memory_system.py.")
+            sys.exit(1)
+
+        # CLI에서 메모리 디렉토리 지정된 경우 새 인스턴스 생성
+        if args.memory_dir:
+            from memory_system import MemorySystem, set_memory_system
+            custom_instance = MemorySystem(data_dir=args.memory_dir)
+            set_memory_system(custom_instance)
+            print(f"💾 Using custom memory directory: {args.memory_dir}")
+
+        handle_memory_commands(args)
         sys.exit(0)
 
     # Handle MCP tools list
@@ -938,6 +1024,69 @@ def handle_mcp_call(tool_name: str, args_json: str = None):
         print(f"❌ Invalid JSON in --mcp-args: {e}")
     except Exception as e:
         print(f"❌ Error calling MCP tool: {e}")
+
+def handle_memory_commands(args):
+    """Handle memory system commands"""
+    from memory_utils import cleanup_expired_conversations, export_memory_backup
+
+    if args.memory or args.memory_stats:
+        # Show memory status
+        show_memory_status()
+        return
+
+    if args.memory_init:
+        # Initialize project memory
+        project_id = init_project_memory()
+        print(f"✅ Project memory initialized: {project_id}")
+        return
+
+    if args.memory_search:
+        # Search conversations
+        project_info = get_current_project_info()
+        if not project_info["has_memory"]:
+            print("❌ Project memory not initialized. Use --memory-init first.")
+            return
+
+        project_id = project_info["project_id"]
+        ms = get_memory_system()
+        results = ms.search_conversations(
+            project_id=project_id,
+            query=args.memory_search,
+            limit=10
+        )
+
+        print(f"🔍 Search results for '{args.memory_search}':")
+        print("=" * 50)
+
+        if not results:
+            print("No conversations found.")
+            return
+
+        for i, conv in enumerate(results, 1):
+            timestamp = conv['timestamp']
+            importance = conv['importance_score']
+            query_preview = conv['user_query'][:100]
+            response_preview = conv['ai_response'][:200]
+
+            print(f"\n{i}. [{importance}/10] {timestamp}")
+            print(f"Q: {query_preview}{'...' if len(conv['user_query']) > 100 else ''}")
+            print(f"A: {response_preview}{'...' if len(conv['ai_response']) > 200 else ''}")
+
+    if args.memory_cleanup:
+        # Clean up expired conversations
+        try:
+            result = cleanup_expired_conversations(dry_run=False)
+            print(f"🧹 Cleanup completed: {result['cleaned']} conversations removed")
+        except Exception as e:
+            print(f"❌ Cleanup failed: {e}")
+
+    if args.memory_backup is not None:
+        # Export memory backup
+        try:
+            backup_path = export_memory_backup(output_path=args.memory_backup)
+            print(f"💾 Memory backup saved to: {backup_path}")
+        except Exception as e:
+            print(f"❌ Backup failed: {e}")
 
 if __name__ == "__main__":
     main()

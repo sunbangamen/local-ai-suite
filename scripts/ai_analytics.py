@@ -17,31 +17,93 @@ from contextlib import contextmanager
 
 
 DEFAULT_CHAT_MODEL = os.getenv("API_GATEWAY_CHAT_MODEL", "chat-7b")
+ANALYTICS_ENABLED = True  # Global flag for analytics availability
 
 class AIAnalytics:
     def __init__(self, db_path: str = None):
-        # Use environment variable or fallback to writable location
-        if db_path is None:
-            db_path = os.getenv(
-                'AI_ANALYTICS_DB',
-                os.path.expanduser('~/.local/share/ai-suite/ai_analytics.db')
-            )
-
-        self.db_path = db_path
-        try:
-            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            # If external path is read-only, fall back to home directory
-            fallback_path = os.path.expanduser('~/.local/share/ai-suite/ai_analytics.db')
-            print(f"Warning: Cannot write to {db_path} ({e}). Using fallback: {fallback_path}")
-            self.db_path = fallback_path
-            Path(fallback_path).parent.mkdir(parents=True, exist_ok=True)
-
+        self.db_path = self._get_database_path(db_path)
         self._local = threading.local()
         self._init_schema()
 
+    def _get_database_path(self, custom_path: str = None) -> str:
+        """유연한 데이터베이스 경로 결정 로직"""
+        candidates = []
+
+        # 1. CLI/환경변수 우선순위
+        if custom_path:
+            candidates.append(custom_path)
+
+        # AI_ANALYTICS_DB 환경변수
+        if os.getenv('AI_ANALYTICS_DB'):
+            candidates.append(os.getenv('AI_ANALYTICS_DB'))
+
+        # AI_ANALYTICS_DIR 환경변수 + 기본 파일명
+        if os.getenv('AI_ANALYTICS_DIR'):
+            analytics_dir = os.getenv('AI_ANALYTICS_DIR')
+            candidates.append(os.path.join(analytics_dir, 'analytics.db'))
+
+        # 2. 기본 경로
+        candidates.append('/mnt/e/ai-data/analytics/analytics.db')
+
+        # 3. Git 루트 폴백
+        try:
+            import subprocess
+            git_root = subprocess.check_output(
+                ['git', 'rev-parse', '--show-toplevel'],
+                stderr=subprocess.DEVNULL,
+                text=True
+            ).strip()
+            candidates.append(os.path.join(git_root, '.ai-analytics-data', 'analytics.db'))
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+
+        # 4. 워킹 디렉터리 폴백
+        candidates.append(os.path.join(os.getcwd(), '.ai-analytics-data', 'analytics.db'))
+
+        # 5. 홈 디렉터리 폴백 (최종)
+        candidates.append(os.path.expanduser('~/.local/share/ai-suite/ai_analytics.db'))
+
+        # 각 후보 경로 검증
+        for candidate in candidates:
+            try:
+                candidate_path = Path(candidate).resolve()
+
+                # 디렉터리 생성 시도
+                candidate_path.parent.mkdir(parents=True, exist_ok=True)
+
+                # 임시 쓰기 테스트
+                test_file = candidate_path.parent / '.analytics_write_test'
+                try:
+                    test_file.write_text('test')
+                    test_file.unlink()
+
+                    # 성공 - 이 경로 사용
+                    if str(candidate_path) != candidates[0]:  # 첫 번째 후보가 아닌 경우
+                        if candidate == candidates[-1]:  # 홈 디렉터리 폴백
+                            print(f"💡 Using local analytics storage: {candidate_path}")
+                        else:
+                            print(f"💡 Using fallback analytics storage: {candidate_path}")
+
+                    return str(candidate_path)
+
+                except (OSError, PermissionError):
+                    continue
+
+            except (OSError, PermissionError):
+                continue
+
+        # 모든 경로 실패 시 - analytics 비활성화
+        print("⚠️ Cannot find writable location for analytics database.")
+        print("💡 Analytics will be disabled for this session.")
+        global ANALYTICS_ENABLED
+        ANALYTICS_ENABLED = False
+        return None
+
     def _get_connection(self):
         """Thread-safe connection handling"""
+        if self.db_path is None:
+            raise RuntimeError("Analytics database path not available")
+
         if not hasattr(self._local, 'connection'):
             self._local.connection = sqlite3.connect(
                 self.db_path,
@@ -68,6 +130,9 @@ class AIAnalytics:
 
     def _init_schema(self):
         """Initialize database schema for AI analytics"""
+        if self.db_path is None:
+            return  # Analytics disabled, skip schema initialization
+
         with self.transaction() as conn:
             # AI CLI usage tracking
             conn.execute("""
@@ -144,6 +209,9 @@ class AIAnalytics:
                   model_used: str, response_time_ms: int, tokens_used: int = 0,
                   success: bool = True, error_message: str = None, session_id: str = None):
         """Log AI CLI usage for analytics"""
+        if self.db_path is None:
+            return  # Analytics disabled, skip logging
+
         query_hash = hashlib.sha256(query.encode()).hexdigest()[:16]
 
         with self.transaction() as conn:
@@ -227,6 +295,14 @@ class AIAnalytics:
 
     def get_model_recommendation(self, query: str, query_type: str = None) -> Dict[str, Any]:
         """Get smart model recommendation based on usage patterns"""
+        if self.db_path is None:
+            # Fallback to default model when analytics disabled
+            return {
+                'recommended_model': DEFAULT_CHAT_MODEL,
+                'confidence': 0.5,
+                'reason': 'Default model (analytics disabled)'
+            }
+
         with self.transaction() as conn:
             # Get current time context
             now = datetime.now()
@@ -269,6 +345,16 @@ class AIAnalytics:
 
     def get_analytics_summary(self, hours: int = 24) -> Dict[str, Any]:
         """Get comprehensive analytics summary"""
+        if self.db_path is None:
+            return {
+                'usage_stats': [],
+                'peak_times': [],
+                'model_performance': [],
+                'analysis_period_hours': hours,
+                'generated_at': datetime.now().isoformat(),
+                'status': 'Analytics disabled'
+            }
+
         cutoff = datetime.now() - timedelta(hours=hours)
 
         with self.transaction() as conn:
@@ -321,6 +407,13 @@ class AIAnalytics:
 
     def optimize_database(self):
         """Run database optimization"""
+        if self.db_path is None:
+            return {
+                'cleaned_records': 0,
+                'database_size_mb': 0,
+                'status': 'Analytics disabled'
+            }
+
         with self.transaction() as conn:
             # Clean old data (keep last 30 days)
             cutoff = datetime.now() - timedelta(days=30)
@@ -336,4 +429,9 @@ class AIAnalytics:
             }
 
 # Global instance for easy import
-analytics = AIAnalytics()
+try:
+    analytics = AIAnalytics()
+except Exception as e:
+    print(f"⚠️ Analytics initialization failed: {e}")
+    ANALYTICS_ENABLED = False
+    analytics = None
