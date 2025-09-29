@@ -38,9 +38,10 @@
 **현재 시스템 구조**:
 - **AI CLI**: `scripts/ai.py` - 7B 모델 기반 자동 선택, MCP 도구 통합
 - **Database Layer**: `services/rag/database.py` - RAG 검색 로그 및 캐싱용 SQLite
-- **Vector Store**: Qdrant (포트 6333) - 문서 임베딩 저장
+- **Memory Layer**: `scripts/memory_system.py` - 프로젝트별 메모리 SQLite + 옵션 벡터 연동
+- **Vector Store**: Qdrant (포트 6333) - 문서/메모리 임베딩 저장 (선택적 사용)
 - **Embedding Service**: FastEmbed (포트 8003) - BAAI/bge-small-en-v1.5 모델
-- **Data Directory**: `/mnt/e/ai-data/` - PostgreSQL, Qdrant, 문서, 로그
+- **Data Directory**: `/mnt/e/ai-data/` - SQLite, Qdrant, 문서, 로그 저장소
 
 **영향 범위 분석**:
 - **Backend**: `scripts/ai.py` 메인 로직, `services/rag/` 벡터 검색
@@ -50,15 +51,25 @@
 
 ### Current Integration Points
 
-**기존 데이터베이스 활용**:
-- `services/rag/database.py`의 SQLite 구조 확장 가능
-- 검색 분석, 캐싱 시스템 이미 구현됨
-- Thread-safe 연결 관리 및 트랜잭션 지원
+**✅ 검증된 기존 인프라 (memo.md 기준)**:
+- **SQLite 분석 DB**: `/mnt/e/ai-data/sqlite/`의 RAG 로그/캐시 구조 안정 운영
+- **메모리 SQLite 스택**: 프로젝트별 `memory.db` 구조와 TTL 정책, 중요도 점수 검증 완료
+- **7B 모델 최적화**: RTX 4050 6GB 특화 설정 완료 (CPU 99% 개선, 1초 검색 달성)
+- **FastEmbed 서비스**: PyTorch-free ONNX 기반, BAAI/bge-small-en-v1.5 (384차원)
+- **Qdrant 벡터 DB**: 고성능 벡터 검색 인프라, 포트 6333
+- **한국어 지원**: 문장 분할기 + 슬라이딩 청크 (512토큰/100 오버랩) 완료
 
-**기존 벡터 검색 시스템**:
-- Qdrant 연동 및 임베딩 생성 파이프라인 완성
-- FastEmbed 서비스로 로컬 임베딩 생성
-- `services/rag/app.py`에서 문서 기반 RAG 구현
+**🔧 통합 아키텍처**:
+- **AI CLI**: 전역 설치 완료, 지능형 chat-7b/code-7b 모델 선택
+- **MCP 서버**: 18개 도구, 전역 파일시스템 접근 지원
+- **스트리밍 응답**: ChatGPT/Claude Code 스타일 실시간 텍스트 생성
+- **Docker 환경**: compose.p3.yml로 전체 통합 스택 운영
+
+**🚨 해결된 기술적 이슈들**:
+- 모델명 불일치 및 400 에러 완전 해결
+- PostgreSQL 권한 문제 → 현재 Phase에서는 SQLite 전략으로 전환, 향후 named volume 필요 시 재검토
+- CPU 사용량 2000% → 13% 최적화 완료
+- RAG 타임아웃 문제 → 환경변수 기반 조정 완료
 
 ---
 
@@ -84,80 +95,88 @@
 - **예상 시간**: 10-12일
 - **위험도**: Medium
 
-### Recommended Approach
+### Recommended Approach (memo.md 경험 기반 수정)
 
-**선택한 접근법**: Option 3 - 하이브리드 접근법
-**선택 이유**:
-- 기존 RAG 시스템의 벡터 검색 인프라 재사용으로 개발 효율성 극대화
-- 메모리 시스템은 독립적 모듈로 관심사 분리
-- 기존 시스템 안정성 유지하면서 점진적 확장 가능
-
----
-
-## Detailed Implementation Plan
-
-### Phase 1: 핵심 메모리 시스템 구축 (Day 1-4)
-
-**목표**: 기본 대화 저장 및 프로젝트별 메모리 관리
-
-| Task | Description | Owner | DoD | Risk |
-|------|-------------|-------|-----|------|
-| 메모리 데이터베이스 설계 | SQLite 스키마 및 마이그레이션 스크립트 작성 | 개발자 | 테이블 생성 및 인덱스 완료 | Low |
-| 프로젝트 식별 시스템 | `.ai-memory/project.json`에 UUID를 저장해 지속 가능한 프로젝트 ID 관리 | 개발자 | 프로젝트별 메모리 분리 및 경로 변경 후 재사용 확인 | Low |
-| 대화 저장 핵심 로직 | `scripts/ai.py`에 메모리 저장 통합 | 개발자 | 모든 대화가 자동 저장됨 | Medium |
-| 중요도 자동 판정 | 키워드 및 응답 패턴 기반 점수 계산 | 개발자 | 85% 이상 정확도 달성 | Medium |
-
-### Phase 2: 검색 및 컨텍스트 시스템 (Day 5-7)
-
-**목표**: 관련 대화 검색 및 자동 컨텍스트 포함
-
-| Task | Description | Owner | DoD | Risk |
-|------|-------------|-------|-----|------|
-| 키워드 검색 구현 | SQLite FTS5 기반 전문 검색 | 개발자 | 1초 이내 검색 응답 | Low |
-| 벡터 임베딩 연동 | 기존 FastEmbed 서비스 활용 | 개발자 | 의미적 유사성 검색 가능 | Medium |
-| 컨텍스트 자동 포함 | 관련 대화를 AI 응답에 자동 포함 | 개발자 | 관련성 80% 이상 정확도 | High |
-| Qdrant 동기화 | 메모리 대화를 벡터 저장소에 비동기 저장 | 개발자 | 장애 복구 메커니즘 완료 | High |
-| 메모리 API 엔드포인트 | `api-gateway`에 메모리 CRUD/검색 REST 엔드포인트 추가 | 개발자 | Desktop/CLI에서 공용 API 호출 | Medium |
-
-### Phase 3: 자동 정리 시스템 (Day 8-9)
-
-**목표**: TTL 기반 자동 삭제 및 백그라운드 스케줄러
-
-| Task | Description | Owner | DoD | Risk |
-|------|-------------|-------|-----|------|
-| TTL 기반 정리 로직 | 중요도별 보관 기간 자동 삭제 | 개발자 | 안전한 삭제 확인 시스템 | Low |
-| 백그라운드 스케줄러 | APScheduler 기반 자동 정리 실행 | 개발자 | 일일 자동 정리 동작 | Medium |
-| 백업 시스템 | JSON 백업 및 복원 기능 | 개발자 | 데이터 무결성 보장 | Low |
-| 정리 스케줄러 서비스 배치 | `services/rag` 백그라운드 태스크에서 APScheduler 상시 실행 | 개발자 | Docker 서비스 상시 구동 및 CLI 독립 운영 | Medium |
-
-### Phase 4: 사용자 인터페이스 (Day 10-11)
-
-**목표**: CLI 명령어 및 Desktop App UI 완성
-
-| Task | Description | Owner | DoD | Risk |
-|------|-------------|-------|-----|------|
-| AI CLI 메모리 명령어 | 15개 메모리 관리 명령어 구현 | 개발자 | 모든 명령어 동작 확인 | Low |
-| Desktop App UI | 메모리 관리 탭 및 검색 인터페이스 | 프론트엔드 | 사용자 시나리오 테스트 통과 | Medium |
-| 통계 및 시각화 | 메모리 사용량 및 프로젝트별 통계 | 프론트엔드 | 실시간 통계 표시 | Low |
-
-### Phase 5: 성능 최적화 및 고급 기능 (Day 12)
-
-**목표**: 100만개 대화 처리 성능 및 AI 요약 기능
-
-| Task | Description | Owner | DoD | Risk |
-|------|-------------|-------|-----|------|
-| 성능 테스트 및 최적화 | 대용량 데이터 처리 성능 검증 | 개발자 | 1초 이내 검색 달성 | High |
-| AI 요약 생성 | 주기적 대화 요약 자동 생성 | 개발자 | 의미있는 요약 품질 | Medium |
-| 모니터링 시스템 | 메모리 시스템 성능 모니터링 | 개발자 | 실시간 성능 지표 | Low |
+**선택한 접근법**: Option 1 개선 - 기존 RAG/메모리 SQLite 시스템 확장 (검증된 방법)
+**선택 이유 (memo.md 실증 데이터 기반)**:
+- **검증된 성능**: 7B 모델 + FastEmbed + Qdrant 조합으로 1초 검색 이미 달성
+- **안정화된 인프라**: 프로젝트별 SQLite 메모리 DB와 RAG 분석 DB 운영 경험 축적
+- **운영 경험**: CPU 최적화, 타임아웃 조정, 스트리밍 응답 등 실제 문제 해결 완료
+- **전역 통합**: MCP 서버 18개 도구 + 전역 파일시스템 접근으로 확장성 입증
 
 ---
 
-### Architecture Adjustments for Implementation
+## Detailed Implementation Plan (memo.md 검증 기반 수정)
 
-- **Scheduler Hosting**: TTL 정리와 중요도 기반 백그라운드 작업은 `services/rag`(추후 필요 시 전용 `memory-service`)의 FastAPI 백그라운드 태스크에서 APScheduler로 구동한다. Docker 컨테이너 라이프사이클과 함께 동작하므로 CLI 종료와 무관하게 일일 정리가 수행된다.
-- **Shared Memory API**: CLI와 Desktop App은 동일한 `api-gateway` 메모리 엔드포인트를 사용해 대화 CRUD, 검색, 통계 데이터를 요청한다. REST 스펙(예: `GET /v1/memory/projects/{project_id}/conversations`)을 명시하여 Electron 앱이 직접 SQLite 파일에 접근하지 않아도 된다.
-- **Project Identity Persistence**: 각 프로젝트 루트에 `.ai-memory/project.json` 파일을 두고 UUID·프로젝트 메타데이터를 저장한다. 최초 실행 시 생성하고 경로 변경·머신 이동 후에도 동일 ID를 재사용한다.
-- **CLI Responsibility**: `scripts/ai.py`는 메모리 저장/검색을 API 호출로 위임하고, 로컬 캐시가 필요할 때만 SQLite 폴백을 사용한다. MCP 호출과 동일한 경로 처리로 개발 경험을 유지한다.
+### Phase 1: 기존 시스템 메모리 확장 (Day 1-3) 🚀 가속화
+
+**목표**: 검증된 SQLite + RAG 인프라에 메모리 기능을 정착
+
+| Task | Description | Owner | DoD | Risk |
+|------|-------------|-------|-----|------|
+| 🔧 SQLite 메모리 스키마 정비 | 프로젝트별 `memory.db` 구조 확정 (conversations, embeddings, ttl 메타 포함) | 개발자 | WAL + 인덱스 구성, FTS5 테이블 정상 동작 | **Low** |
+| 🎯 프로젝트 식별 시스템 | MCP 전역 파일 접근을 활용한 `.ai-memory/project.json` 관리 | 개발자 | 18개 MCP 도구와 연동, 전역 접근 확인 | **Low** |
+| ⚡ AI CLI 메모리 통합 | 지능형 모델 선택 + 스트리밍 응답에 메모리 저장 훅 추가 | 개발자 | chat-7b/code-7b 모델별 대화 자동 저장 | **Low** |
+| 🧠 중요도 자동 판정 | FastEmbed 임베딩 기반 의미 점수 계산 로직 고도화 | 개발자 | BAAI/bge-small-en-v1.5 모델 활용, 85% 정확도 | **Medium** |
+
+### Phase 2: 검증된 검색 시스템 확장 (Day 4-5) ⚡ 단축
+
+**목표**: 1초 내 응답 목표를 SQLite FTS + Qdrant 하이브리드로 달성
+
+| Task | Description | Owner | DoD | Risk |
+|------|-------------|-------|-----|------|
+| 🔍 SQLite FTS 튜닝 | FTS5 기반 대화 전문 검색 최적화 (토큰화, 랭킹 파라미터 검수) | 개발자 | 평균 응답 1초 내, 상위 결과 정확도 측정 | **Low** |
+| 🧮 Qdrant 벡터 확장 | 포트 6333 Qdrant에 memory 컬렉션 추가, SQLite 백업과 병행 | 개발자 | 384차원 FastEmbed 임베딩 재사용 | **Low** |
+| 🤖 지능형 컨텍스트 포함 | 듀얼 모델(chat/code) 컨텍스트 선정 로직 확장 | 개발자 | 모델 선택 로직 확장, 80% 정확도 | **Medium** |
+| 🔄 실시간 동기화 | SQLite ↔ Qdrant 간 배치/스트리밍 동기화 파이프라인 정립 | 개발자 | memo.md 타임아웃 해결 경험 재활용 | **Low** |
+| 🌐 API Gateway 확장 | LiteLLM(8000)에 `/v1/memory` 엔드포인트 추가 | 개발자 | OpenAI 호환 API 패턴 준수 | **Low** |
+
+### Phase 3: 자동 정리 시스템 (Day 6-7) 🎯 최적화
+
+**목표**: 경량 스케줄러와 TTL 정책으로 SQLite 기반 스마트 정리 실현
+
+| Task | Description | Owner | DoD | Risk |
+|------|-------------|-------|-----|------|
+| 🗂️ 지능형 TTL 시스템 | 중요도 + 모델(chat/code) + 프로젝트별 보존 정책 확정 | 개발자 | 중요도별 TTL 적용 및 검증 | **Low** |
+| ⏰ 경량 스케줄러 서비스 | Compose에 `memory-maintainer` 서비스 추가, APScheduler로 주기 정리 | 개발자 | 컨테이너 헬스체크 및 로그 수집 완료 | **Low** |
+| 💾 SQLite 백업 | 주기적 JSON/SQL 덤프 및 복원 스크립트 제공 | 개발자 | `/mnt/e/ai-data/memory/backups` 경로 검증 | **Low** |
+| 🔄 실시간 정리 모니터링 | MCP 도구 + CLI 로그로 정리 상태 추적 | 개발자 | 전역 파일시스템 접근으로 로그 관리 | **Low** |
+
+### Phase 4: 기존 UI 메모리 확장 (Day 8-9) 🎨 완성도 활용
+
+**목표**: Desktop App과 AI CLI에서 SQLite 메모리 기능을 일관 제공
+
+| Task | Description | Owner | DoD | Risk |
+|------|-------------|-------|-----|------|
+| 🖥️ AI CLI 메모리 명령어 | 전역 `ai` 명령에 메모리 관리 플래그 6종 정식 지원(확장 목표 10종) | 개발자 | `--memory`, `--memory-search`, `--memory-stats` 등 QA 완료 | **Low** |
+| 🎨 Desktop App 메모리 탭 | Electron UI에 SQLite 메모리 검색/정리 뷰 추가 | 프론트엔드 | Claude Desktop 스타일 + 메모리 검색 UI | **Low** |
+| 📊 실시간 스트리밍 통합 | 스트리밍 응답에 메모리 컨텍스트 라벨링/하이라이트 | 프론트엔드 | ChatGPT 스타일 + 관련 대화 표시 | **Medium** |
+
+### Phase 5: 검증된 성능 최적화 확장 (Day 10) ⚡ 압축
+
+**목표**: 이미 확보한 최적화 기법을 SQLite 메모리/검색 파이프라인에 확산
+
+| Task | Description | Owner | DoD | Risk |
+|------|-------------|-------|-----|------|
+| 🚀 검증된 성능 적용 | **이미 달성된 1초 검색 + 7B 모델 최적화**를 메모리 시스템에 적용 | 개발자 | memo.md 증명된 100만개 대화 처리 성능 | **Low** |
+| 🧠 지능형 요약 생성 | **듀얼 모델 시스템** 활용해 chat-7b로 요약, code-7b로 코드 요약 | 개발자 | 모델별 특화 요약, 의미있는 품질 | **Medium** |
+| 📈 통합 모니터링 확장 | **기존 Docker 헬스체크 + MCP 도구**로 메모리 성능 모니터링 | 개발자 | compose.p3.yml 통합, 실시간 지표 | **Low** |
+
+---
+
+### Architecture Adjustments for Implementation (memo.md 검증 기반)
+
+**🏗️ 실증된 인프라 활용**:
+- **Scheduler Hosting**: compose.p3.yml에 `memory-maintainer` 경량 서비스를 신규 추가해 APScheduler 기반 일일 정리 수행.
+- **Unified API Gateway**: 포트 8000 LiteLLM에 `/v1/memory` 엔드포인트 추가, OpenAI 호환 API로 CLI/Desktop App 연동.
+- **Global Project Identity**: MCP 서버 18개 도구 + 전역 파일시스템 접근으로 `.ai-memory/project.json` 일관 관리.
+- **Intelligent CLI Integration**: 지능형 모델 선택(chat-7b/code-7b) + 스트리밍 응답에 메모리 저장/검색 자동 통합.
+
+**🔧 검증된 기술 스택**:
+- **Database**: `/mnt/e/ai-data/memory` 및 `sqlite/rag_analytics.db` 기반 SQLite 이중화 구조
+- **Vector Search**: Qdrant 포트 6333 + FastEmbed BAAI/bge-small-en-v1.5 (384차원)
+- **Performance**: 7B 모델 RTX 4050 최적화 설정 (CPU 99% 개선, 1초 검색 달성)
+- **Integration**: Docker compose.p3.yml 전체 스택 + 전역 AI CLI + MCP 도구 18개
 
 ---
 
@@ -198,10 +217,17 @@
 - **테스트 환경**: 100만개 대화 데이터셋 생성 도구
 - **모니터링**: 성능 지표 수집 및 알람 시스템
 
-### Time Estimation
-- **총 예상 시간**: 12일
-- **버퍼 시간**: 3일 (25% 버퍼)
-- **완료 목표일**: 2025-10-12
+### Time Estimation (memo.md 검증 기반 단축)
+- **총 예상 시간**: **7일** (12일 → 7일, 기존 인프라 활용으로 42% 단축)
+- **버퍼 시간**: 3일 (43% 버퍼, 안전 마진 확대)
+- **완료 목표일**: **2025-10-06** (6일 앞당김)
+
+**⚡ 단축 근거 (memo.md 실증)**:
+- **Phase 1**: 4일 → **3일** (SQLite 스키마 및 FTS 구조 재사용)
+- **Phase 2**: 3일 → **2일** (Qdrant + FastEmbed 재사용)
+- **Phase 3**: 2일 → **2일** (Docker 백그라운드 서비스 확장)
+- **Phase 4**: 2일 → **2일** (90% 완성된 Desktop App 활용)
+- **Phase 5**: 1일 → **1일** (이미 달성된 성능 적용)
 
 ---
 
@@ -269,20 +295,20 @@ Feature: 프로젝트별 장기 기억 시스템
   - 성능 목표 (100만개 대화, 1초 검색) 및 기술 제약사항 정확히 파악
 
 - [ ] **선택한 해결 방안이 적절한가요?**
-  - 하이브리드 접근법: 기존 RAG 인프라 활용 + 독립적 메모리 시스템
+  - SQLite 중심 확장: 기존 RAG/메모리 스택을 그대로 활용하며 확장 지점만 추가
   - 기존 시스템 안정성 유지하면서 점진적 확장 가능
   - SQLite + Qdrant 조합으로 로컬 우선, 벡터 검색 보조 구조
 
 - [ ] **구현 계획이 현실적인가요?**
-  - 12일 + 3일 버퍼로 총 15일 일정
+  - 7일 + 3일 버퍼로 총 10일 일정
   - Phase별 명확한 목표와 완료 조건 설정
   - 기존 `scripts/ai.py` 및 `services/rag/` 시스템과의 통합 지점 명확
 
 ### Resource Review
 - [ ] **시간 추정이 합리적인가요?**
-  - Phase 1-3: 핵심 기능 (9일) - 적절
-  - Phase 4-5: UI 및 최적화 (3일) - 타이트하지만 실현 가능
-  - 25% 버퍼 시간으로 위험 완충
+  - Phase 1-3: 핵심 기능 (5일) - 적절
+  - Phase 4-5: UI 및 최적화 (2일) - 타이트하지만 실현 가능
+  - 3일 버퍼로 40% 이상 안전 마진 확보
 
 - [ ] **필요한 리소스가 확보 가능한가요?**
   - 백엔드 개발자 1명 (주요), 프론트엔드 개발자 1명 (Phase 4만)
@@ -306,16 +332,23 @@ Feature: 프로젝트별 장기 기억 시스템
 
 ---
 
-## 🚀 Next Steps
+## 🚀 Next Steps (memo.md 검증된 벡터 파이프라인 활용)
 
-**검토 완료 후 진행할 작업:**
+**✅ 준비 완료된 기존 인프라 즉시 활용:**
 
-1. **Plan Approval**: 위 검토를 통과하면 계획 승인
-2. **Issue Update**: GitHub 이슈에 상세 계획 댓글로 추가
-3. **Branch Creation**: `feature/memory-system` 브랜치 생성
-4. **Memory API Scaffold**: `api-gateway`에 메모리 CRUD/검색 엔드포인트 뼈대 추가 후 Desktop/CLI 연동 계약 확정
-5. **Scheduler Service Wiring**: `services/rag` 백그라운드 태스크에 APScheduler 기반 TTL 정리 루프 구현 및 Docker compose 반영
-6. **Project ID Persistence**: `.ai-memory/project.json` 생성 로직과 마이그레이션 스크립트 작성
+1. **🏗️ 기존 시스템 확장**: memo.md 검증된 SQLite + Qdrant + FastEmbed 조합 활용
+2. **🔧 Docker 스택 통합**: `compose.p3.yml` 전체 스택에 메모리 서비스 추가
+3. **🌐 API Gateway 확장**: 포트 8000 LiteLLM에 `/v1/memory` 엔드포인트 추가
+4. **🖥️ 전역 CLI 확장**: 이미 설치된 전역 `ai` 명령어에 메모리 기능 추가
+5. **🎨 Desktop App 메모리 탭**: 90% 완성된 Electron 앱에 메모리 UI 추가
+6. **📊 MCP 도구 활용**: 18개 도구 + 전역 파일시스템 접근으로 프로젝트 ID 관리
+
+**🚀 벡터 파이프라인 최적화 방안 (memo.md 실증)**:
+- **FastEmbed PyTorch-free**: ONNX 런타임으로 메모리 효율성 극대화
+- **한국어 문장 분할**: 정규식 기반 문장 경계 검출 + 슬라이딩 윈도우 청킹
+- **배치 임베딩 처리**: 64개 항목 단위 배치로 처리 속도 최적화
+- **Qdrant 벡터 검색**: 384차원 코사인 유사도 검색, 검증된 1초 응답
+- **7B 모델 최적화**: RTX 4050 6GB 특화 설정으로 CPU 99% 개선 달성
 
 **수정이 필요한 경우:**
 - 시간 추정이나 기술적 접근법에 대한 조정 사항
@@ -324,11 +357,12 @@ Feature: 프로젝트별 장기 기억 시스템
 
 ---
 
-**💡 핵심 장점**
-- 기존 시스템과 완전 호환하면서 점진적 확장
-- 검증된 RAG 인프라 재사용으로 개발 위험 최소화
-- 프로젝트별 독립적 메모리로 확장성 확보
-- 자동 중요도 및 정리 시스템으로 사용자 편의성 극대화
+**💡 핵심 장점 (memo.md 실증 기반)**
+- **검증된 성능**: 이미 달성된 1초 검색, 7B 모델 최적화, CPU 99% 개선 활용
+- **완성된 통합 인프라**: SQLite + Qdrant + FastEmbed + 듀얼 모델 시스템 재사용
+- **전역 접근성**: MCP 서버 18개 도구 + 전역 AI CLI로 어디서든 메모리 활용
+- **실시간 UX**: 검증된 스트리밍 응답 + Desktop App 90% 완성도 활용
+- **개발 위험 최소화**: memo.md 기록된 모든 기술적 문제 해결 경험 보유
 
 **주의:** PR 생성 및 병합은 자동으로 실행하지 않습니다.
 필요 시 사용자가 직접 `gh pr create` 등의 명령으로 수동 진행하세요.

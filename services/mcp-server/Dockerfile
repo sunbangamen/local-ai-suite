@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 시스템 의존성 설치 (Playwright용 추가)
+# 시스템 의존성 설치 (Playwright + Docker + Enhanced Security)
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y \
     libxss1 \
     libxtst6 \
     xvfb \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Python 의존성 설치
@@ -42,14 +43,14 @@ RUN git config --global --add safe.directory /mnt/workspace && \
 RUN playwright install --with-deps chromium
 
 # 애플리케이션 및 보안 모듈 복사
-COPY app.py security.py safe_api.py __init__.py .
+COPY app.py security.py safe_api.py sandbox.py security_admin.py __init__.py .
 
 # 헬스체크
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8020/health || exit 1
 
-# 기본 포트
-EXPOSE 8020
+# 기본 포트 (MCP 서버 + Security Admin API)
+EXPOSE 8020 8021
 
-# 실행 (HTTP 모드로 헬스체크 서버 실행)
+# 실행 (HTTP 모드로 헬스체크 서버 및 보안 관리 API 실행)
 CMD ["python", "app.py", "--http"]

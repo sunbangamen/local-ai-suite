@@ -32,10 +32,12 @@ from PIL import Image
 try:
     from .security import get_security_validator, get_secure_executor, SecurityError
     from .safe_api import get_safe_file_api, get_safe_command_executor, secure_resolve_path
+    from .security_admin import security_app
 except ImportError:
     # 개발/테스트 환경에서의 절대 임포트
     from security import get_security_validator, get_secure_executor, SecurityError
     from safe_api import get_safe_file_api, get_safe_command_executor, secure_resolve_path
+    from security_admin import security_app
 
 # Playwright와 Notion 임포트 (지연 로딩)
 playwright = None
@@ -1188,13 +1190,31 @@ async def get_current_model() -> Dict[str, Any]:
 # 서버 실행
 # =============================================================================
 
-if __name__ == "__main__":
+async def start_security_admin_server():
+    """보안 관리 API 서버를 별도 포트에서 실행"""
     import uvicorn
+    config = uvicorn.Config(security_app, host="0.0.0.0", port=8021, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
 
-    # 개발 모드: FastAPI + MCP 동시 실행
+async def start_main_server():
+    """메인 MCP 서버 실행"""
+    import uvicorn
+    config = uvicorn.Config(app, host="0.0.0.0", port=8020, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
+
+async def main():
+    """메인 서버와 보안 관리 API 서버를 동시 실행"""
+    await asyncio.gather(
+        start_main_server(),
+        start_security_admin_server()
+    )
+
+if __name__ == "__main__":
+    # HTTP 모드: FastAPI + 보안 관리 API 동시 실행
     if len(sys.argv) > 1 and sys.argv[1] == "--http":
-        uvicorn.run(app, host="0.0.0.0", port=8020)
+        asyncio.run(main())
     else:
-        # 프로덕션 모드: MCP 서버 실행
-        # 현재는 HTTP 모드로 실행하여 헬스체크 지원
-        uvicorn.run(app, host="0.0.0.0", port=8020)
+        # 기본 모드: HTTP 모드로 실행 (헬스체크 지원)
+        asyncio.run(main())
