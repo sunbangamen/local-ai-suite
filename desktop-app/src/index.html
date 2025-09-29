@@ -204,6 +204,244 @@
             0%, 60% { opacity: 1; }
             30% { opacity: 0.5; }
         }
+
+        /* 탭 스타일 */
+        .tabs {
+            display: flex;
+            background: #2a2a2a;
+            border-radius: 8px 8px 0 0;
+            border: 1px solid #404040;
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        .tab-button {
+            flex: 1;
+            padding: 12px 20px;
+            background: transparent;
+            color: #aaa;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .tab-button:first-child {
+            border-radius: 8px 0 0 0;
+        }
+        .tab-button:last-child {
+            border-radius: 0 8px 0 0;
+        }
+        .tab-button.active {
+            background: #404040;
+            color: #e0e0e0;
+            border-bottom: 2px solid #0066cc;
+        }
+        .tab-button:hover:not(.active) {
+            background: #333;
+            color: #ccc;
+        }
+
+        /* 탭 컨텐츠 */
+        .tab-content {
+            display: none;
+            background: #2a2a2a;
+            border: 1px solid #404040;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            padding: 20px;
+            min-height: 500px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* 메모리 탭 스타일 */
+        .memory-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #404040;
+        }
+        .memory-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #404040;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #555;
+        }
+        .stat-title {
+            font-size: 12px;
+            color: #aaa;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+        .stat-description {
+            font-size: 11px;
+            color: #999;
+            margin-top: 3px;
+        }
+
+        .memory-search {
+            margin-bottom: 20px;
+        }
+        .search-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .search-input {
+            flex: 1;
+            padding: 12px;
+            background: #404040;
+            border: 1px solid #555;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+        .search-options {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            font-size: 13px;
+        }
+        .search-options label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #ccc;
+            cursor: pointer;
+        }
+        .search-options input[type="checkbox"] {
+            accent-color: #0066cc;
+        }
+
+        .conversation-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #555;
+            border-radius: 6px;
+            background: #333;
+        }
+        .conversation-item {
+            padding: 12px;
+            border-bottom: 1px solid #444;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .conversation-item:hover {
+            background: #404040;
+        }
+        .conversation-item:last-child {
+            border-bottom: none;
+        }
+        .conversation-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .conversation-time {
+            font-size: 11px;
+            color: #999;
+        }
+        .conversation-model {
+            font-size: 10px;
+            background: #555;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #ccc;
+        }
+        .conversation-preview {
+            font-size: 13px;
+            color: #ccc;
+            line-height: 1.4;
+            max-height: 40px;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        .conversation-query {
+            font-weight: 500;
+            color: #e0e0e0;
+            margin-bottom: 4px;
+        }
+
+        .memory-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #404040;
+        }
+        .memory-btn {
+            padding: 8px 16px;
+            background: #555;
+            color: #e0e0e0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+        .memory-btn:hover {
+            background: #666;
+        }
+        .memory-btn.primary {
+            background: #0066cc;
+        }
+        .memory-btn.primary:hover {
+            background: #0056b3;
+        }
+        .memory-btn.danger {
+            background: #dc3545;
+        }
+        .memory-btn.danger:hover {
+            background: #c82333;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+        .empty-state h3 {
+            color: #ccc;
+            margin-bottom: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+        }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #444;
+            border-radius: 50%;
+            border-top-color: #0066cc;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -212,40 +450,128 @@
 
         <div class="status" id="status">서버 연결 확인 중...</div>
 
-        <div class="mode-container">
-            <div class="mode-toggle">
-                <button class="mode-button active" id="autoMode">🤖 자동 모드</button>
-                <button class="mode-button" id="manualMode">👤 수동 모드</button>
+        <!-- 탭 메뉴 -->
+        <div class="tabs">
+            <button class="tab-button active" data-tab="chat">
+                <span>💬</span> 채팅
+            </button>
+            <button class="tab-button" data-tab="memory">
+                <span>🧠</span> 메모리
+            </button>
+        </div>
+
+        <!-- 채팅 탭 -->
+        <div class="tab-content active" id="chatTab">
+            <div class="mode-container">
+                <div class="mode-toggle">
+                    <button class="mode-button active" id="autoMode">🤖 자동 모드</button>
+                    <button class="mode-button" id="manualMode">👤 수동 모드</button>
+                </div>
+                <div class="current-model" id="currentModel">현재 모델: 💬 Chat Model (자동 감지)</div>
+                <button class="clear-chat-btn" onclick="clearChat()">🗑️ 대화 지우기</button>
             </div>
-            <div class="current-model" id="currentModel">현재 모델: 💬 Chat Model (자동 감지)</div>
-            <button class="clear-chat-btn" onclick="clearChat()">🗑️ 대화 지우기</button>
-        </div>
 
-        <select class="model-selector" id="modelSelector" style="display: none;">
-            <option value="chat-7b">💬 Chat Model</option>
-            <option value="code-7b">💻 Code Model</option>
-        </select>
+            <select class="model-selector" id="modelSelector" style="display: none;">
+                <option value="chat-7b">💬 Chat Model</option>
+                <option value="code-7b">💻 Code Model</option>
+            </select>
 
-        <div class="chat-container" id="chatContainer">
-            <div class="message ai-message">
-                <strong>🤖 AI:</strong> 안녕하세요! Local AI Desktop에 오신 것을 환영합니다.<br><br>
-                💬 **일반 대화**: 자유롭게 질문하세요<br>
-                💻 **코딩 질문**: 프로그래밍 관련 질문을 하시면 자동으로 코드 모델이 선택됩니다<br>
-                🌐 **웹 도구**: URL과 함께 다음 명령어를 사용하세요:<br>
-                &nbsp;&nbsp;• "https://example.com <strong>스크린샷</strong> 찍어줘"<br>
-                &nbsp;&nbsp;• "https://example.com <strong>내용</strong> 크롤링해줘"<br>
-                &nbsp;&nbsp;• "https://example.com <strong>UI 분석</strong>해줘"<br>
-                &nbsp;&nbsp;• "https://example.com <strong>Notion에 저장</strong>해줘"
+            <div class="chat-container" id="chatContainer">
+                <div class="message ai-message">
+                    <strong>🤖 AI:</strong> 안녕하세요! Local AI Desktop에 오신 것을 환영합니다.<br><br>
+                    💬 **일반 대화**: 자유롭게 질문하세요<br>
+                    💻 **코딩 질문**: 프로그래밍 관련 질문을 하시면 자동으로 코드 모델이 선택됩니다<br>
+                    🌐 **웹 도구**: URL과 함께 다음 명령어를 사용하세요:<br>
+                    &nbsp;&nbsp;• "https://example.com <strong>스크린샷</strong> 찍어줘"<br>
+                    &nbsp;&nbsp;• "https://example.com <strong>내용</strong> 크롤링해줘"<br>
+                    &nbsp;&nbsp;• "https://example.com <strong>UI 분석</strong>해줘"<br>
+                    &nbsp;&nbsp;• "https://example.com <strong>Notion에 저장</strong>해줘"
+                </div>
+            </div>
+
+            <div class="shortcuts-info">
+                💡 <strong>Enter</strong>: 전송 | <strong>Ctrl+Enter</strong>: 줄바꿈 | <strong>ESC</strong>: 응답 중단 | <strong>Ctrl+L</strong>: 대화 지우기 | <strong>Ctrl+/</strong>: 모드 전환
+            </div>
+
+            <div class="input-container">
+                <textarea class="message-input" id="messageInput" placeholder="메시지를 입력하세요..." rows="1"></textarea>
+                <button class="send-button" id="sendButton">전송</button>
             </div>
         </div>
 
-        <div class="shortcuts-info">
-            💡 <strong>Enter</strong>: 전송 | <strong>Ctrl+Enter</strong>: 줄바꿈 | <strong>ESC</strong>: 응답 중단 | <strong>Ctrl+L</strong>: 대화 지우기 | <strong>Ctrl+/</strong>: 모드 전환
-        </div>
+        <!-- 메모리 탭 -->
+        <div class="tab-content" id="memoryTab">
+            <div class="memory-header">
+                <h2>🧠 AI 메모리 관리</h2>
+                <button class="memory-btn primary" onclick="refreshMemoryStats()">🔄 새로고침</button>
+            </div>
 
-        <div class="input-container">
-            <textarea class="message-input" id="messageInput" placeholder="메시지를 입력하세요..." rows="1"></textarea>
-            <button class="send-button" id="sendButton">전송</button>
+            <!-- 메모리 통계 -->
+            <div class="memory-stats" id="memoryStats">
+                <div class="stat-card">
+                    <div class="stat-title">총 대화</div>
+                    <div class="stat-value" id="totalConversations">-</div>
+                    <div class="stat-description">저장된 대화 수</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">평균 중요도</div>
+                    <div class="stat-value" id="avgImportance">-</div>
+                    <div class="stat-description">1-10 중요도 점수</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">프로젝트 ID</div>
+                    <div class="stat-value" id="projectId">-</div>
+                    <div class="stat-description">현재 프로젝트</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">최근 대화</div>
+                    <div class="stat-value" id="latestConversation">-</div>
+                    <div class="stat-description">마지막 활동</div>
+                </div>
+            </div>
+
+            <!-- 메모리 검색 -->
+            <div class="memory-search">
+                <h3>🔍 대화 검색</h3>
+                <div class="search-container">
+                    <input type="text" class="search-input" id="memorySearchInput" placeholder="검색어를 입력하세요...">
+                    <button class="memory-btn primary" onclick="searchMemory()">검색</button>
+                </div>
+                <div class="search-options">
+                    <label>
+                        <input type="checkbox" id="useVectorSearch">
+                        벡터 검색 (의미적 유사성)
+                    </label>
+                    <label>
+                        최소 중요도:
+                        <select id="minImportance" style="background: #404040; color: #e0e0e0; border: 1px solid #555; border-radius: 4px; padding: 2px 6px;">
+                            <option value="">전체</option>
+                            <option value="1">1</option>
+                            <option value="3">3</option>
+                            <option value="5">5</option>
+                            <option value="7">7</option>
+                            <option value="9">9</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 검색 결과 -->
+            <div class="conversation-list" id="conversationList">
+                <div class="empty-state">
+                    <h3>검색 결과가 여기에 표시됩니다</h3>
+                    <p>검색어를 입력하고 검색 버튼을 클릭하세요.</p>
+                </div>
+            </div>
+
+            <!-- 메모리 관리 액션 -->
+            <div class="memory-actions">
+                <button class="memory-btn primary" onclick="syncToQdrant()">📤 Qdrant 동기화</button>
+                <button class="memory-btn" onclick="createBackup()">💾 백업 생성</button>
+                <button class="memory-btn" onclick="cleanupMemory()">🧹 만료된 대화 정리</button>
+                <button class="memory-btn" onclick="optimizeDatabase()">⚡ 데이터베이스 최적화</button>
+                <button class="memory-btn danger" onclick="confirmClearMemory()">🗑️ 메모리 초기화</button>
+            </div>
         </div>
     </div>
 
@@ -264,6 +590,10 @@
         let isLoading = false;
         let isAutoMode = true;
         let abortController = null; // 응답 중단을 위한 컨트롤러
+        let currentProject = null; // 현재 프로젝트 ID
+
+        // 메모리 API 기본 URL
+        const MEMORY_API_URL = 'http://localhost:8005';
 
         // 웹/Electron 환경 감지
         const isElectron = window.electronAPI !== undefined;
@@ -526,6 +856,7 @@
         async function checkServerStatus() {
             let aiStatus = '🔴 AI 서버 오프라인';
             let mcpStatus = '🔴 MCP 서버 오프라인';
+            let memoryStatus = '🔴 메모리 서버 오프라인';
 
             console.log('서버 상태 확인 시작...');
 
@@ -555,10 +886,21 @@
                 console.log('MCP 서버 연결 실패:', error);
             }
 
+            // 메모리 서버 상태 확인
+            try {
+                const healthResponse = await callMemoryAPI('/v1/memory/health');
+                if (healthResponse.status === 'healthy') {
+                    memoryStatus = `🟢 메모리 서버 온라인`;
+                }
+            } catch (error) {
+                console.log('메모리 서버 연결 실패:', error);
+            }
+
             // 상태 표시 업데이트
-            const bothOnline = aiStatus.includes('🟢') && mcpStatus.includes('🟢');
-            status.textContent = `${aiStatus} | ${mcpStatus}`;
-            status.className = bothOnline ? 'status online' : 'status offline';
+            const allOnline = aiStatus.includes('🟢') && mcpStatus.includes('🟢') && memoryStatus.includes('🟢');
+            const partialOnline = [aiStatus, mcpStatus, memoryStatus].some(s => s.includes('🟢'));
+            status.textContent = `${aiStatus} | ${mcpStatus} | ${memoryStatus}`;
+            status.className = allOnline ? 'status online' : (partialOnline ? 'status' : 'status offline');
 
             console.log('서버 상태 확인 완료:', status.textContent);
         }
@@ -699,6 +1041,9 @@
                         const parsedContent = parseMarkdown(responseText);
                         const statsText = `<div class="message-stats">⏱️ ${responseTime}초 | 📊 ~${tokenEstimate} 토큰</div>`;
                         streamingMessageDiv.innerHTML = `<strong>🤖 AI:</strong> ${parsedContent}${statsText}`;
+
+                        // 메모리에 대화 저장 (비동기, 실패해도 계속 진행)
+                        saveConversationToMemory(message, responseText, model, responseTime, tokenEstimate);
                     } else {
                         streamingMessageDiv.innerHTML = '<strong>🤖 AI:</strong> ❌ 응답 실패: ' + response.error;
                     }
@@ -865,6 +1210,335 @@
 
             saveChatHistory(); // 히스토리 저장
         }
+
+        // ===== 탭 관리 =====
+        function switchTab(tabName) {
+            // 모든 탭 버튼과 컨텐츠 비활성화
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            // 선택된 탭 활성화
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            document.getElementById(`${tabName}Tab`).classList.add('active');
+
+            // 메모리 탭 선택 시 자동으로 통계 로드
+            if (tabName === 'memory') {
+                refreshMemoryStats();
+            }
+        }
+
+        // 탭 클릭 이벤트 리스너
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tabName = btn.getAttribute('data-tab');
+                switchTab(tabName);
+            });
+        });
+
+        // ===== 메모리 API 함수들 =====
+        async function callMemoryAPI(endpoint, method = 'GET', data = null) {
+            try {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+
+                if (data) {
+                    options.body = JSON.stringify(data);
+                }
+
+                const response = await fetch(`${MEMORY_API_URL}${endpoint}`, options);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('Memory API 호출 실패:', error);
+                throw error;
+            }
+        }
+
+        // 메모리 통계 새로고침
+        async function refreshMemoryStats() {
+            try {
+                // 로딩 표시
+                document.getElementById('totalConversations').textContent = '...';
+                document.getElementById('avgImportance').textContent = '...';
+                document.getElementById('projectId').textContent = '...';
+                document.getElementById('latestConversation').textContent = '...';
+
+                // 현재 프로젝트 ID 가져오기 (임시로 'desktop-app'으로 설정)
+                currentProject = 'desktop-app';
+
+                // 프로젝트 통계 가져오기
+                const statsResponse = await callMemoryAPI(`/v1/memory/projects/${currentProject}/stats`);
+
+                if (statsResponse.success) {
+                    const stats = statsResponse.stats;
+                    document.getElementById('totalConversations').textContent = stats.total_conversations || 0;
+                    document.getElementById('avgImportance').textContent = stats.avg_importance ? stats.avg_importance.toFixed(1) : 'N/A';
+                    document.getElementById('latestConversation').textContent = stats.latest_conversation || 'N/A';
+                } else {
+                    throw new Error('통계 가져오기 실패');
+                }
+
+                document.getElementById('projectId').textContent = currentProject;
+
+            } catch (error) {
+                console.error('메모리 통계 로드 실패:', error);
+                document.getElementById('totalConversations').textContent = 'Error';
+                document.getElementById('avgImportance').textContent = 'Error';
+                document.getElementById('projectId').textContent = 'Error';
+                document.getElementById('latestConversation').textContent = 'Error';
+            }
+        }
+
+        // 메모리 검색
+        async function searchMemory() {
+            const query = document.getElementById('memorySearchInput').value.trim();
+            const useVector = document.getElementById('useVectorSearch').checked;
+            const minImportance = document.getElementById('minImportance').value;
+            const conversationList = document.getElementById('conversationList');
+
+            if (!query) {
+                alert('검색어를 입력하세요.');
+                return;
+            }
+
+            try {
+                // 로딩 표시
+                conversationList.innerHTML = '<div class="loading"><div class="spinner"></div> 검색 중...</div>';
+
+                const searchData = {
+                    query: query,
+                    use_vector_search: useVector,
+                    importance_min: minImportance ? parseInt(minImportance) : null,
+                    limit: 20,
+                    project_id: currentProject
+                };
+
+                const searchResponse = await callMemoryAPI('/v1/memory/conversations/search', 'POST', searchData);
+
+                if (searchResponse.success && searchResponse.results.length > 0) {
+                    displayConversations(searchResponse.results);
+                } else {
+                    conversationList.innerHTML = `
+                        <div class="empty-state">
+                            <h3>검색 결과가 없습니다</h3>
+                            <p>다른 검색어를 시도해보세요.</p>
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                console.error('메모리 검색 실패:', error);
+                conversationList.innerHTML = `
+                    <div class="empty-state">
+                        <h3>검색 중 오류 발생</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // 대화 목록 표시
+        function displayConversations(conversations) {
+            const conversationList = document.getElementById('conversationList');
+
+            if (!conversations || conversations.length === 0) {
+                conversationList.innerHTML = `
+                    <div class="empty-state">
+                        <h3>검색 결과가 없습니다</h3>
+                        <p>다른 검색어를 시도해보세요.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            conversationList.innerHTML = conversations.map(conv => {
+                const timestamp = new Date(conv.timestamp).toLocaleString('ko-KR');
+                const queryPreview = conv.user_query.length > 100 ?
+                    conv.user_query.substring(0, 100) + '...' : conv.user_query;
+                const responsePreview = conv.ai_response.length > 150 ?
+                    conv.ai_response.substring(0, 150) + '...' : conv.ai_response;
+
+                return `
+                    <div class="conversation-item" onclick="showConversationDetail(${conv.id})">
+                        <div class="conversation-meta">
+                            <span class="conversation-time">${timestamp}</span>
+                            <span class="conversation-model">${conv.model_used || 'unknown'}</span>
+                        </div>
+                        <div class="conversation-query">${queryPreview}</div>
+                        <div class="conversation-preview">${responsePreview}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 대화 상세 보기 (임시 구현)
+        function showConversationDetail(conversationId) {
+            alert(`대화 ID ${conversationId}의 상세 보기 기능은 추후 구현 예정입니다.`);
+        }
+
+        // Qdrant 동기화
+        async function syncToQdrant() {
+            if (!currentProject) {
+                alert('프로젝트가 설정되지 않았습니다.');
+                return;
+            }
+
+            try {
+                const syncData = {
+                    sync_type: 'qdrant',
+                    batch_size: 64
+                };
+
+                const response = await callMemoryAPI(`/v1/memory/projects/${currentProject}/sync`, 'POST', syncData);
+
+                if (response.success) {
+                    alert(`동기화 완료!\n동기화된 대화: ${response.sync_stats.synced}개`);
+                    refreshMemoryStats();
+                } else {
+                    throw new Error('동기화 실패');
+                }
+
+            } catch (error) {
+                console.error('Qdrant 동기화 실패:', error);
+                alert(`동기화 실패: ${error.message}`);
+            }
+        }
+
+        // 백업 생성
+        async function createBackup() {
+            if (!currentProject) {
+                alert('프로젝트가 설정되지 않았습니다.');
+                return;
+            }
+
+            try {
+                const backupData = {
+                    backup_type: 'json'
+                };
+
+                const response = await callMemoryAPI(`/v1/memory/projects/${currentProject}/backup`, 'POST', backupData);
+
+                if (response.success) {
+                    alert(`백업 생성 완료!\n백업 파일: ${response.backup_path}`);
+                } else {
+                    throw new Error('백업 생성 실패');
+                }
+
+            } catch (error) {
+                console.error('백업 생성 실패:', error);
+                alert(`백업 생성 실패: ${error.message}`);
+            }
+        }
+
+        // 만료된 대화 정리
+        async function cleanupMemory() {
+            if (!currentProject) {
+                alert('프로젝트가 설정되지 않았습니다.');
+                return;
+            }
+
+            if (!confirm('만료된 대화를 정리하시겠습니까?')) {
+                return;
+            }
+
+            try {
+                const response = await callMemoryAPI(`/v1/memory/projects/${currentProject}/cleanup`, 'POST');
+
+                if (response.success) {
+                    alert(`정리 완료!\n삭제된 대화: ${response.deleted_conversations}개`);
+                    refreshMemoryStats();
+                } else {
+                    throw new Error('정리 실패');
+                }
+
+            } catch (error) {
+                console.error('메모리 정리 실패:', error);
+                alert(`메모리 정리 실패: ${error.message}`);
+            }
+        }
+
+        // 데이터베이스 최적화
+        async function optimizeDatabase() {
+            if (!currentProject) {
+                alert('프로젝트가 설정되지 않았습니다.');
+                return;
+            }
+
+            try {
+                const response = await callMemoryAPI(`/v1/memory/projects/${currentProject}/optimize`, 'POST');
+
+                if (response.success) {
+                    alert('데이터베이스 최적화가 완료되었습니다.');
+                } else {
+                    throw new Error('최적화 실패');
+                }
+
+            } catch (error) {
+                console.error('데이터베이스 최적화 실패:', error);
+                alert(`데이터베이스 최적화 실패: ${error.message}`);
+            }
+        }
+
+        // 메모리 초기화 확인
+        function confirmClearMemory() {
+            const confirmText = prompt('메모리를 완전히 초기화하시겠습니까?\n확인하려면 "DELETE"를 입력하세요:');
+
+            if (confirmText === 'DELETE') {
+                alert('메모리 초기화 기능은 보안상의 이유로 현재 비활성화되어 있습니다.\n수동으로 데이터베이스 파일을 삭제하세요.');
+            }
+        }
+
+        // 대화를 메모리에 저장
+        async function saveConversationToMemory(userQuery, aiResponse, modelUsed, responseTimeMs, tokenCount) {
+            try {
+                if (!currentProject) {
+                    currentProject = 'desktop-app';
+                }
+
+                const conversationData = {
+                    user_query: userQuery,
+                    ai_response: aiResponse,
+                    model_used: modelUsed,
+                    session_id: `desktop-${Date.now()}`,
+                    token_count: tokenCount,
+                    response_time_ms: Math.floor(parseFloat(responseTimeMs) * 1000),
+                    tags: ['desktop-app'],
+                    context: {
+                        source: 'desktop-app',
+                        timestamp: new Date().toISOString()
+                    },
+                    project_path: 'desktop-app'
+                };
+
+                const response = await callMemoryAPI('/v1/memory/conversations', 'POST', conversationData);
+
+                if (response.success) {
+                    console.log('대화가 메모리에 저장되었습니다:', response.conversation_id);
+                } else {
+                    console.warn('메모리 저장 실패:', response);
+                }
+
+            } catch (error) {
+                console.error('메모리 저장 중 오류:', error);
+                // 메모리 저장 실패는 사용자에게 방해가 되지 않도록 콘솔 로그만 남김
+            }
+        }
+
+        // Enter 키로 검색
+        document.getElementById('memorySearchInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchMemory();
+            }
+        });
 
         // 앱 시작 시 설정과 히스토리 로드, 서버 상태 확인
         loadSettings();
