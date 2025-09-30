@@ -43,7 +43,7 @@ RUN git config --global --add safe.directory /mnt/workspace && \
 RUN playwright install --with-deps chromium
 
 # 애플리케이션 및 보안 모듈 복사
-COPY app.py security.py safe_api.py sandbox.py security_admin.py __init__.py .
+COPY app.py security.py safe_api.py sandbox.py security_admin.py rate_limiter.py __init__.py .
 
 # 헬스체크
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

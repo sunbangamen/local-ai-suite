@@ -36,6 +36,10 @@ class CodeExecutionRequest(BaseModel):
     client_info: Optional[Dict[str, Any]] = None
 
 
+class CodeValidationRequest(BaseModel):
+    code: str
+
+
 class SecurityAuditAPI:
     """보안 감사 및 관리 API"""
 
@@ -271,14 +275,13 @@ async def cleanup_expired_sessions():
 
 
 @security_app.post("/security/validate")
-async def validate_code_security(request: Body(...)):
+async def validate_code_security(request: CodeValidationRequest):
     """코드 보안성 검증 (실행 없이)"""
     try:
-        code = request.get("code", "")
-        if not code:
+        if not request.code:
             raise HTTPException(status_code=400, detail="Code is required")
 
-        validation_result = security_audit.validate_code_security(code)
+        validation_result = security_audit.validate_code_security(request.code)
         return {
             "success": True,
             "validation": validation_result
