@@ -1,0 +1,197 @@
+{
+  "timestamp": "2025-09-30T10:20:00+09:00",
+  "verification": "monitoring-stack-validation",
+  "summary": {
+    "total": 8,
+    "up": 5,
+    "down": 3
+  },
+  "targets": [
+    {
+      "discoveredLabels": {
+        "__address__": "api-gateway:8000",
+        "__metrics_path__": "/metrics",
+        "__param_format": "prometheus",
+        "__scheme__": "http",
+        "__scrape_interval__": "10s",
+        "__scrape_timeout__": "5s",
+        "job": "api-gateway"
+      },
+      "labels": {
+        "instance": "api-gateway:8000",
+        "job": "api-gateway"
+      },
+      "scrapePool": "api-gateway",
+      "scrapeUrl": "http://api-gateway:8000/metrics?format=prometheus",
+      "globalUrl": "http://api-gateway:8000/metrics?format=prometheus",
+      "lastError": "server returned HTTP status 404 Not Found",
+      "lastScrape": "2025-09-30T01:27:27.599025988Z",
+      "lastScrapeDuration": 0.003173965,
+      "health": "down",
+      "scrapeInterval": "10s",
+      "scrapeTimeout": "5s"
+    },
+    {
+      "discoveredLabels": {
+        "__address__": "cadvisor:8080",
+        "__metrics_path__": "/metrics",
+        "__scheme__": "http",
+        "__scrape_interval__": "30s",
+        "__scrape_timeout__": "10s",
+        "job": "cadvisor"
+      },
+      "labels": {
+        "instance": "cadvisor:8080",
+        "job": "cadvisor"
+      },
+      "scrapePool": "cadvisor",
+      "scrapeUrl": "http://cadvisor:8080/metrics",
+      "globalUrl": "http://cadvisor:8080/metrics",
+      "lastError": "",
+      "lastScrape": "2025-09-30T01:27:11.386984071Z",
+      "lastScrapeDuration": 0.013530929,
+      "health": "up",
+      "scrapeInterval": "30s",
+      "scrapeTimeout": "10s"
+    },
+    {
+      "discoveredLabels": {
+        "__address__": "embedding:8003",
+        "__metrics_path__": "/metrics",
+        "__scheme__": "http",
+        "__scrape_interval__": "15s",
+        "__scrape_timeout__": "5s",
+        "job": "embedding-service"
+      },
+      "labels": {
+        "instance": "embedding:8003",
+        "job": "embedding-service"
+      },
+      "scrapePool": "embedding-service",
+      "scrapeUrl": "http://embedding:8003/metrics",
+      "globalUrl": "http://embedding:8003/metrics",
+      "lastError": "",
+      "lastScrape": "2025-09-30T01:27:25.202413783Z",
+      "lastScrapeDuration": 0.003490465,
+      "health": "up",
+      "scrapeInterval": "15s",
+      "scrapeTimeout": "5s"
+    },
+    {
+      "discoveredLabels": {
+        "__address__": "mcp-server:8020",
+        "__metrics_path__": "/metrics",
+        "__scheme__": "http",
+        "__scrape_interval__": "15s",
+        "__scrape_timeout__": "5s",
+        "job": "mcp-server"
+      },
+      "labels": {
+        "instance": "mcp-server:8020",
+        "job": "mcp-server"
+      },
+      "scrapePool": "mcp-server",
+      "scrapeUrl": "http://mcp-server:8020/metrics",
+      "globalUrl": "http://mcp-server:8020/metrics",
+      "lastError": "Get \"http://mcp-server:8020/metrics\": dial tcp: lookup mcp-server on 127.0.0.11:53: no such host",
+      "lastScrape": "2025-09-30T01:27:26.229973932Z",
+      "lastScrapeDuration": 3.968551201,
+      "health": "down",
+      "scrapeInterval": "15s",
+      "scrapeTimeout": "5s"
+    },
+    {
+      "discoveredLabels": {
+        "__address__": "node-exporter:9100",
+        "__metrics_path__": "/metrics",
+        "__scheme__": "http",
+        "__scrape_interval__": "30s",
+        "__scrape_timeout__": "10s",
+        "job": "node-exporter"
+      },
+      "labels": {
+        "instance": "node-exporter:9100",
+        "job": "node-exporter"
+      },
+      "scrapePool": "node-exporter",
+      "scrapeUrl": "http://node-exporter:9100/metrics",
+      "globalUrl": "http://node-exporter:9100/metrics",
+      "lastError": "",
+      "lastScrape": "2025-09-30T01:27:29.514456352Z",
+      "lastScrapeDuration": 0.018323693,
+      "health": "up",
+      "scrapeInterval": "30s",
+      "scrapeTimeout": "10s"
+    },
+    {
+      "discoveredLabels": {
+        "__address__": "postgres:5432",
+        "__metrics_path__": "/metrics",
+        "__param_collect[]": "info",
+        "__scheme__": "http",
+        "__scrape_interval__": "30s",
+        "__scrape_timeout__": "10s",
+        "job": "postgres-exporter"
+      },
+      "labels": {
+        "instance": "postgres:5432",
+        "job": "postgres-exporter"
+      },
+      "scrapePool": "postgres-exporter",
+      "scrapeUrl": "http://postgres:5432/metrics?collect%5B%5D=info",
+      "globalUrl": "http://postgres:5432/metrics?collect%5B%5D=info",
+      "lastError": "Get \"http://postgres:5432/metrics?collect%5B%5D=info\": dial tcp: lookup postgres on 127.0.0.11:53: no such host",
+      "lastScrape": "2025-09-30T01:27:20.429795524Z",
+      "lastScrapeDuration": 3.970303502,
+      "health": "down",
+      "scrapeInterval": "30s",
+      "scrapeTimeout": "10s"
+    },
+    {
+      "discoveredLabels": {
+        "__address__": "localhost:9090",
+        "__metrics_path__": "/metrics",
+        "__scheme__": "http",
+        "__scrape_interval__": "15s",
+        "__scrape_timeout__": "10s",
+        "job": "prometheus"
+      },
+      "labels": {
+        "instance": "localhost:9090",
+        "job": "prometheus"
+      },
+      "scrapePool": "prometheus",
+      "scrapeUrl": "http://localhost:9090/metrics",
+      "globalUrl": "http://730065f14f6a:9090/metrics",
+      "lastError": "",
+      "lastScrape": "2025-09-30T01:27:28.648716544Z",
+      "lastScrapeDuration": 0.006082695,
+      "health": "up",
+      "scrapeInterval": "15s",
+      "scrapeTimeout": "10s"
+    },
+    {
+      "discoveredLabels": {
+        "__address__": "rag:8002",
+        "__metrics_path__": "/metrics",
+        "__scheme__": "http",
+        "__scrape_interval__": "15s",
+        "__scrape_timeout__": "5s",
+        "job": "rag-service"
+      },
+      "labels": {
+        "instance": "rag:8002",
+        "job": "rag-service"
+      },
+      "scrapePool": "rag-service",
+      "scrapeUrl": "http://rag:8002/metrics",
+      "globalUrl": "http://rag:8002/metrics",
+      "lastError": "",
+      "lastScrape": "2025-09-30T01:27:33.454098383Z",
+      "lastScrapeDuration": 0.003587368,
+      "health": "up",
+      "scrapeInterval": "15s",
+      "scrapeTimeout": "5s"
+    }
+  ]
+}

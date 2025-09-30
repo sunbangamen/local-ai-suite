@@ -6,12 +6,42 @@ Memory API Router for API Gateway
 
 import os
 import sys
+import time
+import uuid
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Query, Body
+from fastapi import FastAPI, HTTPException, Query, Body, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 import asyncio
+
+# Prometheus 메트릭 라이브러리
+try:
+    from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+    PROMETHEUS_AVAILABLE = True
+
+    # 메트릭 정의
+    REQUEST_COUNT = Counter('memory_api_requests_total', 'Total requests', ['method', 'endpoint', 'status'])
+    REQUEST_DURATION = Histogram('memory_api_request_duration_seconds', 'Request duration', ['method', 'endpoint'])
+    ACTIVE_CONVERSATIONS = Gauge('memory_api_active_conversations', 'Number of active conversations', ['project_id'])
+    VECTOR_SEARCH_ENABLED = Gauge('memory_api_vector_search_enabled', 'Vector search availability')
+
+except ImportError:
+    PROMETHEUS_AVAILABLE = False
+    logger.warning("Prometheus client not available, metrics disabled")
+
+# 공통 로깅 시스템 임포트
+try:
+    # Docker 환경에서는 shared 디렉토리가 마운트되어야 함
+    sys.path.append("/app")
+    from shared.logging_config import create_service_logger, get_request_logger, log_request_response, log_metric
+    logger = create_service_logger("memory-api")
+except ImportError:
+    # Fallback to basic logging
+    import logging
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger("memory-api")
 
 # 메모리 시스템 임포트를 위한 경로 추가 (Docker 볼륨 마운트를 통해 접근)
 sys.path.append("/app/scripts")
@@ -64,8 +94,86 @@ memory_app = FastAPI(
     redoc_url="/v1/memory/redoc"
 )
 
+# CORS 미들웨어
+memory_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 로깅 미들웨어
+@memory_app.middleware("http")
+async def logging_middleware(request: Request, call_next):
+    # 요청 ID 생성
+    request_id = str(uuid.uuid4())[:8]
+    start_time = time.time()
+
+    # 요청 로그
+    req_logger = get_request_logger(logger, request_id)
+    req_logger.info(f"요청 시작: {request.method} {request.url.path}")
+
+    try:
+        # 실제 요청 처리
+        response = await call_next(request)
+
+        # 처리 시간 계산
+        duration_ms = (time.time() - start_time) * 1000
+
+        # 응답 로깅
+        log_request_response(
+            logger,
+            request.method,
+            str(request.url.path),
+            response.status_code,
+            duration_ms,
+            request_id=request_id
+        )
+
+        # 메트릭 로깅
+        log_metric(
+            logger,
+            "http_request_duration_ms",
+            duration_ms,
+            tags={
+                "method": request.method,
+                "endpoint": str(request.url.path),
+                "status_code": str(response.status_code)
+            }
+        )
+
+        # Prometheus 메트릭 수집
+        if PROMETHEUS_AVAILABLE:
+            REQUEST_COUNT.labels(
+                method=request.method,
+                endpoint=str(request.url.path),
+                status=response.status_code
+            ).inc()
+            REQUEST_DURATION.labels(
+                method=request.method,
+                endpoint=str(request.url.path)
+            ).observe(duration_ms / 1000)  # seconds
+
+        return response
+
+    except Exception as e:
+        # 에러 로깅
+        duration_ms = (time.time() - start_time) * 1000
+        log_request_response(
+            logger,
+            request.method,
+            str(request.url.path),
+            500,
+            duration_ms,
+            request_id=request_id,
+            error=str(e)
+        )
+        raise
+
 # 메모리 시스템 인스턴스
 memory_system = get_memory_system()
+logger.info("메모리 시스템 초기화 완료")
 
 @memory_app.get("/v1/memory/health")
 async def health_check():
@@ -338,6 +446,52 @@ async def recover_vector_functionality():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error recovering vector functionality: {e}")
+
+# Prometheus 메트릭 엔드포인트
+@memory_app.get("/metrics")
+async def metrics():
+    """Prometheus 메트릭 노출"""
+    if not PROMETHEUS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Prometheus metrics not available")
+
+    try:
+        # 실시간 메트릭 업데이트
+        if hasattr(memory_system, '_vector_enabled'):
+            VECTOR_SEARCH_ENABLED.set(1 if memory_system._vector_enabled else 0)
+
+        # 프로젝트별 대화 수 업데이트 (기본 프로젝트만)
+        try:
+            project_id = memory_system.get_project_id()
+            stats = memory_system.get_conversation_stats(project_id)
+            if stats and 'total_conversations' in stats:
+                ACTIVE_CONVERSATIONS.labels(project_id=project_id).set(stats['total_conversations'])
+        except Exception:
+            pass  # 메트릭 업데이트 실패는 무시
+
+        # Prometheus 형식으로 메트릭 반환
+        return JSONResponse(
+            content=generate_latest().decode('utf-8'),
+            media_type=CONTENT_TYPE_LATEST
+        )
+
+    except Exception as e:
+        logger.error(f"메트릭 생성 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating metrics: {e}")
+
+# 애플리케이션 시작 시 초기 메트릭 설정
+def initialize_metrics():
+    """애플리케이션 시작 시 메트릭 초기화"""
+    if PROMETHEUS_AVAILABLE:
+        logger.info("Prometheus 메트릭 초기화됨")
+        # 벡터 검색 상태 초기화
+        try:
+            if hasattr(memory_system, '_vector_enabled'):
+                VECTOR_SEARCH_ENABLED.set(1 if memory_system._vector_enabled else 0)
+        except Exception:
+            VECTOR_SEARCH_ENABLED.set(0)
+
+# 초기화 실행
+initialize_metrics()
 
 @memory_app.get("/v1/memory/projects")
 async def list_projects():
