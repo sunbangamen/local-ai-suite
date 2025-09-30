@@ -15,19 +15,65 @@ from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timedelta
 
 # 메모리 시스템 모듈 경로 추가
-sys.path.append('/mnt/e/worktree/issue-5/scripts')
+sys.path.append('/mnt/e/worktree/issue-5-memory/scripts')
+
+# 테스트 전역 환경 변수 선행 설정 (memory_maintainer 로깅 경로 문제 방지)
+if 'AI_MEMORY_DIR' not in os.environ:
+    test_memory_dir = tempfile.mkdtemp(prefix='test_memory_')
+    os.environ['AI_MEMORY_DIR'] = test_memory_dir
+    print(f"📁 테스트용 임시 메모리 디렉토리 설정: {test_memory_dir}")
+
+# schedule 의존성 모킹 (memory_maintainer import 전에 필수)
+class FakeSchedule:
+    """schedule 모듈 모킹용 더미 클래스"""
+
+    class Job:
+        def __init__(self):
+            # 체이닝을 위해 자신을 반환하는 속성들 추가
+            self.seconds = self
+            self.minutes = self
+            self.hours = self
+            self.day = self
+
+        def do(self, func):
+            """do() 메서드 모킹"""
+            return self
+
+        def tag(self, *args):
+            """tag() 메서드 모킹"""
+            return self
+
+        def at(self, time):
+            """at() 메서드 모킹"""
+            return self
+
+    def every(self, interval=None):
+        """every() 메서드 모킹 - 체이닝 지원"""
+        return self.Job()
+
+    def run_pending(self):
+        """run_pending() 메서드 모킹"""
+        pass
+
+    class CancelJob(Exception):
+        """CancelJob 예외 모킹"""
+        pass
+
+# schedule 모듈이 없으면 모킹된 버전 주입
+if 'schedule' not in sys.modules:
+    sys.modules['schedule'] = FakeSchedule()
 
 try:
     from memory_system import MemorySystem, get_memory_system
-    # memory_maintainer는 schedule 의존성 때문에 optional로 처리
+    # memory_maintainer import (schedule 모킹 후)
     try:
         from memory_maintainer import MemoryMaintainer
         MAINTAINER_AVAILABLE = True
-    except ImportError:
-        print("⚠️ Warning: memory_maintainer module not available (schedule dependency)")
+    except ImportError as e:
+        print(f"⚠️ Warning: memory_maintainer module not available: {e}")
         MAINTAINER_AVAILABLE = False
-except ImportError:
-    print("⚠️ Warning: memory modules not found")
+except ImportError as e:
+    print(f"⚠️ Warning: memory modules not found: {e}")
     sys.exit(1)
 
 
@@ -67,11 +113,18 @@ class TestQdrantFailureScenarios(unittest.TestCase):
         print("테스트 환경 정리 완료")
 
     def _create_test_database(self):
-        """테스트용 메모리 데이터베이스 생성"""
+        """테스트용 메모리 데이터베이스 생성 (실제 스키마와 정확히 일치)"""
         conn = sqlite3.connect(self.memory_db)
+
+        # SQLite 최적화 설정
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA cache_size=10000")
+        conn.execute("PRAGMA foreign_keys=ON")
+
         cursor = conn.cursor()
 
-        # 대화 테이블 생성 (실제 스키마와 일치)
+        # 대화 테이블 생성 (실제 memory_system.py와 정확히 일치)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS conversations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,22 +137,25 @@ class TestQdrantFailureScenarios(unittest.TestCase):
                 session_id VARCHAR(50),
                 token_count INTEGER,
                 response_time_ms INTEGER,
-                context TEXT,
-                expires_at TIMESTAMP
+                project_context TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                expires_at DATETIME
             )
         """)
 
-        # 임베딩 테이블 생성
+        # 임베딩 테이블 생성 (실제 스키마와 정확히 일치)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS conversation_embeddings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
-                embedding TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                conversation_id INTEGER NOT NULL,
+                embedding_vector TEXT,
+                qdrant_point_id TEXT,
                 sync_status TEXT DEFAULT 'pending',
-                synced_at TIMESTAMP,
-                failure_count INTEGER DEFAULT 0,
-                last_failure TEXT
+                synced_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+                UNIQUE(conversation_id)
             )
         """)
 
@@ -113,11 +169,50 @@ class TestQdrantFailureScenarios(unittest.TestCase):
             )
         """)
 
+        # 인덱스 생성 (실제 스키마와 일치)
+        indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_conversations_timestamp ON conversations(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_conversations_importance ON conversations(importance_score)",
+            "CREATE INDEX IF NOT EXISTS idx_conversations_expires_at ON conversations(expires_at)",
+            "CREATE INDEX IF NOT EXISTS idx_conversations_session_id ON conversations(session_id)",
+            "CREATE INDEX IF NOT EXISTS idx_conversations_model_used ON conversations(model_used)",
+            "CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_sync_status ON conversation_embeddings(sync_status)"
+        ]
+
+        for index_sql in indexes:
+            cursor.execute(index_sql)
+
+        # FTS5 트리거 생성 (자동 동기화)
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS conversations_ai_insert AFTER INSERT ON conversations
+            BEGIN
+                INSERT INTO conversations_fts(rowid, user_query, ai_response)
+                VALUES (NEW.id, NEW.user_query, NEW.ai_response);
+            END
+        """)
+
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS conversations_ai_update AFTER UPDATE ON conversations
+            BEGIN
+                UPDATE conversations_fts SET
+                    user_query = NEW.user_query,
+                    ai_response = NEW.ai_response
+                WHERE rowid = NEW.id;
+            END
+        """)
+
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS conversations_ai_delete AFTER DELETE ON conversations
+            BEGIN
+                DELETE FROM conversations_fts WHERE rowid = OLD.id;
+            END
+        """)
+
         # 테스트 데이터 삽입
         test_conversations = [
-            ("Python 함수 작성법", "def example(): pass", "code", 8),
-            ("머신러닝 개념", "ML은 데이터 학습 기술입니다", "chat", 7),
-            ("Docker 사용법", "docker run hello-world", "code", 6)
+            ("Python 함수 작성법", "def example(): pass", "code-7b", 8),
+            ("머신러닝 개념", "ML은 데이터 학습 기술입니다", "chat-7b", 7),
+            ("Docker 사용법", "docker run hello-world", "code-7b", 6)
         ]
 
         for query, response, model, importance in test_conversations:
@@ -129,16 +224,13 @@ class TestQdrantFailureScenarios(unittest.TestCase):
 
             conv_id = cursor.lastrowid
 
-            # 가짜 임베딩 데이터
+            # 가짜 임베딩 데이터 (컬럼명 수정: embedding -> embedding_vector)
             fake_embedding = json.dumps([0.1] * 384)  # 384차원 벡터
             cursor.execute("""
                 INSERT INTO conversation_embeddings
-                (conversation_id, embedding, sync_status)
+                (conversation_id, embedding_vector, sync_status)
                 VALUES (?, ?, 'pending')
             """, (conv_id, fake_embedding))
-
-        # FTS 테이블 데이터 동기화
-        cursor.execute("INSERT INTO conversations_fts(conversations_fts) VALUES('rebuild')")
 
         conn.commit()
         conn.close()
@@ -173,18 +265,20 @@ class TestQdrantFailureScenarios(unittest.TestCase):
 
         print("✅ Qdrant 연결 실패 시 FTS 폴백 정상 작동")
 
+    @patch('requests.post')
     @patch('requests.get')
-    @patch('requests.put')
-    def test_qdrant_sync_failure_handling(self, mock_put, mock_get):
+    def test_qdrant_sync_failure_handling(self, mock_get, mock_post):
         """Qdrant 동기화 실패 처리 테스트"""
         print("\n=== Qdrant 동기화 실패 처리 테스트 시작 ===")
 
         # 컬렉션 존재 확인은 성공
         mock_get.return_value.status_code = 200
 
-        # 벡터 업로드는 실패
-        mock_put.return_value.status_code = 500
-        mock_put.return_value.text = "Internal server error"
+        # 임베딩 생성 실패 시뮬레이션
+        mock_post.side_effect = Exception("Embedding service unavailable")
+
+        # 벡터 기능 강제 활성화 (테스트를 위해)
+        self.memory_system._vector_enabled = True
 
         # 동기화 시도
         sync_stats = self.memory_system.batch_sync_to_qdrant(
@@ -262,28 +356,28 @@ class TestQdrantFailureScenarios(unittest.TestCase):
 
         print("✅ 재시도 스케줄링 정상 등록됨")
 
-        # 실제 재시도 통계 기록 테스트
+        # 실패 상태 테스트 (실제 스키마에 맞게)
         conn = sqlite3.connect(self.memory_db)
         cursor = conn.cursor()
 
         # 실패한 임베딩 상태 업데이트
         cursor.execute("""
             UPDATE conversation_embeddings
-            SET sync_status = 'failed', failure_count = failure_count + 1
+            SET sync_status = 'failed'
             WHERE id = 1
         """)
         conn.commit()
 
-        # 실패 카운트 확인
+        # 실패 상태 확인
         cursor.execute("""
-            SELECT failure_count FROM conversation_embeddings
+            SELECT sync_status FROM conversation_embeddings
             WHERE id = 1
         """)
-        failure_count = cursor.fetchone()[0]
+        status = cursor.fetchone()[0]
         conn.close()
 
-        self.assertGreater(failure_count, 0, "실패 카운트가 증가해야 함")
-        print(f"✅ 실패 카운트 증가 확인: {failure_count}")
+        self.assertEqual(status, 'failed', "실패 상태가 기록되어야 함")
+        print(f"✅ 실패 상태 기록 확인: {status}")
 
     def test_fts_fallback_search_quality(self):
         """FTS 폴백 검색 품질 테스트"""

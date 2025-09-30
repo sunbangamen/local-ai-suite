@@ -5,8 +5,9 @@ Memory System Utilities
 
 import os
 import json
+import requests
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from datetime import datetime
 
 def init_project_memory(project_path: str = None) -> str:
@@ -252,6 +253,138 @@ def export_memory_backup(project_id: str = None, output_path: str = None) -> str
     print(f"📊 대화 {len(conversations)}개, 사실 {len(facts)}개, 요약 {len(summaries)}개")
 
     return output_path
+
+# ============ Qdrant 헬퍼 함수 (공통) ============
+
+def get_collection_name(project_id: str) -> str:
+    """
+    프로젝트 ID로부터 Qdrant 컬렉션 이름 생성 (통일된 규칙)
+    Args:
+        project_id: 프로젝트 UUID
+    Returns:
+        collection_name: memory_{project_id[:8]}
+    """
+    return f"memory_{project_id[:8]}"
+
+def ensure_qdrant_collection(project_id: str, qdrant_url: str = None,
+                             vector_size: int = 384, distance: str = "Cosine") -> bool:
+    """
+    Qdrant 컬렉션 존재 확인 및 생성 (memory_system과 maintainer 공통 사용)
+
+    Args:
+        project_id: 프로젝트 UUID
+        qdrant_url: Qdrant 서버 URL (기본: http://localhost:6333)
+        vector_size: 벡터 차원 (기본: 384 - BAAI/bge-small-en-v1.5)
+        distance: 거리 메트릭 (기본: Cosine)
+
+    Returns:
+        bool: 컬렉션 준비 성공 여부
+    """
+    if qdrant_url is None:
+        qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
+
+    collection_name = get_collection_name(project_id)
+
+    try:
+        # 컬렉션 존재 확인
+        response = requests.get(
+            f"{qdrant_url}/collections/{collection_name}",
+            timeout=10
+        )
+
+        if response.status_code == 404:
+            # 컬렉션 생성
+            create_data = {
+                "vectors": {
+                    "size": vector_size,
+                    "distance": distance
+                }
+            }
+
+            response = requests.put(
+                f"{qdrant_url}/collections/{collection_name}",
+                json=create_data,
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                print(f"✅ Qdrant 컬렉션 생성: {collection_name}")
+                return True
+            else:
+                print(f"❌ Qdrant 컬렉션 생성 실패: {response.status_code}")
+                return False
+
+        elif response.status_code == 200:
+            # 컬렉션 이미 존재
+            return True
+
+        else:
+            print(f"⚠️ Qdrant 상태 확인 실패: {response.status_code}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Qdrant 접근 실패: {e}")
+        return False
+
+def upsert_to_qdrant(project_id: str, points: List[Dict], qdrant_url: str = None) -> bool:
+    """
+    Qdrant에 포인트 업로드 (배치)
+
+    Args:
+        project_id: 프로젝트 UUID
+        points: 업로드할 포인트 리스트 [{"id": int, "vector": List[float], "payload": Dict}]
+        qdrant_url: Qdrant 서버 URL
+
+    Returns:
+        bool: 업로드 성공 여부
+    """
+    if qdrant_url is None:
+        qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
+
+    collection_name = get_collection_name(project_id)
+
+    try:
+        response = requests.put(
+            f"{qdrant_url}/collections/{collection_name}/points",
+            json={"points": points},
+            timeout=60
+        )
+
+        if response.status_code == 200:
+            return True
+        else:
+            print(f"❌ Qdrant 업로드 실패: {response.status_code}")
+            return False
+
+    except Exception as e:
+        print(f"❌ Qdrant 업로드 에러: {e}")
+        return False
+
+def build_qdrant_payload(conversation_id: int, user_query: str, ai_response: str,
+                        model_used: str = None, importance_score: int = 5,
+                        created_at: str = None) -> Dict:
+    """
+    Qdrant 페이로드 생성 (통일된 구조)
+
+    Args:
+        conversation_id: 대화 ID
+        user_query: 사용자 질문
+        ai_response: AI 응답
+        model_used: 사용된 모델
+        importance_score: 중요도 점수
+        created_at: 생성 시각
+
+    Returns:
+        payload: Qdrant 페이로드 딕셔너리
+    """
+    return {
+        "conversation_id": conversation_id,
+        "user_query": user_query[:500],  # 최대 500자
+        "ai_response": ai_response[:1000],  # 최대 1000자
+        "model_used": model_used or "unknown",
+        "importance_score": importance_score,
+        "created_at": created_at or datetime.now().isoformat()
+    }
 
 if __name__ == "__main__":
     # 테스트 코드

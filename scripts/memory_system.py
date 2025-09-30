@@ -919,48 +919,19 @@ class MemorySystem:
             return False
 
     def ensure_memory_collection(self, project_id: str) -> bool:
-        """Qdrant 메모리 컬렉션 존재 확인 및 생성"""
+        """Qdrant 메모리 컬렉션 존재 확인 및 생성 (memory_utils 공통 함수 사용)"""
         try:
-            collection_name = f"memory_{project_id[:8]}"
+            from memory_utils import ensure_qdrant_collection as ensure_collection_util
 
-            # HTTP API로 컬렉션 확인
-            import requests
-            response = requests.get(f"{self.qdrant_url}/collections/{collection_name}")
+            result = ensure_collection_util(project_id, self.qdrant_url)
 
-            if response.status_code == 404:
-                # 컬렉션 생성
-                create_data = {
-                    "vectors": {
-                        "size": 384,  # BAAI/bge-small-en-v1.5 차원
-                        "distance": "Cosine"
-                    }
-                }
-
-                response = requests.put(
-                    f"{self.qdrant_url}/collections/{collection_name}",
-                    json=create_data,
-                    timeout=30
-                )
-
-                if response.status_code == 200:
-                    print(f"✅ Qdrant 컬렉션 생성됨: {collection_name}")
-                    # 컬렉션 생성 성공 시 벡터 기능 자동 활성화
-                    if not self._vector_enabled:
-                        self._vector_enabled = True
-                        print(f"🔄 벡터 검색 기능 자동 복구됨")
-                    return True
-                else:
-                    print(f"⚠️ Qdrant 컬렉션 생성 실패: {response.status_code}")
-                    return False
-            elif response.status_code == 200:
-                # 컬렉션 존재 확인 성공 시 벡터 기능 자동 활성화
+            if result:
+                # 컬렉션 준비 성공 시 벡터 기능 자동 활성화
                 if not self._vector_enabled:
                     self._vector_enabled = True
                     print(f"🔄 벡터 검색 기능 자동 복구됨")
-                return True
-            else:
-                print(f"⚠️ Qdrant 컬렉션 확인 실패: {response.status_code}")
-                return False
+
+            return result
 
         except Exception as e:
             import logging

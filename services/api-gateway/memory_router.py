@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import uuid
+import logging
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, Body, Request
 from fastapi.responses import JSONResponse
@@ -16,7 +17,11 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 import asyncio
 
-# Prometheus 메트릭 라이브러리
+# 기본 로거 먼저 초기화 (다른 임포트보다 우선)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("memory-api")
+
+# Prometheus 메트릭 라이브러리 (logger 초기화 후)
 try:
     from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
     PROMETHEUS_AVAILABLE = True
@@ -31,17 +36,14 @@ except ImportError:
     PROMETHEUS_AVAILABLE = False
     logger.warning("Prometheus client not available, metrics disabled")
 
-# 공통 로깅 시스템 임포트
+# 공통 로깅 시스템 업그레이드 시도 (선택적)
 try:
-    # Docker 환경에서는 shared 디렉토리가 마운트되어야 함
     sys.path.append("/app")
-    from shared.logging_config import create_service_logger, get_request_logger, log_request_response, log_metric
+    from shared.logging_config import create_service_logger
     logger = create_service_logger("memory-api")
+    logger.info("Using enhanced logging system")
 except ImportError:
-    # Fallback to basic logging
-    import logging
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    logger = logging.getLogger("memory-api")
+    logger.info("Using basic logging system")
 
 # 메모리 시스템 임포트를 위한 경로 추가 (Docker 볼륨 마운트를 통해 접근)
 sys.path.append("/app/scripts")
@@ -111,8 +113,7 @@ async def logging_middleware(request: Request, call_next):
     start_time = time.time()
 
     # 요청 로그
-    req_logger = get_request_logger(logger, request_id)
-    req_logger.info(f"요청 시작: {request.method} {request.url.path}")
+    logger.info(f"[{request_id}] 요청 시작: {request.method} {request.url.path}")
 
     try:
         # 실제 요청 처리
@@ -122,25 +123,9 @@ async def logging_middleware(request: Request, call_next):
         duration_ms = (time.time() - start_time) * 1000
 
         # 응답 로깅
-        log_request_response(
-            logger,
-            request.method,
-            str(request.url.path),
-            response.status_code,
-            duration_ms,
-            request_id=request_id
-        )
-
-        # 메트릭 로깅
-        log_metric(
-            logger,
-            "http_request_duration_ms",
-            duration_ms,
-            tags={
-                "method": request.method,
-                "endpoint": str(request.url.path),
-                "status_code": str(response.status_code)
-            }
+        logger.info(
+            f"[{request_id}] {request.method} {request.url.path} "
+            f"-> {response.status_code} ({duration_ms:.2f}ms)"
         )
 
         # Prometheus 메트릭 수집
@@ -160,14 +145,9 @@ async def logging_middleware(request: Request, call_next):
     except Exception as e:
         # 에러 로깅
         duration_ms = (time.time() - start_time) * 1000
-        log_request_response(
-            logger,
-            request.method,
-            str(request.url.path),
-            500,
-            duration_ms,
-            request_id=request_id,
-            error=str(e)
+        logger.error(
+            f"[{request_id}] {request.method} {request.url.path} "
+            f"-> 500 ({duration_ms:.2f}ms) Error: {str(e)}"
         )
         raise
 
