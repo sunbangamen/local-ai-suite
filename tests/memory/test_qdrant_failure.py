@@ -17,6 +17,12 @@ from datetime import datetime, timedelta
 # 메모리 시스템 모듈 경로 추가
 sys.path.append('/mnt/e/worktree/issue-5-memory/scripts')
 
+# 테스트 전역 환경 변수 선행 설정 (memory_maintainer 로깅 경로 문제 방지)
+if 'AI_MEMORY_DIR' not in os.environ:
+    test_memory_dir = tempfile.mkdtemp(prefix='test_memory_')
+    os.environ['AI_MEMORY_DIR'] = test_memory_dir
+    print(f"📁 테스트용 임시 메모리 디렉토리 설정: {test_memory_dir}")
+
 # schedule 의존성 모킹 (memory_maintainer import 전에 필수)
 class FakeSchedule:
     """schedule 모듈 모킹용 더미 클래스"""

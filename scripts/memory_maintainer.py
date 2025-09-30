@@ -34,15 +34,28 @@ TTL_CHECK_INTERVAL = int(os.getenv('TTL_CHECK_INTERVAL', '3600'))  # 1시간
 
 # 로깅 설정
 log_dir = Path(AI_MEMORY_DIR) / 'logs'
-log_dir.mkdir(parents=True, exist_ok=True)
+
+# 테스트 모드 감지 (환경변수 또는 임시 디렉토리 확인)
+TEST_MODE = os.getenv('TEST_MODE', 'false').lower() == 'true' or '/tmp' in AI_MEMORY_DIR
+
+try:
+    # 로그 디렉토리 생성 시도
+    log_dir.mkdir(parents=True, exist_ok=True)
+    use_file_logging = True
+except (OSError, PermissionError) as e:
+    # 권한 문제 시 stdout만 사용
+    print(f"⚠️ Warning: Cannot create log directory ({e}), using stdout only")
+    use_file_logging = False
+
+# 핸들러 구성
+handlers = [logging.StreamHandler()]
+if use_file_logging and not TEST_MODE:
+    handlers.insert(0, logging.FileHandler(log_dir / 'memory_maintainer.log'))
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_dir / 'memory_maintainer.log'),
-        logging.StreamHandler()
-    ]
+    handlers=handlers
 )
 logger = logging.getLogger(__name__)
 
