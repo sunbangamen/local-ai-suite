@@ -4,6 +4,7 @@ from typing import List, Optional, Dict, Any
 
 from fastapi import FastAPI, Body
 from pydantic import BaseModel
+from prometheus_fastapi_instrumentator import Instrumentator
 
 # FastEmbed: 경량 ONNX 임베딩 (기본 CPU)
 from fastembed import TextEmbedding
@@ -32,6 +33,9 @@ MAX_TEXTS = int(os.getenv("EMBEDDING_MAX_TEXTS", "1024"))
 MAX_CHARS = int(os.getenv("EMBEDDING_MAX_CHARS", "8000"))
 
 app = FastAPI(title="Embedding Service (FastEmbed)", version="1.0.0")
+
+# Prometheus metrics
+Instrumentator().instrument(app).expose(app)
 
 # ---- Global model holder (thread-safe) ----
 _model_lock = threading.Lock()

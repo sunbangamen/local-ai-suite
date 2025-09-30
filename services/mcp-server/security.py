@@ -247,10 +247,11 @@ class SecurityValidator:
 
 
 class SecureExecutionEnvironment:
-    """보안이 강화된 코드 실행 환경"""
+    """보안이 강화된 코드 실행 환경 (Deprecated - EnhancedSandbox 사용 권장)"""
 
     def __init__(self, validator: SecurityValidator):
         self.validator = validator
+        self._use_enhanced_sandbox = os.getenv("USE_ENHANCED_SANDBOX", "true").lower() == "true"
 
     def execute_python_code(self, code: str, timeout: int = 30) -> dict:
         """
@@ -263,6 +264,38 @@ class SecureExecutionEnvironment:
         Returns:
             dict: 실행 결과 (stdout, stderr, returncode, success)
         """
+        # Enhanced Sandbox 사용 권장
+        if self._use_enhanced_sandbox:
+            try:
+                from .sandbox import get_enhanced_sandbox
+                import asyncio
+
+                # 비동기 실행을 위한 래퍼
+                async def _async_execute():
+                    sandbox = get_enhanced_sandbox()
+                    return await sandbox.execute_code(code, session_id="legacy_api")
+
+                # 새 이벤트 루프에서 실행
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # 이미 루프가 실행 중인 경우 새 스레드에서 실행
+                        import concurrent.futures
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(asyncio.run, _async_execute())
+                            result = future.result(timeout=timeout)
+                    else:
+                        result = loop.run_until_complete(_async_execute())
+                except RuntimeError:
+                    # 루프 없는 경우 새로 생성
+                    result = asyncio.run(_async_execute())
+
+                return result
+            except ImportError:
+                # sandbox 모듈이 없으면 레거시 실행
+                pass
+
+        # 레거시 실행 방식 (폴백)
         # 1단계: AST 보안 검증
         try:
             self.validator.validate_code(code)
@@ -274,7 +307,7 @@ class SecureExecutionEnvironment:
                 "success": False
             }
 
-        # 2단계: asyncio 루프 충돌 방지를 위한 동기 실행
+        # 2단계: 기본 subprocess 실행
         import subprocess
         import sys
 
@@ -293,7 +326,8 @@ class SecureExecutionEnvironment:
                 "stdout": stdout or "",
                 "stderr": stderr or "",
                 "returncode": proc.returncode or 0,
-                "success": proc.returncode == 0
+                "success": proc.returncode == 0,
+                "sandbox_type": "legacy"
             }
         except subprocess.TimeoutExpired:
             proc.kill()
@@ -301,14 +335,16 @@ class SecureExecutionEnvironment:
                 "stdout": "",
                 "stderr": f"Timeout ({timeout}초)",
                 "returncode": 124,
-                "success": False
+                "success": False,
+                "sandbox_type": "legacy"
             }
         except Exception as e:
             return {
                 "stdout": "",
                 "stderr": f"Execution error: {str(e)}",
                 "returncode": 1,
-                "success": False
+                "success": False,
+                "sandbox_type": "legacy"
             }
 
     async def execute_python_code_async(self, code: str, timeout: int = 30) -> dict:

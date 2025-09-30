@@ -13,6 +13,7 @@ from fastapi import FastAPI, Query
 from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from database import db
 
@@ -54,6 +55,9 @@ OPENAI_CHAT_COMPLETIONS = f"{RAG_LLM_API_BASE}/chat/completions"
 
 # -------- FastAPI --------
 app = FastAPI(title="RAG Service", version="1.0.0")
+
+# Prometheus metrics
+Instrumentator().instrument(app).expose(app)
 
 # -------- Globals --------
 qdrant: Optional[QdrantClient] = None

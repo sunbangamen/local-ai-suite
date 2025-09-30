@@ -1,0 +1,24 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 필요한 패키지 설치
+RUN pip install --no-cache-dir \
+    fastapi==0.104.1 \
+    uvicorn[standard]==0.24.0 \
+    pydantic==2.5.0 \
+    requests==2.31.0 \
+    httpx==0.25.0
+
+# API 라우터 복사
+COPY memory_router.py /app/main.py
+
+# 포트 노출
+EXPOSE 8005
+
+# 헬스체크
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8005/v1/memory/health')"
+
+# 앱 실행
+CMD ["uvicorn", "main:memory_app", "--host", "0.0.0.0", "--port", "8005"]

@@ -23,6 +23,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
+from prometheus_fastapi_instrumentator import Instrumentator
 import base64
 import tempfile
 from io import BytesIO
@@ -32,10 +33,14 @@ from PIL import Image
 try:
     from .security import get_security_validator, get_secure_executor, SecurityError
     from .safe_api import get_safe_file_api, get_safe_command_executor, secure_resolve_path
+    from .security_admin import security_app
+    from .rate_limiter import get_rate_limiter, get_access_control
 except ImportError:
     # 개발/테스트 환경에서의 절대 임포트
     from security import get_security_validator, get_secure_executor, SecurityError
     from safe_api import get_safe_file_api, get_safe_command_executor, secure_resolve_path
+    from security_admin import security_app
+    from rate_limiter import get_rate_limiter, get_access_control
 
 # Playwright와 Notion 임포트 (지연 로딩)
 playwright = None
@@ -88,6 +93,9 @@ mcp = FastMCP("Local AI MCP Server")
 # FastAPI 앱 (헬스체크용)
 app = FastAPI(title="Local AI MCP Server", version="1.0.0")
 
+# Prometheus metrics
+Instrumentator().instrument(app).expose(app)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -110,6 +118,18 @@ async def ensure_utf8_content_type(request: Request, call_next):
 async def health_check():
     return {"status": "ok", "service": "mcp-server"}
 
+@app.get("/rate-limits/{tool_name}")
+async def get_rate_limit_status(tool_name: str, user_id: str = "default"):
+    """특정 도구의 Rate Limit 상태 조회"""
+    rate_limiter = get_rate_limiter()
+    return rate_limiter.get_current_usage(tool_name, user_id)
+
+@app.get("/tool-info/{tool_name}")
+async def get_tool_security_info(tool_name: str):
+    """도구의 보안 정보 조회"""
+    access_control = get_access_control()
+    return access_control.get_tool_info(tool_name)
+
 # MCP 도구 목록 API 엔드포인트 (올바른 FastMCP 사용법)
 @app.get("/tools")
 async def list_tools():
@@ -129,22 +149,43 @@ async def list_tools():
         return {"error": f"도구 목록 조회 실패: {str(e)}"}
 
 @app.post("/tools/{tool_name}/call")
-async def call_tool(tool_name: str, arguments: dict = None):
-    """MCP 도구 실행"""
+async def call_tool(tool_name: str, arguments: dict = None, user_id: str = "default"):
+    """MCP 도구 실행 (Rate Limiting 및 Access Control 적용)"""
     try:
-        # FastMCP의 call_tool 메서드 사용
-        result = await mcp.call_tool(tool_name, arguments or {})
+        # Rate limiting 체크
+        rate_limiter = get_rate_limiter()
+        allowed, error_msg = rate_limiter.check_rate_limit(tool_name, user_id)
+        if not allowed:
+            return {"error": error_msg, "success": False, "error_type": "rate_limit"}
 
-        # 결과 처리 - FastMCP의 실제 반환 형식에 따라 조정
-        if hasattr(result, 'content') and result.content:
-            # TextContent나 다른 content 타입인 경우
-            if hasattr(result.content[0], 'text'):
-                return {"result": result.content[0].text, "success": True}
+        # Access control 체크
+        access_control = get_access_control()
+        allowed, error_msg = access_control.check_access(tool_name, user_id)
+        if not allowed:
+            return {"error": error_msg, "success": False, "error_type": "access_denied"}
+
+        # 도구 실행 시작 (동시 실행 제한 강제 적용)
+        allowed, error_msg = rate_limiter.start_execution(tool_name, user_id, access_control)
+        if not allowed:
+            return {"error": error_msg, "success": False, "error_type": "concurrent_limit"}
+
+        try:
+            # FastMCP의 call_tool 메서드 사용
+            result = await mcp.call_tool(tool_name, arguments or {})
+
+            # 결과 처리 - FastMCP의 실제 반환 형식에 따라 조정
+            if hasattr(result, 'content') and result.content:
+                # TextContent나 다른 content 타입인 경우
+                if hasattr(result.content[0], 'text'):
+                    return {"result": result.content[0].text, "success": True}
+                else:
+                    return {"result": str(result.content[0]), "success": True}
             else:
-                return {"result": str(result.content[0]), "success": True}
-        else:
-            # 직접 결과인 경우
-            return {"result": result, "success": True}
+                # 직접 결과인 경우
+                return {"result": result, "success": True}
+        finally:
+            # 도구 실행 종료
+            rate_limiter.end_execution(tool_name, user_id)
 
     except Exception as e:
         return {"error": str(e), "success": False}
@@ -1188,13 +1229,31 @@ async def get_current_model() -> Dict[str, Any]:
 # 서버 실행
 # =============================================================================
 
-if __name__ == "__main__":
+async def start_security_admin_server():
+    """보안 관리 API 서버를 별도 포트에서 실행"""
     import uvicorn
+    config = uvicorn.Config(security_app, host="0.0.0.0", port=8021, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
 
-    # 개발 모드: FastAPI + MCP 동시 실행
+async def start_main_server():
+    """메인 MCP 서버 실행"""
+    import uvicorn
+    config = uvicorn.Config(app, host="0.0.0.0", port=8020, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
+
+async def main():
+    """메인 서버와 보안 관리 API 서버를 동시 실행"""
+    await asyncio.gather(
+        start_main_server(),
+        start_security_admin_server()
+    )
+
+if __name__ == "__main__":
+    # HTTP 모드: FastAPI + 보안 관리 API 동시 실행
     if len(sys.argv) > 1 and sys.argv[1] == "--http":
-        uvicorn.run(app, host="0.0.0.0", port=8020)
+        asyncio.run(main())
     else:
-        # 프로덕션 모드: MCP 서버 실행
-        # 현재는 HTTP 모드로 실행하여 헬스체크 지원
-        uvicorn.run(app, host="0.0.0.0", port=8020)
+        # 기본 모드: HTTP 모드로 실행 (헬스체크 지원)
+        asyncio.run(main())

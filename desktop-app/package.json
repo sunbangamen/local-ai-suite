@@ -20,6 +20,9 @@
   "license": "MIT",
   "dependencies": {
     "axios": "^1.12.2",
-    "electron": "^26.6.10"
+    "electron": "^26.6.10",
+    "marked": "^9.1.2",
+    "dompurify": "^3.0.5",
+    "highlight.js": "^11.9.0"
   }
 }

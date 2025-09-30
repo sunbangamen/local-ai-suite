@@ -36,6 +36,17 @@ except ImportError:
     ANALYTICS_ENABLED = False
     analytics = None
 
+# Memory system integration
+try:
+    from memory_system import get_memory_system, set_memory_system, MemorySystem
+    MEMORY_ENABLED = True
+except ImportError:
+    MEMORY_ENABLED = False
+    print("⚠️ Memory system not available. Install memory_system.py for conversation memory.")
+
+# Memory API integration
+MEMORY_API_URL = "http://localhost:8005/v1/memory"
+
 # Session ID for tracking related queries
 SESSION_ID = str(uuid.uuid4())[:8]
 
@@ -541,6 +552,22 @@ def call_api(query: str, model_type: str = 'auto', max_tokens: int = 500, stream
             except Exception:
                 pass  # Don't fail on analytics errors
 
+        # Save to memory system
+        if MEMORY_ENABLED and full_content:
+            try:
+                response_time_ms = int((time.time() - start_time) * 1000)
+                save_conversation_to_memory(
+                    user_query=query,
+                    ai_response=full_content,
+                    model_used=model_name,
+                    session_id=SESSION_ID,
+                    response_time_ms=response_time_ms,
+                    token_count=tokens_used
+                )
+            except Exception as e:
+                # 메모리 저장 실패해도 응답은 반환
+                print(f"⚠️ Memory save failed: {e}")
+
         return full_content
 
     except requests.exceptions.ConnectionError:
@@ -637,6 +664,15 @@ Examples:
     parser.add_argument("--tools", action="store_true", help="Enable AI to use MCP tools automatically")
     parser.add_argument("--no-stream", action="store_true", help="Disable streaming responses (show all at once)")
 
+    # Memory system commands
+    parser.add_argument("--memory", action="store_true", help="Show memory system status")
+    parser.add_argument("--memory-init", action="store_true", help="Initialize project memory")
+    parser.add_argument("--memory-search", metavar="QUERY", help="Search conversations in memory")
+    parser.add_argument("--memory-cleanup", action="store_true", help="Clean up expired conversations")
+    parser.add_argument("--memory-backup", metavar="PATH", nargs='?', const=None, help="Export memory backup")
+    parser.add_argument("--memory-stats", action="store_true", help="Show detailed memory statistics")
+    parser.add_argument("--memory-dir", metavar="DIR", help="Override memory storage directory")
+
     args = parser.parse_args()
 
     # Handle indexing command
@@ -658,6 +694,23 @@ Examples:
             print("❌ Analytics not available. ai_analytics.py not found.")
             sys.exit(1)
         run_optimization()
+        sys.exit(0)
+
+    # Handle memory commands
+    if any([args.memory, args.memory_init, args.memory_search, args.memory_cleanup,
+            args.memory_backup is not None, args.memory_stats]) or args.memory_dir:
+        if not MEMORY_ENABLED:
+            print("❌ Memory system not available. Install memory_system.py.")
+            sys.exit(1)
+
+        # CLI에서 메모리 디렉토리 지정된 경우 새 인스턴스 생성
+        if args.memory_dir:
+            from memory_system import MemorySystem, set_memory_system
+            custom_instance = MemorySystem(data_dir=args.memory_dir)
+            set_memory_system(custom_instance)
+            print(f"💾 Using custom memory directory: {args.memory_dir}")
+
+        handle_memory_commands(args)
         sys.exit(0)
 
     # Handle MCP tools list
@@ -938,6 +991,319 @@ def handle_mcp_call(tool_name: str, args_json: str = None):
         print(f"❌ Invalid JSON in --mcp-args: {e}")
     except Exception as e:
         print(f"❌ Error calling MCP tool: {e}")
+
+
+def save_conversation_to_memory(user_query: str, ai_response: str, model_used: str,
+                              session_id: str, response_time_ms: int = None,
+                              token_count: int = None) -> bool:
+    """AI 대화를 메모리에 저장"""
+    if not MEMORY_ENABLED:
+        return False
+
+    try:
+        # API 우선 시도
+        try:
+            data = {
+                "user_query": user_query,
+                "ai_response": ai_response,
+                "model_used": model_used,
+                "session_id": session_id,
+                "response_time_ms": response_time_ms,
+                "token_count": token_count,
+                "project_path": os.getcwd()
+            }
+
+            response = requests.post(
+                f"{MEMORY_API_URL}/conversations",
+                json=data,
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                print(f"💾 Conversation saved to memory (ID: {result.get('conversation_id')})")
+                return True
+            else:
+                print(f"⚠️ Memory API failed: {response.status_code}")
+
+        except requests.RequestException:
+            print("⚠️ Memory API unavailable, using local storage")
+
+        # 로컬 폴백
+        memory_system = get_memory_system()
+        project_id = memory_system.get_project_id()
+
+        conversation_id = memory_system.save_conversation(
+            project_id=project_id,
+            user_query=user_query,
+            ai_response=ai_response,
+            model_used=model_used,
+            session_id=session_id,
+            response_time_ms=response_time_ms,
+            token_count=token_count
+        )
+
+        if conversation_id:
+            print(f"💾 Conversation saved locally (ID: {conversation_id})")
+            return True
+
+    except Exception as e:
+        print(f"⚠️ Failed to save conversation: {e}")
+
+    return False
+
+def handle_memory_commands(args):
+    """메모리 시스템 명령어 처리"""
+
+    if args.memory:
+        # 메모리 상태 표시
+        show_memory_status()
+
+    elif args.memory_init:
+        # 프로젝트 메모리 초기화
+        init_project_memory()
+
+    elif args.memory_search:
+        # 메모리 검색
+        handle_memory_search(args.memory_search)
+
+    elif args.memory_cleanup:
+        # 만료된 대화 정리
+        try:
+            deleted_count = handle_memory_cleanup()
+            print(f"🧹 Cleanup completed: {deleted_count} conversations removed")
+        except Exception as e:
+            print(f"❌ Cleanup failed: {e}")
+
+    elif args.memory_backup is not None:
+        # 메모리 백업
+        try:
+            backup_path = handle_memory_backup(args.memory_backup)
+            print(f"💾 Memory backup saved to: {backup_path}")
+        except Exception as e:
+            print(f"❌ Backup failed: {e}")
+
+    elif args.memory_stats:
+        # 메모리 통계
+        show_memory_stats()
+
+def show_memory_status():
+    """메모리 시스템 상태 표시"""
+    try:
+        # API 시도
+        try:
+            response = requests.get(f"{MEMORY_API_URL}/health", timeout=5)
+            if response.status_code == 200:
+                health = response.json()
+                print("💾 Memory System Status (API)")
+                print(f"   Status: {health.get('status', 'unknown')}")
+                print(f"   Storage: {'Available' if health.get('storage_available') else 'Unavailable'}")
+                print(f"   Vector Search: {'Enabled' if health.get('vector_enabled') else 'Disabled'}")
+                return
+        except requests.RequestException:
+            pass
+
+        # 로컬 폴백
+        memory_system = get_memory_system()
+        project_id = memory_system.get_project_id()
+        stats = memory_system.get_conversation_stats(project_id)
+
+        print("💾 Memory System Status (Local)")
+        print(f"   Project ID: {project_id}")
+        print(f"   Total Conversations: {stats.get('total_conversations', 0)}")
+        print(f"   Average Importance: {stats.get('avg_importance', 0):.1f}")
+        print(f"   Latest: {stats.get('latest_conversation', 'None')}")
+
+    except Exception as e:
+        print(f"❌ Error getting memory status: {e}")
+
+def init_project_memory():
+    """프로젝트 메모리 초기화"""
+    try:
+        memory_system = get_memory_system()
+        project_id = memory_system.get_project_id()
+
+        print(f"🎯 Initializing memory for project: {project_id}")
+        print(f"📁 Memory directory: {memory_system.data_dir}")
+
+        # 테스트 대화 저장
+        test_id = memory_system.save_conversation(
+            project_id=project_id,
+            user_query="Memory system initialization test",
+            ai_response="Memory system initialized successfully!",
+            model_used="system",
+            session_id="init"
+        )
+
+        if test_id:
+            print(f"✅ Memory initialization successful (Test ID: {test_id})")
+        else:
+            print("❌ Memory initialization failed")
+
+    except Exception as e:
+        print(f"❌ Error initializing memory: {e}")
+
+def handle_memory_search(query: str):
+    """메모리 검색 처리"""
+    try:
+        # API 우선 시도
+        try:
+            data = {
+                "query": query,
+                "limit": 10,
+                "use_vector_search": False
+            }
+
+            response = requests.post(
+                f"{MEMORY_API_URL}/conversations/search",
+                json=data,
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                results = result.get('results', [])
+                print(f"🔍 Found {len(results)} conversations:")
+
+                for i, conv in enumerate(results, 1):
+                    importance = conv.get('importance_score', 5)
+                    timestamp = conv.get('timestamp', '')[:16] if conv.get('timestamp') else ''
+                    print(f"\n{i}. [{importance}] {timestamp}")
+                    print(f"   Q: {conv.get('user_query', '')[:100]}...")
+                    print(f"   A: {conv.get('ai_response', '')[:100]}...")
+
+                return
+        except requests.RequestException:
+            print("⚠️ Memory API unavailable, using local search")
+
+        # 로컬 폴백
+        memory_system = get_memory_system()
+        project_id = memory_system.get_project_id()
+
+        results = memory_system.search_conversations(
+            project_id=project_id,
+            query=query,
+            limit=10
+        )
+
+        print(f"🔍 Found {len(results)} conversations:")
+        for i, conv in enumerate(results, 1):
+            importance = conv.get('importance_score', 5)
+            timestamp = conv.get('timestamp', '')[:16] if conv.get('timestamp') else ''
+            print(f"\n{i}. [{importance}] {timestamp}")
+            print(f"   Q: {conv.get('user_query', '')[:100]}...")
+            print(f"   A: {conv.get('ai_response', '')[:100]}...")
+
+    except Exception as e:
+        print(f"❌ Error searching memory: {e}")
+
+def handle_memory_cleanup() -> int:
+    """메모리 정리 처리"""
+    try:
+        # API 우선 시도
+        try:
+            memory_system = get_memory_system()
+            project_id = memory_system.get_project_id()
+
+            response = requests.post(
+                f"{MEMORY_API_URL}/projects/{project_id}/cleanup",
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                return result.get('deleted_conversations', 0)
+        except requests.RequestException:
+            print("⚠️ Memory API unavailable, using local cleanup")
+
+        # 로컬 폴백
+        memory_system = get_memory_system()
+        project_id = memory_system.get_project_id()
+        return memory_system.cleanup_expired_conversations(project_id)
+
+    except Exception as e:
+        print(f"❌ Error cleaning up memory: {e}")
+        return 0
+
+def handle_memory_backup(output_path: str = None) -> str:
+    """메모리 백업 처리"""
+    try:
+        memory_system = get_memory_system()
+        project_id = memory_system.get_project_id()
+
+        # API 우선 시도
+        try:
+            data = {"project_id": project_id, "backup_type": "json"}
+            response = requests.post(
+                f"{MEMORY_API_URL}/projects/{project_id}/backup",
+                json=data,
+                timeout=60
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                return result.get('backup_path', 'API backup completed')
+        except requests.RequestException:
+            print("⚠️ Memory API unavailable, using local backup")
+
+        # 로컬 폴백
+        backup_path = memory_system.export_memory_backup(
+            project_id=project_id,
+            output_path=Path(output_path) if output_path else None
+        )
+
+        return str(backup_path) if backup_path else "Backup failed"
+
+    except Exception as e:
+        print(f"❌ Error creating backup: {e}")
+        return "Backup failed"
+
+def show_memory_stats():
+    """메모리 통계 표시"""
+    try:
+        memory_system = get_memory_system()
+        project_id = memory_system.get_project_id()
+
+        # API 우선 시도
+        try:
+            response = requests.get(
+                f"{MEMORY_API_URL}/projects/{project_id}/stats",
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                stats = result.get('stats', {})
+                print("📊 Memory Statistics (API)")
+            else:
+                raise requests.RequestException()
+        except requests.RequestException:
+            print("⚠️ Memory API unavailable, using local stats")
+            stats = memory_system.get_conversation_stats(project_id)
+            print("📊 Memory Statistics (Local)")
+
+        print(f"   Project ID: {project_id}")
+        print(f"   Total Conversations: {stats.get('total_conversations', 0)}")
+        print(f"   Average Importance: {stats.get('avg_importance', 0):.2f}")
+        print(f"   Oldest: {stats.get('oldest_conversation', 'None')}")
+        print(f"   Latest: {stats.get('latest_conversation', 'None')}")
+
+        # 중요도별 분포
+        importance_dist = stats.get('importance_distribution', {})
+        if importance_dist:
+            print("\n   Importance Distribution:")
+            for score, count in sorted(importance_dist.items()):
+                print(f"     Level {score}: {count} conversations")
+
+        # 모델별 사용량
+        model_usage = stats.get('model_usage', {})
+        if model_usage:
+            print("\n   Model Usage:")
+            for model, count in model_usage.items():
+                print(f"     {model}: {count} conversations")
+
+    except Exception as e:
+        print(f"❌ Error getting memory stats: {e}")
 
 if __name__ == "__main__":
     main()

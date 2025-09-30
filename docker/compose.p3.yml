@@ -148,15 +148,17 @@ services:
       context: ../services/mcp-server
       dockerfile: Dockerfile
     restart: unless-stopped
-    ports: ["${MCP_PORT:-8020}:8020"]
+    ports:
+      - "${MCP_PORT:-8020}:8020"
+      - "8021:8021"  # Security Admin API port
     volumes:
       # File system access for MCP tools - GLOBAL ACCESS
       - /:/mnt/host:rw  # Full filesystem access for anywhere usage
       - ${DATA_DIR:-/mnt/e/ai-data}:/mnt/data:rw
       - ${MODELS_DIR:-/mnt/e/ai-models}:/mnt/models:ro
       - /mnt/e/local-ai-suite/.git:/mnt/workspace/.git-main:rw  # Main repo .git for worktree
-      # Docker socket access for dynamic model switching
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Docker socket access for enhanced sandbox functionality
+      - /var/run/docker.sock:/var/run/docker.sock:rw
     environment:
       - API_GATEWAY_URL=${API_GATEWAY_URL:-http://api-gateway:8000}
       - RAG_URL=${RAG_URL:-http://rag:8002}
@@ -168,12 +170,92 @@ services:
       - GIT_DIR_PATH=/mnt/workspace/.git-main  # Main repo .git for worktree
       - API_GATEWAY_CHAT_MODEL=${API_GATEWAY_CHAT_MODEL:-chat-7b}
       - API_GATEWAY_CODE_MODEL=${API_GATEWAY_CODE_MODEL:-code-7b}
+      # Enhanced Security Configuration
+      - MCP_SECURITY_LEVEL=${MCP_SECURITY_LEVEL:-normal}
+      - USE_ENHANCED_SANDBOX=${USE_ENHANCED_SANDBOX:-true}
+      - SANDBOX_MAX_MEMORY_MB=${SANDBOX_MAX_MEMORY_MB:-512}
+      # Rate Limiting & Access Control
+      - SECURITY_MODE=${SECURITY_MODE:-development}
+      - SANDBOX_MAX_CPU_TIME=${SANDBOX_MAX_CPU_TIME:-30}
+      - SANDBOX_MAX_OUTPUT_SIZE=${SANDBOX_MAX_OUTPUT_SIZE:-1048576}
+      - SANDBOX_MAX_FILE_SIZE=${SANDBOX_MAX_FILE_SIZE:-10485760}
+      - SANDBOX_MAX_PROCESSES=${SANDBOX_MAX_PROCESSES:-10}
+      - SANDBOX_NETWORK_ACCESS=${SANDBOX_NETWORK_ACCESS:-false}
+      - SANDBOX_SESSION_TIMEOUT=${SANDBOX_SESSION_TIMEOUT:-3600}
+      - SANDBOX_MAX_SESSIONS=${SANDBOX_MAX_SESSIONS:-50}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
     depends_on:
       - api-gateway
       - rag
       - embedding
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8020/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Memory Maintainer Service - TTL 정리, 백업, Qdrant 동기화
+  memory-maintainer:
+    image: python:3.11-slim
+    restart: unless-stopped
+    volumes:
+      - ../scripts:/app/scripts:ro  # Memory maintainer script
+      - ${DATA_DIR:-/mnt/e/ai-data}/memory:/app/memory:rw  # Memory databases
+      - ${DATA_DIR:-/mnt/e/ai-data}/memory/logs:/app/logs:rw  # Logs directory
+      - /:/mnt/host:ro  # Global filesystem access for backup operations
+    working_dir: /app
+    environment:
+      - AI_MEMORY_DIR=/app/memory
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - EMBEDDING_URL=${EMBEDDING_URL:-http://embedding:8003}
+      - MEMORY_BACKUP_CRON=${MEMORY_BACKUP_CRON:-03:00}
+      - MEMORY_SYNC_INTERVAL=${MEMORY_SYNC_INTERVAL:-300}  # 5분
+      - TTL_CHECK_INTERVAL=${TTL_CHECK_INTERVAL:-3600}     # 1시간
+    depends_on:
+      - qdrant
+      - embedding
+    command: >
+      bash -c "
+        pip install --no-cache-dir schedule requests &&
+        python scripts/memory_maintainer.py
+      "
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; exit(0 if os.path.exists('/app/logs/memory_maintainer.log') else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Memory API Service - REST API for memory operations
+  memory-api:
+    build:
+      context: ../services/api-gateway
+      dockerfile: Dockerfile.memory
+    restart: unless-stopped
+    ports: ["8005:8005"]
+    volumes:
+      - ../scripts:/app/scripts:ro  # Memory system script access
+      - ${DATA_DIR:-/mnt/e/ai-data}/memory:/app/memory:rw  # Memory databases
+      - /:/mnt/host:ro  # Global filesystem access for project path resolution
+    environment:
+      - AI_MEMORY_DIR=/app/memory
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - EMBEDDING_URL=${EMBEDDING_URL:-http://embedding:8003}
+      - DEFAULT_PROJECT_ID=${DEFAULT_PROJECT_ID:-default-project}
+    depends_on:
+      - qdrant
+      - embedding
+      - memory-maintainer
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/v1/memory/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
