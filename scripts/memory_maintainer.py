@@ -17,6 +17,13 @@ from typing import Optional, Dict, List
 import requests
 from concurrent.futures import ThreadPoolExecutor
 
+# 공통 Qdrant 헬퍼 함수
+from memory_utils import (
+    ensure_qdrant_collection as ensure_collection_util,
+    upsert_to_qdrant,
+    build_qdrant_payload
+)
+
 # 환경변수
 AI_MEMORY_DIR = os.getenv('AI_MEMORY_DIR', '/mnt/e/ai-data/memory')
 QDRANT_URL = os.getenv('QDRANT_URL', 'http://qdrant:6333')
@@ -157,14 +164,27 @@ class MemoryMaintainer:
             json.dump(export_data, f, ensure_ascii=False, indent=2)
 
     def sync_to_qdrant(self, db_path: Path) -> int:
-        """Qdrant와 동기화 - 미동기화 임베딩 업로드"""
+        """Qdrant와 동기화 - 미동기화 임베딩 업로드 (수정된 스키마 반영)"""
         try:
             conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            # 동기화 필요한 임베딩 조회
+            # 프로젝트 ID (디렉토리 이름이 project_id)
+            project_id = db_path.parent.name
+
+            # 동기화 필요한 임베딩 조회 (정확한 컬럼명 사용)
             cursor.execute("""
-                SELECT ce.*, c.content, c.model_type, c.importance_score
+                SELECT
+                    ce.id as embedding_id,
+                    ce.conversation_id,
+                    ce.embedding_vector,
+                    ce.created_at as embedding_created_at,
+                    c.user_query,
+                    c.ai_response,
+                    c.model_used,
+                    c.importance_score,
+                    c.created_at
                 FROM conversation_embeddings ce
                 JOIN conversations c ON ce.conversation_id = c.id
                 WHERE ce.sync_status != 'synced'
@@ -178,62 +198,68 @@ class MemoryMaintainer:
             if not pending_items:
                 return 0
 
-            project_name = db_path.parent.name
-            collection_name = f"memory_{project_name}"
+            # 컬렉션 확인/생성 (공통 함수 사용)
+            if not ensure_collection_util(project_id, QDRANT_URL):
+                logger.warning(f"프로젝트 {project_id} Qdrant 컬렉션 생성 실패")
+                conn.close()
+                return 0
 
-            # Qdrant 컬렉션 확인/생성
-            self.ensure_qdrant_collection(collection_name)
+            # 배치로 포인트 준비
+            points = []
+            synced_conversations = []  # 성공한 항목만 추적
 
             for item in pending_items:
                 try:
-                    # Qdrant에 벡터 업로드
-                    payload = {
-                        "conversation_id": item[1],
-                        "content": item[7],
-                        "model_type": item[8],
-                        "importance_score": item[9] or 0,
-                        "created_at": item[3]
-                    }
-
                     # 임베딩이 JSON 문자열인 경우 파싱
-                    embedding_vector = json.loads(item[2]) if isinstance(item[2], str) else item[2]
+                    embedding_vector = item['embedding_vector']
+                    if isinstance(embedding_vector, str):
+                        embedding_vector = json.loads(embedding_vector)
+
+                    # 공통 함수로 페이로드 생성
+                    payload = build_qdrant_payload(
+                        conversation_id=item['conversation_id'],
+                        user_query=item['user_query'],
+                        ai_response=item['ai_response'],
+                        model_used=item['model_used'],
+                        importance_score=item['importance_score'] or 5,
+                        created_at=item['created_at']
+                    )
 
                     point_data = {
-                        "id": item[0],  # embedding_id
+                        "id": item['conversation_id'],  # conversation_id를 Qdrant ID로 사용
                         "vector": embedding_vector,
                         "payload": payload
                     }
 
-                    response = requests.put(
-                        f"{QDRANT_URL}/collections/{collection_name}/points",
-                        json={"points": [point_data]},
-                        timeout=30
-                    )
-
-                    if response.status_code == 200:
-                        # 동기화 상태 업데이트
-                        cursor.execute("""
-                            UPDATE conversation_embeddings
-                            SET sync_status = 'synced', synced_at = ?
-                            WHERE id = ?
-                        """, (datetime.now().isoformat(), item[0]))
-                        synced_count += 1
-                    else:
-                        logger.warning(f"Qdrant 업로드 실패 - ID {item[0]}: {response.status_code}")
+                    points.append(point_data)
+                    synced_conversations.append(item['conversation_id'])  # 성공 리스트에 추가
 
                 except Exception as e:
-                    logger.error(f"임베딩 동기화 실패 - ID {item[0]}: {e}")
+                    logger.error(f"임베딩 파싱 실패 - conversation_id {item['conversation_id']}: {e}")
+                    # 실패한 항목은 failed로 마킹
                     cursor.execute("""
                         UPDATE conversation_embeddings
                         SET sync_status = 'failed'
-                        WHERE id = ?
-                    """, (item[0],))
+                        WHERE conversation_id = ?
+                    """, (item['conversation_id'],))
+
+            # 배치 업로드 (공통 함수 사용)
+            if points and upsert_to_qdrant(project_id, points, QDRANT_URL):
+                # 성공한 항목들만 상태 업데이트
+                for conv_id in synced_conversations:
+                    cursor.execute("""
+                        UPDATE conversation_embeddings
+                        SET sync_status = 'synced', synced_at = ?
+                        WHERE conversation_id = ?
+                    """, (datetime.now().isoformat(), conv_id))
+                synced_count = len(synced_conversations)
 
             conn.commit()
             conn.close()
 
             if synced_count > 0:
-                logger.info(f"Qdrant 동기화 완료 - {project_name}: {synced_count}개 벡터")
+                failed_count = len(pending_items) - synced_count
+                logger.info(f"Qdrant 동기화 완료 - 프로젝트 {project_id}: 성공 {synced_count}개, 실패 {failed_count}개")
 
             return synced_count
 
@@ -241,33 +267,7 @@ class MemoryMaintainer:
             logger.error(f"Qdrant 동기화 실패 - {db_path}: {e}")
             return 0
 
-    def ensure_qdrant_collection(self, collection_name: str):
-        """Qdrant 컬렉션 존재 확인 및 생성"""
-        try:
-            # 컬렉션 존재 확인
-            response = requests.get(f"{QDRANT_URL}/collections/{collection_name}")
-
-            if response.status_code == 404:
-                # 컬렉션 생성
-                create_data = {
-                    "vectors": {
-                        "size": 384,  # BAAI/bge-small-en-v1.5 차원
-                        "distance": "Cosine"
-                    }
-                }
-
-                response = requests.put(
-                    f"{QDRANT_URL}/collections/{collection_name}",
-                    json=create_data
-                )
-
-                if response.status_code == 200:
-                    logger.info(f"Qdrant 컬렉션 생성 완료: {collection_name}")
-                else:
-                    logger.error(f"Qdrant 컬렉션 생성 실패: {collection_name}")
-
-        except Exception as e:
-            logger.error(f"Qdrant 컬렉션 확인/생성 실패: {e}")
+    # ensure_qdrant_collection은 memory_utils.py의 공통 함수로 대체됨
 
     def cleanup_old_backups(self, days: int = 30):
         """오래된 백업 파일 정리"""
@@ -303,7 +303,7 @@ class MemoryMaintainer:
         logger.info(f"TTL 정리 작업 완료 - 총 {total_deleted}개 대화 삭제")
 
     def run_qdrant_sync(self):
-        """Qdrant 동기화 작업 실행"""
+        """Qdrant 동기화 작업 실행 (공통 헬퍼 함수 사용)"""
         logger.info("Qdrant 동기화 작업 시작")
 
         memory_dbs = self.find_memory_databases()
@@ -314,11 +314,8 @@ class MemoryMaintainer:
                 # 프로젝트 ID 추출 (db 경로에서)
                 project_id = db_path.parent.name
 
-                # memory_system의 컬렉션 확인
-                from memory_system import get_memory_system
-                memory_system = get_memory_system()
-
-                if not memory_system.ensure_memory_collection(project_id):
+                # 공통 헬퍼 함수로 컬렉션 확인
+                if not ensure_collection_util(project_id, QDRANT_URL):
                     logger.warning(f"프로젝트 {project_id} Qdrant 컬렉션 생성 실패, 스킵")
                     sync_stats["skipped"] += 1
                     continue
