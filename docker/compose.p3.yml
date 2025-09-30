@@ -133,6 +133,12 @@ services:
     ports: ["${EMBEDDING_PORT:-8003}:8003"]
     environment:
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -142,6 +148,14 @@ services:
       - "6334:6334"
     volumes:
       - ${DATA_DIR:-/mnt/e/ai-data}/vectors/qdrant:/qdrant/storage
+    healthcheck:
+      # /proc/net/tcp에서 포트 6333(hex:18BD)이 LISTEN 상태인지 확인
+      # start_period를 30초로 설정하여 소켓 생성 대기 시간 확보
+      test: ["CMD-SHELL", "grep -q ':18BD' /proc/net/tcp || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   mcp-server:
     build:
@@ -220,8 +234,10 @@ services:
       - MEMORY_SYNC_INTERVAL=${MEMORY_SYNC_INTERVAL:-300}  # 5분
       - TTL_CHECK_INTERVAL=${TTL_CHECK_INTERVAL:-3600}     # 1시간
     depends_on:
-      - qdrant
-      - embedding
+      qdrant:
+        condition: service_healthy
+      embedding:
+        condition: service_healthy
     command: >
       bash -c "
         pip install --no-cache-dir schedule requests &&
@@ -251,9 +267,12 @@ services:
       - EMBEDDING_URL=${EMBEDDING_URL:-http://embedding:8003}
       - DEFAULT_PROJECT_ID=${DEFAULT_PROJECT_ID:-default-project}
     depends_on:
-      - qdrant
-      - embedding
-      - memory-maintainer
+      qdrant:
+        condition: service_healthy
+      embedding:
+        condition: service_healthy
+      memory-maintainer:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/v1/memory/health')"]
       interval: 30s
