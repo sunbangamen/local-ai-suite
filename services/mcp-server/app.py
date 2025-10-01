@@ -35,12 +35,24 @@ try:
     from .safe_api import get_safe_file_api, get_safe_command_executor, secure_resolve_path
     from .security_admin import security_app
     from .rate_limiter import get_rate_limiter, get_access_control
+    # RBAC 및 감사 로깅 모듈 (Issue #8)
+    from .settings import get_security_settings
+    from .security_database import init_database
+    from .rbac_manager import get_rbac_manager
+    from .audit_logger import get_audit_logger
+    from .rbac_middleware import RBACMiddleware
 except ImportError:
     # 개발/테스트 환경에서의 절대 임포트
     from security import get_security_validator, get_secure_executor, SecurityError
     from safe_api import get_safe_file_api, get_safe_command_executor, secure_resolve_path
     from security_admin import security_app
     from rate_limiter import get_rate_limiter, get_access_control
+    # RBAC 및 감사 로깅 모듈 (Issue #8)
+    from settings import get_security_settings
+    from security_database import init_database
+    from rbac_manager import get_rbac_manager
+    from audit_logger import get_audit_logger
+    from rbac_middleware import RBACMiddleware
 
 # Playwright와 Notion 임포트 (지연 로딩)
 playwright = None
@@ -104,6 +116,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# RBAC 미들웨어 등록 (Issue #8)
+# CORS 다음에 등록해야 CORS 헤더가 먼저 처리됨
+settings = get_security_settings()
+if settings.is_rbac_enabled():
+    app.add_middleware(RBACMiddleware)
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("RBAC middleware enabled")
+
 @app.middleware("http")
 async def ensure_utf8_content_type(request: Request, call_next):
     """모든 응답에 UTF-8 charset 부여"""
@@ -113,6 +134,76 @@ async def ensure_utf8_content_type(request: Request, call_next):
     elif "application/json" in response.headers["content-type"] and "charset" not in response.headers["content-type"]:
         response.headers["content-type"] = "application/json; charset=utf-8"
     return response
+
+@app.on_event("startup")
+async def startup_event():
+    """애플리케이션 시작 시 초기화"""
+    import logging
+    logger = logging.getLogger(__name__)
+
+    settings = get_security_settings()
+
+    # 설정 검증
+    warnings = settings.validate_config()
+    for warning in warnings:
+        logger.warning(f"Security config warning: {warning}")
+
+    # RBAC 활성화 시 초기화
+    if settings.is_rbac_enabled():
+        logger.info("Initializing RBAC system...")
+
+        # 1. DB 초기화
+        try:
+            await init_database()
+            logger.info(f"Security DB initialized: {settings.get_db_path()}")
+        except Exception as e:
+            logger.error(f"Failed to initialize security DB: {e}")
+            raise
+
+        # 2. RBAC 캐시 예열
+        try:
+            rbac_manager = get_rbac_manager()
+            await rbac_manager.prewarm_cache()
+            cache_stats = rbac_manager.get_cache_stats()
+            logger.info(f"RBAC cache prewarmed: {cache_stats}")
+        except Exception as e:
+            logger.warning(f"Failed to prewarm RBAC cache: {e}")
+
+        # 3. Audit logger 시작
+        try:
+            audit_logger = get_audit_logger()
+            audit_logger.start_async_writer()
+            queue_stats = audit_logger.get_queue_stats()
+            logger.info(f"Audit logger started: {queue_stats}")
+        except Exception as e:
+            logger.error(f"Failed to start audit logger: {e}")
+            raise
+
+        logger.info("RBAC system initialized successfully")
+    else:
+        logger.info("RBAC system disabled (RBAC_ENABLED=false)")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """애플리케이션 종료 시 정리"""
+    import logging
+    logger = logging.getLogger(__name__)
+
+    settings = get_security_settings()
+
+    if settings.is_rbac_enabled():
+        logger.info("Shutting down RBAC system...")
+
+        try:
+            audit_logger = get_audit_logger()
+            await audit_logger.stop_async_writer()
+            logger.info("Audit logger stopped")
+        except Exception as e:
+            logger.error(f"Error stopping audit logger: {e}")
+
+        logger.info("RBAC system shutdown complete")
+
 
 @app.get("/health")
 async def health_check():
