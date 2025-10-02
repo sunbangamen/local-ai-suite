@@ -9,3 +9,4 @@ beautifulsoup4
 notion-client
 pillow
 prometheus-fastapi-instrumentator>=7.0.0
+aiosqlite>=0.19.0

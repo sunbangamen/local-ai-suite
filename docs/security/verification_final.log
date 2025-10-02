@@ -1,0 +1,83 @@
+==================================================
+RBAC Deployment Verification Script
+==================================================
+
+Step 1: Checking environment variables...
+
+[0;32m✓[0m .env file loaded
+  RBAC_ENABLED=true
+  SECURITY_DB_PATH=/mnt/e/ai-data/sqlite/security.db
+  SANDBOX_ENABLED=true
+
+Step 2: Initializing security database...
+
+ℹ Using existing database (SKIP_DB_RESET=true)
+
+Step 3: Verifying database contents...
+
+[1;33m⚠[0m sqlite3 not found, skipping database verification
+Step 4: Checking MCP server health...
+
+[0;32m✓[0m MCP server is running at http://localhost:8020
+
+Step 5: Running permission tests...
+
+ℹ Test 1: Guest user → execute_python (expect 403)
+[0;32m✓[0m Guest denied execute_python (403)
+ℹ Test 2: Developer user → execute_python (expect NOT 403)
+[0;32m✓[0m Developer allowed execute_python (200)
+ℹ Test 3: Guest user → read_file (expect NOT 403)
+[0;32m✓[0m Guest allowed read_file (200)
+ℹ Test 4: Developer user → git_commit (expect 403)
+[0;32m✓[0m Developer denied git_commit (403)
+
+Step 6: Checking audit logs...
+
+[1;33m⚠[0m sqlite3 not found, skipping audit log verification
+Step 7: Testing backup functionality...
+
+ℹ Running backup script...
+Checkpointing WAL...
+Copying database: /mnt/e/ai-data/sqlite/security.db -> /tmp/rbac_test_backup/security_backup_20251001_111827.db
+
+Backup completed:
+  Backup file: /tmp/rbac_test_backup/security_backup_20251001_111827.db
+  Database size: 0.16 MB
+  WAL size: 0.0 MB
+  Integrity check: PASSED
+
+✅ Backup successful: /tmp/rbac_test_backup/security_backup_20251001_111827.db
+[0;32m✓[0m Backup completed successfully
+total 324K
+-rw-r--r-- 1 root root 160K Oct  1 11:12 security_backup_20251001_111259.db
+-rw-r--r-- 1 root root 164K Oct  1 11:18 security_backup_20251001_111827.db
+
+Step 8: Performance benchmark...
+
+ℹ Running 10 permission checks...
+  Total time: 75ms
+  Average per request: 7ms
+[0;32m✓[0m Performance acceptable (avg 7ms < 500ms)
+
+==================================================
+Verification Summary
+==================================================
+
+[0;32m✓[0m ✓ Environment configured
+[0;32m✓[0m ✓ Database initialized
+[0;32m✓[0m ✓ MCP server running
+[0;32m✓[0m ✓ Permission tests passed
+[0;32m✓[0m ✓ Audit logging working
+[0;32m✓[0m ✓ Backup functional
+
+Next steps:
+  1. Review audit logs: sqlite3 /mnt/e/ai-data/sqlite/security.db 'SELECT * FROM security_audit_logs;'
+  2. Monitor performance: Check Prometheus metrics at http://localhost:8020/metrics
+  3. Test in production: Set RBAC_ENABLED=true in .env and restart services
+
+Documentation:
+  - Architecture: docs/security/architecture.md
+  - Implementation: docs/security/IMPLEMENTATION_SUMMARY.md
+  - ADR: docs/adr/adr-001-sqlite-vs-postgresql.md
+
+[0;32m✓[0m Verification complete!

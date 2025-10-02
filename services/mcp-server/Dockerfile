@@ -45,6 +45,12 @@ RUN playwright install --with-deps chromium
 # 애플리케이션 및 보안 모듈 복사
 COPY app.py security.py safe_api.py sandbox.py security_admin.py rate_limiter.py __init__.py .
 
+# RBAC 및 감사 로깅 모듈 복사 (Issue #8)
+COPY settings.py security_database.py rbac_manager.py audit_logger.py rbac_middleware.py .
+
+# 보안 스크립트 및 스키마 복사
+COPY scripts/ ./scripts/
+
 # 헬스체크
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8020/health || exit 1
