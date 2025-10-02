@@ -1431,3 +1431,4 @@ curl -u admin:admin -X POST \
 - `docs/monitoring-verification/verification-2025-09-30.md` - 전체 검증 결과
 - `docs/monitoring-verification/prometheus-targets-raw.json` - Prometheus 타겟 JSON
 
+- Update docs/security/VERIFICATION_ARCHIVE.md header timestamp to 2025-10-01 12:15:39 UTC to match latest verification log.
