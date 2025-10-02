@@ -119,6 +119,40 @@ class RBACManager:
 
         return [p["permission_name"] for p in permissions]
 
+    # TODO: Approval workflow methods not implemented yet
+    async def requires_approval(self, tool_name: str) -> bool:
+        """
+        Check if tool requires approval workflow
+
+        NOTE: This is a placeholder. Actual implementation needed.
+        Should query tool_permissions or access_control to check require_approval flag.
+
+        Args:
+            tool_name: MCP tool name
+
+        Returns:
+            True if approval required, False otherwise
+        """
+        # Placeholder - always returns False until implemented
+        return False
+
+    async def _wait_for_approval(self, user_id: str, tool_name: str) -> bool:
+        """
+        Wait for approval from admin/approver
+
+        NOTE: This is a placeholder. Actual implementation needed.
+        Should implement approval request queue, notification, and response handling.
+
+        Args:
+            user_id: User requesting approval
+            tool_name: Tool requiring approval
+
+        Returns:
+            True if approved, False if denied
+        """
+        # Placeholder - always returns False until implemented
+        return False
+
     async def invalidate_user_cache(self, user_id: str) -> None:
         """
         Invalidate cache for a specific user

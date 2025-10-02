@@ -68,6 +68,14 @@ class RBACMiddleware(BaseHTTPMiddleware):
             f"allowed={allowed}, time={check_time:.2f}ms"
         )
 
+        # TODO: Approval workflow not implemented yet
+        # If allowed and require_approval=True, should wait for approval here
+        # Example:
+        #   if allowed and await self.rbac_manager.requires_approval(tool_name):
+        #       approval_status = await self._wait_for_approval(user_id, tool_name)
+        #       if not approval_status:
+        #           return JSONResponse(status_code=403, content={"error": "Approval denied"})
+
         if not allowed:
             # Permission denied - log and return 403
             logger.warning(
