@@ -13,7 +13,7 @@
 
 ### 1. 데이터 저장 구조
 ```
-/mnt/e/ai-data/memory/
+${MEMORY_ROOT:-~/.local/share/local-ai/memory}/
 ├── projects/
 │   ├── [project_hash]/
 │   │   ├── memory.db          # SQLite 데이터베이스
@@ -27,9 +27,12 @@
     └── processing/            # 임시 처리 파일
 ```
 
+> `MEMORY_ROOT` 환경 변수를 통해 저장 경로를 제어하고, 미설정 시 플랫폼 기본 경로(`~/.local/share/local-ai/memory`)를 사용.
+> 태그는 JSON 필드가 아닌 `conversation_tags` 보조 테이블로 관리해 검색 성능과 정규화를 동시에 확보.
+
 ### 2. 데이터베이스 스키마 (SQLite)
 ```sql
--- 대화 기록
+-- 대화 기록 (핵심 메타데이터)
 CREATE TABLE conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -37,12 +40,20 @@ CREATE TABLE conversations (
     ai_response TEXT NOT NULL,
     model_used VARCHAR(50),
     importance_score INTEGER DEFAULT 5, -- 1(삭제) ~ 10(영구보관)
-    tags TEXT,                         -- JSON 배열
     session_id VARCHAR(50),
     token_count INTEGER,
     response_time_ms INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 대화 태그 (정규화)
+CREATE TABLE conversation_tags (
+    conversation_id INTEGER NOT NULL,
+    tag TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (conversation_id, tag),
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 
 -- 대화 요약
@@ -74,11 +85,22 @@ CREATE TABLE user_preferences (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 의미 검색용 임베딩 (로컬 캐시 + 외부 벡터스토어 핸들)
+CREATE TABLE conversation_embeddings (
+    conversation_id INTEGER PRIMARY KEY,
+    embedding BLOB NOT NULL,                     -- 1536 float32 벡터 직렬화
+    vector_store_id TEXT,                        -- Qdrant 등 외부 스토어 식별자
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+
 -- 인덱스
 CREATE INDEX idx_conversations_timestamp ON conversations(timestamp);
 CREATE INDEX idx_conversations_importance ON conversations(importance_score);
-CREATE INDEX idx_conversations_tags ON conversations(tags);
+CREATE INDEX idx_conversation_tags_tag ON conversation_tags(tag);
 ```
+
+> 대용량 의미 검색이 필요하면 Qdrant/Weaviate 등 외부 벡터 스토어에 `vector_store_id`로 동기화하고, 로컬 SQLite는 캐시/백업 용도로 유지.
 
 ### 3. 중요도 기반 자동 정리 시스템
 
@@ -114,6 +136,11 @@ def calculate_importance_score(query: str, response: str, context: dict) -> int:
         "안녕", "hello", "테스트", "test", "확인", "체크"
     ]
 
+    if any(word in query or word in response for word in high_importance_keywords):
+        score += 2
+    if any(word in query or word in response for word in low_importance_keywords):
+        score -= 2
+
     # 응답 길이 고려 (긴 응답 = 더 중요)
     if len(response) > 1000:
         score += 1
@@ -127,6 +154,8 @@ def calculate_importance_score(query: str, response: str, context: dict) -> int:
     # 사용자 피드백 반영
     if context.get("user_saved", False):
         score = 10
+    if context.get("user_dismissed", False):
+        score = min(score, 3)
 
     return max(1, min(10, score))
 ```
@@ -145,6 +174,8 @@ def get_relevant_context(current_query: str, project_path: str, limit: int = 5) 
 
     return relevant_conversations
 ```
+
+> 의미 검색은 `conversation_embeddings` 테이블 또는 Qdrant 컬렉션에서 cosine 유사도로 수행하고, 결과는 태그/중요도 기준으로 재정렬.
 
 ### 5. 사용자 인터페이스 설계
 
@@ -197,6 +228,7 @@ ai --memory --set-importance-threshold 6 # 자동 삭제 임계값
 - [ ] 관련성 점수 계산
 - [ ] 컨텍스트 자동 포함 로직
 - [ ] 성능 최적화 (인덱싱)
+- [ ] Qdrant 등 벡터 스토어 동기화 및 임베딩 캐싱
 
 ### Phase 4: 사용자 인터페이스 (2일)
 - [ ] AI CLI 메모리 명령어
@@ -246,21 +278,23 @@ ai --memory --set-importance-threshold 6 # 자동 삭제 임계값
 
 ### 1. 우선 구현할 핵심 기능
 1. **프로젝트 식별**: 현재 디렉토리 기반 프로젝트 구분
-2. **기본 저장**: SQLite + JSON 백업
-3. **자동 중요도**: 키워드 기반 점수 계산
-4. **기본 정리**: TTL 기반 삭제
+2. **기본 저장**: SQLite + JSON 백업 + `conversation_tags` 정규화
+3. **자동 중요도**: 가중치 증감/사용자 피드백 반영 점수 계산
+4. **컨텍스트 임베딩**: OpenAI/로컬 임베딩 생성 후 `conversation_embeddings` + Qdrant 동기화
+5. **기본 정리**: TTL 기반 삭제
 
 ### 2. 파일 구조
 ```
 scripts/
 ├── ai_memory.py              # 메모리 시스템 코어
 ├── memory_manager.py         # 관리 인터페이스
-└── memory_cleanup.py         # 정리 시스템
+├── memory_cleanup.py         # 정리 시스템
+└── memory_vector_sync.py     # Qdrant 등 벡터 스토어 연동
 
-/mnt/e/ai-data/memory/
+${MEMORY_ROOT}/
 ├── schema.sql               # 데이터베이스 스키마
 ├── projects/                # 프로젝트별 메모리
-└── global/                  # 전역 설정
+└── global/                  # 전역 설정 및 백업
 ```
 
 ### 3. 통합 지점
