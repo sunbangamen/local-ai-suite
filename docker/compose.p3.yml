@@ -162,6 +162,7 @@ services:
       context: ../services/mcp-server
       dockerfile: Dockerfile
     restart: unless-stopped
+    user: "1000:1000"  # Run as host user for git write permissions
     ports:
       - "${MCP_PORT:-8020}:8020"
       - "8021:8021"  # Security Admin API port

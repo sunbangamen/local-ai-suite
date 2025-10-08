@@ -34,10 +34,12 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Git 안전 디렉토리 설정 (workspace mount path and main repo)
+# Git 설정 (안전 디렉토리 + 사용자 정보)
 RUN git config --global --add safe.directory /mnt/workspace && \
     git config --global --add safe.directory /mnt/workspace/.git-main && \
-    git config --global --add safe.directory /mnt/e/local-ai-suite || true
+    git config --global --add safe.directory /mnt/e/local-ai-suite && \
+    git config --global user.name "MCP Server" && \
+    git config --global user.email "mcp@local-ai-suite.local" || true
 
 # Playwright 브라우저 설치
 RUN playwright install --with-deps chromium
