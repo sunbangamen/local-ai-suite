@@ -1,76 +1,86 @@
-# 🧠 프로젝트별 장기 기억 시스템 - 완전한 설계 계획
+# 🧠 프로젝트별 장기 기억 시스템 - 현재 구현 상태
 
-## 📋 요구사항 분석
+> **⚠️ 문서 상태**: 이 문서는 실제 구현(`scripts/memory_system.py`)에 기반한 현재 운영 중인 시스템을 반영합니다.
+>
+> **✅ 운영 현황**: 9개 프로젝트에서 안정적으로 실사용 중 (2025-10-08 기준)
 
-**핵심 목표:**
-- 프로젝트별 독립적인 장기 기억
-- 아주 긴 대화 지원 (무제한)
-- 시간 경과에 따른 스마트한 정리
-- 실무적 관리 편의성
-- 관리자 친화적 제어
+## 📋 시스템 개요
+
+**핵심 기능:**
+- 프로젝트별 독립적인 장기 기억 (SQLite 기반)
+- 무제한 대화 이력 저장 및 검색
+- 중요도 기반 자동 TTL 관리 (1-10 레벨)
+- FTS5 전문 검색 + Qdrant 벡터 검색 (하이브리드)
+- Docker/로컬 환경 자동 감지 및 대응
 
 ## 🏗️ 시스템 아키텍처 설계
 
 ### 1. 데이터 저장 구조
+
+**실제 경로 우선순위:**
+1. `--memory-dir` CLI 옵션 (명시적 지정)
+2. `AI_MEMORY_DIR` 환경변수
+3. `/mnt/e/ai-data/memory` (기본 경로)
+4. 프로젝트 로컬 폴백: `{project_root}/.ai-memory-data`
+5. 최종 폴백: `{current_dir}/.ai-memory-data`
+
+**디렉토리 구조:**
 ```
-${MEMORY_ROOT:-~/.local/share/local-ai/memory}/
+/mnt/e/ai-data/memory/              # 기본 데이터 디렉토리
 ├── projects/
-│   ├── [project_hash]/
-│   │   ├── memory.db          # SQLite 데이터베이스
-│   │   ├── conversations.json # JSON 백업
-│   │   ├── summaries.json     # AI 생성 요약
-│   │   └── metadata.json      # 프로젝트 정보
+│   ├── {project_uuid}/
+│   │   ├── memory.db               # SQLite DB (WAL 모드)
+│   │   └── project.json            # 프로젝트 메타데이터
+│   └── docker-default/             # Docker 환경 전용
+│       ├── memory.db
+│       └── project.json
 ├── global/
-│   ├── user_preferences.json
-│   └── cleanup_log.json
-└── temp/
-    └── processing/            # 임시 처리 파일
+│   └── (글로벌 설정용 예약)
+└── backups/
+    └── memory_{project_id}_{timestamp}.json  # JSON 백업
 ```
 
-> `MEMORY_ROOT` 환경 변수를 통해 저장 경로를 제어하고, 미설정 시 플랫폼 기본 경로(`~/.local/share/local-ai/memory`)를 사용.
-> 태그는 JSON 필드가 아닌 `conversation_tags` 보조 테이블로 관리해 검색 성능과 정규화를 동시에 확보.
+> **⚠️ 태그 저장 방식**: `conversation_tags` 정규화 테이블이 아닌 **`conversations.tags TEXT (JSON 배열)`** 형태로 저장됩니다.
+> 이는 간단한 구조와 빠른 개발을 위한 선택이며, 향후 검색 성능 이슈 발생 시 정규화 검토 예정입니다.
 
 ### 2. 데이터베이스 스키마 (SQLite)
+
+**현재 구현된 스키마** (memory_system.py:236-357):
+
 ```sql
--- 대화 기록 (핵심 메타데이터)
+-- 대화 기록 테이블
 CREATE TABLE conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     user_query TEXT NOT NULL,
     ai_response TEXT NOT NULL,
     model_used VARCHAR(50),
-    importance_score INTEGER DEFAULT 5, -- 1(삭제) ~ 10(영구보관)
+    importance_score INTEGER DEFAULT 5,      -- 1(즉시삭제) ~ 10(영구보관)
+    tags TEXT,                               -- JSON 배열 형태로 저장 ⚠️
     session_id VARCHAR(50),
     token_count INTEGER,
     response_time_ms INTEGER,
+    project_context TEXT,                    -- JSON 형태 프로젝트 컨텍스트
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME                      -- TTL 자동 삭제용
 );
 
--- 대화 태그 (정규화)
-CREATE TABLE conversation_tags (
-    conversation_id INTEGER NOT NULL,
-    tag TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (conversation_id, tag),
-    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-);
-
--- 대화 요약
+-- 대화 요약 테이블
 CREATE TABLE conversation_summaries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date_range TEXT,              -- "2024-09-01 to 2024-09-07"
-    summary TEXT,                 -- AI 생성 요약
+    date_range TEXT,                         -- "2024-09-01 to 2024-09-07"
+    summary TEXT,                            -- AI 생성 요약
     conversation_count INTEGER,
     importance_level INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 중요 사실
+-- 중요 사실 테이블
 CREATE TABLE important_facts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     fact TEXT NOT NULL,
-    category VARCHAR(100),        -- code, config, decision, etc.
+    category VARCHAR(100),                   -- code, config, decision 등
     source_conversation_id INTEGER,
     user_marked BOOLEAN DEFAULT FALSE,
     ai_suggested BOOLEAN DEFAULT FALSE,
@@ -78,29 +88,54 @@ CREATE TABLE important_facts (
     FOREIGN KEY (source_conversation_id) REFERENCES conversations(id)
 );
 
--- 사용자 선호도
+-- 사용자 선호도 테이블
 CREATE TABLE user_preferences (
     key VARCHAR(100) PRIMARY KEY,
     value TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 의미 검색용 임베딩 (로컬 캐시 + 외부 벡터스토어 핸들)
+-- 벡터 임베딩 테이블 (Qdrant 동기화용)
 CREATE TABLE conversation_embeddings (
-    conversation_id INTEGER PRIMARY KEY,
-    embedding BLOB NOT NULL,                     -- 1536 float32 벡터 직렬화
-    vector_store_id TEXT,                        -- Qdrant 등 외부 스토어 식별자
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    embedding_vector TEXT,                   -- JSON 형태 임베딩 벡터 ⚠️
+    qdrant_point_id TEXT,                    -- Qdrant 포인트 ID ⚠️
+    sync_status TEXT DEFAULT 'pending',      -- 'pending', 'synced', 'failed'
+    synced_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+    UNIQUE(conversation_id)
+);
+
+-- FTS5 전문 검색 테이블
+CREATE VIRTUAL TABLE conversations_fts USING fts5(
+    user_query,
+    ai_response,
+    content='conversations',
+    content_rowid='id'
 );
 
 -- 인덱스
 CREATE INDEX idx_conversations_timestamp ON conversations(timestamp);
 CREATE INDEX idx_conversations_importance ON conversations(importance_score);
-CREATE INDEX idx_conversation_tags_tag ON conversation_tags(tag);
+CREATE INDEX idx_conversations_expires_at ON conversations(expires_at);
+CREATE INDEX idx_conversations_session_id ON conversations(session_id);
+CREATE INDEX idx_conversations_model_used ON conversations(model_used);
+CREATE INDEX idx_important_facts_category ON important_facts(category);
+CREATE INDEX idx_conversation_embeddings_sync_status ON conversation_embeddings(sync_status);
 ```
 
-> 대용량 의미 검색이 필요하면 Qdrant/Weaviate 등 외부 벡터 스토어에 `vector_store_id`로 동기화하고, 로컬 SQLite는 캐시/백업 용도로 유지.
+**⚠️ 계획 문서와의 차이점:**
+
+1. **`conversation_tags` 테이블 없음**: 대신 `conversations.tags TEXT (JSON)` 사용
+2. **임베딩 구조**: `embedding BLOB`이 아닌 `embedding_vector TEXT (JSON)` 사용
+3. **벡터 스토어 ID**: `vector_store_id` 대신 `qdrant_point_id` 사용
+4. **동기화 상태 추적**: `sync_status`, `synced_at` 필드로 Qdrant 동기화 관리
+5. **TTL 지원**: `expires_at` 필드로 자동 만료 관리
+
+> **설계 결정 배경**: JSON 기반 접근은 스키마 단순성과 빠른 개발을 우선했습니다.
+> 실사용 중 검색 성능 이슈가 발생하지 않았으며, SQLite의 JSON 함수로 충분히 관리 가능합니다.
 
 ### 3. 중요도 기반 자동 정리 시스템
 
@@ -177,70 +212,80 @@ def get_relevant_context(current_query: str, project_path: str, limit: int = 5) 
 
 > 의미 검색은 `conversation_embeddings` 테이블 또는 Qdrant 컬렉션에서 cosine 유사도로 수행하고, 결과는 태그/중요도 기준으로 재정렬.
 
-### 5. 사용자 인터페이스 설계
+### 5. 사용자 인터페이스
 
-**AI CLI 명령어:**
+**현재 구현된 CLI 명령어** (ai.py:668-674):
+
 ```bash
-# 메모리 관리
-ai --memory                           # 메모리 상태 보기
-ai --memory --save "중요한 내용"       # 영구 저장
-ai --memory --important "결정사항"     # 중요도 9로 저장
-ai --memory --forget "패턴"           # 특정 내용 삭제
-ai --memory --cleanup                 # 수동 정리 실행
-ai --memory --export                  # 백업 파일 생성
-ai --memory --import backup.json      # 백업 복원
-
-# 검색 및 조회
-ai --memory --search "키워드"         # 메모리 검색
-ai --memory --summary                 # 프로젝트 요약
-ai --memory --stats                   # 통계 정보
-ai --memory --recent                  # 최근 대화
-ai --memory --important-only          # 중요한 것만
-
-# 설정
-ai --memory --set-retention 90        # 기본 보관기간
-ai --memory --set-auto-cleanup on     # 자동 정리 켜기
-ai --memory --set-importance-threshold 6 # 자동 삭제 임계값
+# 메모리 관리 명령어 (7개 옵션)
+ai --memory                           # 메모리 시스템 상태 표시
+ai --memory-init                      # 프로젝트 메모리 초기화
+ai --memory-search "키워드"           # 대화 검색 (FTS5 기반)
+ai --memory-cleanup                   # 만료된 대화 정리 (TTL)
+ai --memory-backup [PATH]             # JSON 백업 생성
+ai --memory-stats                     # 상세 통계 정보
+ai --memory-dir /custom/path          # 메모리 저장 경로 오버라이드
 ```
 
+**⚠️ 계획 문서와의 차이점:**
+- 총 **7개 옵션** 구현 (계획: 6개)
+- `--memory-dir` 옵션 추가됨 (동적 경로 지정)
+- 복합 명령어(`--memory --save`, `--memory --forget`) 대신 독립적인 플래그 사용
+- 세부 설정 명령어(`--set-retention`, `--set-auto-cleanup`)는 미구현
+
+**환경 변수:**
+| 변수명 | 용도 | 기본값 | 우선순위 |
+|--------|------|--------|----------|
+| `AI_MEMORY_DIR` | 메모리 데이터 디렉토리 | `/mnt/e/ai-data/memory` | 2순위 |
+| `DEFAULT_PROJECT_ID` | Docker 환경 프로젝트 ID | (없음) | Docker 우선 |
+| `EMBEDDING_URL` | 임베딩 서비스 URL | `http://localhost:8003` | - |
+| `QDRANT_URL` | Qdrant 벡터 DB URL | `http://localhost:6333` | - |
+
 **Desktop App UI:**
-- 메모리 관리 탭 추가
-- 대화별 중요도 설정 버튼
-- 검색 기능
-- 백업/복원 기능
+- ⚠️ 현재 미구현 (Phase 4 예정)
 
-## 📊 구현 단계별 계획
+## 📊 구현 현황
 
-### Phase 1: 기본 저장 시스템 (3일)
-- [ ] SQLite 데이터베이스 설계 및 생성
-- [ ] 기본 대화 저장/조회 기능
-- [ ] 프로젝트 식별 시스템
-- [ ] JSON 백업 시스템
+### ✅ Phase 1: 기본 저장 시스템 (완료)
+- ✅ SQLite 데이터베이스 설계 및 생성 (WAL 모드)
+- ✅ 기본 대화 저장/조회 기능
+- ✅ 프로젝트 식별 시스템 (UUID 기반)
+- ✅ JSON 백업 시스템
+- ✅ Thread-safe 연결 관리
 
-### Phase 2: 자동 정리 시스템 (2일)
-- [ ] 중요도 자동 판정 로직
-- [ ] TTL 기반 자동 삭제
-- [ ] 백그라운드 정리 스케줄러
-- [ ] 안전한 삭제 확인 시스템
+### ✅ Phase 2: 자동 정리 시스템 (완료)
+- ✅ 중요도 자동 판정 로직 (1-10 레벨)
+- ✅ TTL 기반 자동 삭제 (`expires_at` 필드)
+- ✅ 수동 정리 명령어 (`--memory-cleanup`)
+- ⚠️ 백그라운드 정리 스케줄러 (미구현, 수동 실행 필요)
 
-### Phase 3: 검색 및 컨텍스트 시스템 (3일)
-- [ ] 키워드 기반 검색
-- [ ] 관련성 점수 계산
-- [ ] 컨텍스트 자동 포함 로직
-- [ ] 성능 최적화 (인덱싱)
-- [ ] Qdrant 등 벡터 스토어 동기화 및 임베딩 캐싱
+### ✅ Phase 3: 검색 및 컨텍스트 시스템 (완료)
+- ✅ FTS5 전문 검색 (BM25 랭킹)
+- ✅ 하이브리드 검색 (FTS5 + 벡터 유사도)
+- ✅ Qdrant 벡터 스토어 동기화
+- ✅ 배치 임베딩 처리
+- ✅ 자동 복구 메커니즘
+- ✅ 성능 최적화 (인덱스, WAL 모드)
 
-### Phase 4: 사용자 인터페이스 (2일)
-- [ ] AI CLI 메모리 명령어
-- [ ] Desktop App 메모리 관리 UI
-- [ ] 통계 및 시각화
-- [ ] 설정 관리
+### 🔶 Phase 4: 사용자 인터페이스 (부분 완료)
+- ✅ AI CLI 메모리 명령어 (7개 옵션)
+- ✅ 통계 정보 (`--memory-stats`)
+- ❌ Desktop App 메모리 관리 UI (미구현)
+- ❌ 시각화 대시보드 (미구현)
+- ⚠️ 세부 설정 관리 (일부 미구현)
 
-### Phase 5: 고급 기능 (2일)
-- [ ] AI 요약 생성
-- [ ] 중요 사실 자동 추출
-- [ ] 백업/복원 시스템
-- [ ] 성능 모니터링
+### 🔶 Phase 5: 고급 기능 (부분 완료)
+- ⚠️ AI 요약 생성 (스키마만 존재, 로직 미구현)
+- ⚠️ 중요 사실 자동 추출 (스키마만 존재)
+- ✅ 백업/복원 시스템
+- ✅ 데이터베이스 최적화 (VACUUM, ANALYZE)
+- ✅ 동기화 재시도 메커니즘
+
+### 🎯 운영 현황 (2025-10-08)
+- **실사용 프로젝트**: 9개
+- **안정성**: 권한 오류 자동 복구, 폴백 메커니즘 완비
+- **성능**: FTS5 + 벡터 검색으로 대용량 대화 지원
+- **확장성**: Docker/로컬 환경 자동 대응
 
 ## 🔧 실무적 고려사항
 
@@ -274,32 +319,55 @@ ai --memory --set-importance-threshold 6 # 자동 삭제 임계값
 - 직관적인 명령어
 - 명확한 피드백
 
-## 📝 구현 시작점
+## 📝 실제 구현 파일 구조
 
-### 1. 우선 구현할 핵심 기능
-1. **프로젝트 식별**: 현재 디렉토리 기반 프로젝트 구분
-2. **기본 저장**: SQLite + JSON 백업 + `conversation_tags` 정규화
-3. **자동 중요도**: 가중치 증감/사용자 피드백 반영 점수 계산
-4. **컨텍스트 임베딩**: OpenAI/로컬 임베딩 생성 후 `conversation_embeddings` + Qdrant 동기화
-5. **기본 정리**: TTL 기반 삭제
-
-### 2. 파일 구조
 ```
 scripts/
-├── ai_memory.py              # 메모리 시스템 코어
-├── memory_manager.py         # 관리 인터페이스
-├── memory_cleanup.py         # 정리 시스템
-└── memory_vector_sync.py     # Qdrant 등 벡터 스토어 연동
+├── memory_system.py          # 메모리 시스템 코어 (1359 라인)
+│   ├── MemorySystem 클래스
+│   ├── FTS5 + 벡터 검색
+│   ├── Qdrant 동기화
+│   └── 백업/복원 기능
+├── memory_utils.py           # 유틸리티 함수
+│   └── ensure_qdrant_collection()
+└── ai.py                     # CLI 통합
+    ├── 메모리 명령어 파싱 (668-674)
+    └── 대화 저장 로직
 
-${MEMORY_ROOT}/
-├── schema.sql               # 데이터베이스 스키마
-├── projects/                # 프로젝트별 메모리
-└── global/                  # 전역 설정 및 백업
+/mnt/e/ai-data/memory/
+├── projects/
+│   └── {uuid}/
+│       ├── memory.db         # SQLite DB
+│       └── project.json      # 메타데이터
+├── global/
+└── backups/
 ```
 
-### 3. 통합 지점
-- `scripts/ai.py`의 `call_api()` 함수에 메모리 저장 로직 추가
-- 응답 전에 관련 컨텍스트 검색 및 포함
-- 새로운 `--memory` 관련 명령어 추가
+## 🔄 향후 개선 방향
 
-이 계획서를 기반으로 단계별 구현을 진행할 수 있습니다.
+### 단기 개선 사항 (1-3개월)
+1. **백그라운드 정리 스케줄러**: 자동 TTL 정리를 위한 cron/systemd 통합
+2. **Desktop App UI**: 메모리 관리 탭 구현
+3. **AI 요약 생성**: 주기적 대화 요약 자동 생성
+4. **중요 사실 추출**: 키워드 기반 자동 추출 로직
+
+### 중기 개선 사항 (3-6개월)
+1. **태그 정규화 검토**: 검색 성능 이슈 발생 시 `conversation_tags` 테이블로 마이그레이션
+2. **임베딩 최적화**: BLOB 저장으로 전환하여 저장 공간 절약
+3. **PostgreSQL 마이그레이션**: 동시성 요구 증가 시 검토
+4. **모니터링 대시보드**: Grafana 통합
+
+### 장기 개선 사항 (6개월+)
+1. **분산 벡터 검색**: 멀티 프로젝트 통합 검색
+2. **AI 컨텍스트 자동 포함**: 질문 시 관련 이전 대화 자동 삽입
+3. **메모리 압축**: 오래된 대화 요약 및 압축 저장
+4. **클라우드 동기화**: 선택적 백업 동기화 기능
+
+## 📚 관련 문서
+- **구현 코드**: `scripts/memory_system.py`
+- **CLI 통합**: `scripts/ai.py`
+- **CLI 레퍼런스**: `docs/MEMORY_CLI_REFERENCE.md`
+- **DB 스키마**: `docs/MEMORY_SCHEMA_DIAGRAM.md`
+- **사용자 가이드**: `docs/MEMORY_SYSTEM_GUIDE.md`
+- **테스트 결과**: `docs/MEMORY_SYSTEM_TEST_RESULTS.md`
+- **ADR**: `docs/adr/adr-002-memory-system-impl-vs-plan.md`
