@@ -34,10 +34,12 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Git 안전 디렉토리 설정 (workspace mount path and main repo)
+# Git 설정 (안전 디렉토리 + 사용자 정보)
 RUN git config --global --add safe.directory /mnt/workspace && \
     git config --global --add safe.directory /mnt/workspace/.git-main && \
-    git config --global --add safe.directory /mnt/e/local-ai-suite || true
+    git config --global --add safe.directory /mnt/e/local-ai-suite && \
+    git config --global user.name "MCP Server" && \
+    git config --global user.email "mcp@local-ai-suite.local" || true
 
 # Playwright 브라우저 설치
 RUN playwright install --with-deps chromium
@@ -51,6 +53,14 @@ COPY settings.py security_database.py rbac_manager.py audit_logger.py rbac_middl
 # 보안 스크립트 및 스키마 복사
 COPY scripts/ ./scripts/
 
+# Entrypoint 스크립트 복사 및 실행 권한 부여
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Create home directory for user 1000 (for git config)
+RUN mkdir -p /home/appuser && chown -R 1000:1000 /home/appuser
+ENV HOME=/home/appuser
+
 # 헬스체크
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8020/health || exit 1
@@ -58,5 +68,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # 기본 포트 (MCP 서버 + Security Admin API)
 EXPOSE 8020 8021
 
-# 실행 (HTTP 모드로 헬스체크 서버 및 보안 관리 API 실행)
+# Entrypoint로 git config 설정 후 앱 실행
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python", "app.py", "--http"]
