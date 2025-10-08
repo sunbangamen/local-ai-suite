@@ -1,8 +1,13 @@
-# Codex 피드백 최종 검증 보고서 (v4)
+# Codex 피드백 최종 검증 보고서 (v5)
 
-**검증 일시**: 2025-10-08 01:18 ~ 01:30 (초기), 10:20 ~ 10:45 (MCP API 검증), 11:00 ~ 11:40 (Worktree 지원)
+**검증 일시**:
+- 2025-10-08 01:18 ~ 01:30 (초기 검증)
+- 2025-10-08 10:20 ~ 10:45 (MCP API 검증)
+- 2025-10-08 11:00 ~ 11:40 (Worktree 지원 구현)
+- 2025-10-08 12:00 ~ 12:30 (Worktree Git Commit 완전 해결)
+
 **검증자**: Claude Code
-**상태**: ✅ **ALL RESOLVED + WORKTREE SUPPORT**
+**상태**: ✅ **ALL RESOLVED + FULL WORKTREE GIT COMMIT**
 
 ---
 
@@ -267,17 +272,68 @@ Author: limeking <limeking1@gmail.com>
 Date: Wed Oct 8 11:37:10 2025 +0900
 ```
 
-**컨테이너 권한 이슈**:
-- MCP 컨테이너(root)에서 index.lock 생성 시 권한 거부 발생
-- 호스트 환경에서 git commit 성공 → worktree 구조 정상 동작 확인
-- git_status, git_diff, git_log 등 읽기 작업은 MCP API에서 정상 동작
+**컨테이너 권한 해결 (v5)**:
+- ~~MCP 컨테이너(root)에서 index.lock 생성 시 권한 거부 발생~~ → **해결 완료**
+- **해결 방법**:
+  1. Docker Compose에 `user: "1000:1000"` 추가 (호스트 UID/GID 매칭)
+  2. Dockerfile에 `/home/appuser` 생성 및 소유권 설정
+  3. `entrypoint.sh`에서 런타임 git config 설정
+  4. 환경변수 `HOME=/home/appuser` 설정
+
+**MCP API Git Commit 최종 성공 (v5)**:
+
+```bash
+# git_status 성공
+$ curl -X POST http://localhost:8020/tools/git_status/call \
+  -H "X-User-ID: admin" \
+  -d '{"working_dir": "/mnt/e/worktree/issue-10"}'
+
+{
+  "command": "git status --porcelain",
+  "stdout": "M docker/compose.p3.yml\n M services/mcp-server/Dockerfile\n...",
+  "stderr": "",
+  "returncode": 0,
+  "success": true
+}
+HTTP_CODE: 200
+
+# git_commit 성공 (MCP API를 통한 실제 커밋!)
+$ curl -X POST http://localhost:8020/tools/git_commit/call \
+  -H "X-User-ID: admin" \
+  -d '{"working_dir": "/mnt/e/worktree/issue-10", "message": "feat(mcp): enable git_commit..."}'
+
+{
+  "command": "git commit -m feat(mcp): enable git_commit in worktree...",
+  "stdout": "커밋 완료: [issue-10 ac0e332] feat(mcp): enable git_commit in worktree...\n 2 files changed, 5 insertions(+), 2 deletions(-)",
+  "stderr": "",
+  "returncode": 0,
+  "success": true
+}
+HTTP_CODE: 200
+
+# git_log로 커밋 확인
+$ curl -X POST http://localhost:8020/tools/git_log/call \
+  -H "X-User-ID: admin" \
+  -d '{"working_dir": "/mnt/e/worktree/issue-10", "max_count": 3}'
+
+{
+  "stdout": "ac0e332 feat(mcp): enable git_commit in worktree with user permissions\n...",
+  "returncode": 0,
+  "success": true
+}
+
+# 호스트에서 확인
+$ git log -1 --oneline
+ac0e332 feat(mcp): enable git_commit in worktree with user permissions
+```
 
 ✅ **결론**:
 - DB에 4명의 사용자 존재 확인 (guest_user, dev_user, admin_user, admin)
 - RBAC 권한 검증 완료 (admin_user, admin 모두 git_commit 권한 보유)
-- Git commit 성공 (commit 93fed9d, f83eaf5, **120e323**)
+- Git commit 성공 (commit 93fed9d, f83eaf5, 120e323, **ac0e332**)
 - **MCP API 인증 성공**: X-User-ID: admin → HTTP 200 + success:true
 - **Worktree 지원 완료**: git_status returncode:0, 모든 git 도구 worktree 인식
+- **✨ MCP API git_commit 완전 성공**: returncode:0, actual commit created (ac0e332)
 
 ---
 
@@ -394,25 +450,56 @@ Running concurrent test (10 simultaneous requests)...
 - [x] **Worktree 지원 구현**: resolve_git_env() 함수 추가, 모든 git 도구에 적용 (v4)
 - [x] **Worktree MCP 테스트 성공**: git_status returncode:0, HTTP 200 (v4)
 - [x] **Worktree 커밋 성공**: commit 120e323 생성 (host 환경, v4)
+- [x] **컨테이너 권한 해결**: user:1000:1000 + /home/appuser + entrypoint.sh (v5)
+- [x] **✨ MCP git_commit 완전 성공**: commit ac0e332 via MCP API, returncode:0 (v5)
+- [x] **git_log 검증 완료**: MCP API로 커밋 히스토리 조회 성공 (v5)
 
 ---
 
 ## 최종 선언
 
-✅ **모든 Codex 피드백 해결 완료 + Worktree 지원 추가**
+✅ **모든 Codex 피드백 완벽 해결 + MCP Git Commit 완전 구현**
 
 1. ✅ DB 파일 실제 존재 및 호스트 접근 가능
 2. ✅ Admin 권한으로 git_commit 성공
 3. ✅ Production 모드 벤치마크 실제 측정 및 로그 기록
-4. ✅ **Git Worktree 완전 지원** (v4 신규)
+4. ✅ **Git Worktree 완전 지원** (v4)
+5. ✅ **✨ MCP API git_commit 완전 성공** (v5 - 최종)
 
-**시스템 상태**: **Production Ready + Enhanced** ✅
+**시스템 상태**: **Production Ready + Fully Enhanced** ✅
 
-- RBAC 시스템 정상 작동 (4 users, 3 roles, 21 permissions)
-- Production 모드에서 모든 성능 목표 97-99% 초과 달성
-- Audit 로깅 273+ entries 기록
-- **Git Worktree 지원**: 모든 git MCP 도구가 worktree 브랜치에서 정상 동작
-- 모든 DoD 충족
+### 핵심 성과
+- **RBAC 시스템**: 4 users, 3 roles, 21 permissions - 완전 동작
+- **성능**: Production 모드 p95 8.87ms (목표 500ms의 98.2% 개선)
+- **감사 로깅**: 318+ entries 기록
+- **Git Worktree**: 모든 git MCP 도구가 worktree 환경에서 완벽 동작
+- **✨ MCP Git Commit**: 컨테이너 내부에서 실제 커밋 생성 성공 (returncode:0)
+
+### 기술 구현 상세
+
+**Worktree 지원 (v4)**:
+- `resolve_git_env()`: .git 파일 읽기 → GIT_DIR/GIT_WORK_TREE 환경변수 설정
+- `resolve_path()`: 전역 파일시스템 접근 지원 (/mnt/host 매핑)
+- 5개 git 도구 모두 적용: git_status, git_diff, git_log, git_add, git_commit
+
+**컨테이너 권한 해결 (v5)**:
+- `user: "1000:1000"`: 호스트 UID/GID와 일치 (Permission denied 해결)
+- `/home/appuser`: git config 저장을 위한 홈 디렉토리 생성
+- `entrypoint.sh`: 런타임 git 사용자 정보 설정
+- `HOME=/home/appuser`: 환경변수로 git config 경로 지정
+
+### DoD 검증
+
+**모든 요구사항 충족**:
+- [x] RBAC 시스템 정상 작동
+- [x] Admin 사용자로 CRITICAL 도구(git_commit) 실행 성공
+- [x] MCP API 인증 (X-User-ID: admin) → HTTP 200
+- [x] Production 모드 벤치마크 측정 완료
+- [x] **Worktree 환경에서 git_commit returncode:0**
+- [x] **실제 커밋 생성 확인** (ac0e332)
+- [x] **git_log로 커밋 히스토리 조회 성공**
+
+모든 DoD 충족 완료
 
 ---
 
