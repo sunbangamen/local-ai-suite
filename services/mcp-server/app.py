@@ -240,23 +240,26 @@ async def list_tools():
         return {"error": f"도구 목록 조회 실패: {str(e)}"}
 
 @app.post("/tools/{tool_name}/call")
-async def call_tool(tool_name: str, arguments: dict = None, user_id: str = "default"):
+async def call_tool(tool_name: str, request: Request, arguments: dict = None, user_id: str = "default"):
     """MCP 도구 실행 (Rate Limiting 및 Access Control 적용)"""
     try:
+        # Extract user_id from header (X-User-ID) or fallback to parameter
+        actual_user_id = request.headers.get("X-User-ID", user_id)
+
         # Rate limiting 체크
         rate_limiter = get_rate_limiter()
-        allowed, error_msg = rate_limiter.check_rate_limit(tool_name, user_id)
+        allowed, error_msg = rate_limiter.check_rate_limit(tool_name, actual_user_id)
         if not allowed:
             return {"error": error_msg, "success": False, "error_type": "rate_limit"}
 
         # Access control 체크
         access_control = get_access_control()
-        allowed, error_msg = access_control.check_access(tool_name, user_id)
+        allowed, error_msg = access_control.check_access(tool_name, actual_user_id)
         if not allowed:
             return {"error": error_msg, "success": False, "error_type": "access_denied"}
 
         # 도구 실행 시작 (동시 실행 제한 강제 적용)
-        allowed, error_msg = rate_limiter.start_execution(tool_name, user_id, access_control)
+        allowed, error_msg = rate_limiter.start_execution(tool_name, actual_user_id, access_control)
         if not allowed:
             return {"error": error_msg, "success": False, "error_type": "concurrent_limit"}
 
@@ -276,7 +279,7 @@ async def call_tool(tool_name: str, arguments: dict = None, user_id: str = "defa
                 return {"result": result, "success": True}
         finally:
             # 도구 실행 종료
-            rate_limiter.end_execution(tool_name, user_id)
+            rate_limiter.end_execution(tool_name, actual_user_id)
 
     except Exception as e:
         return {"error": str(e), "success": False}

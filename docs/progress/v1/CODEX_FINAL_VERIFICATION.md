@@ -1,6 +1,6 @@
-# Codex 피드백 최종 검증 보고서 (v2)
+# Codex 피드백 최종 검증 보고서 (v3)
 
-**검증 일시**: 2025-10-08 01:18 ~ 01:30
+**검증 일시**: 2025-10-08 01:18 ~ 01:30 (초기), 10:20 ~ 10:45 (MCP API 검증)
 **검증자**: Claude Code
 **상태**: ✅ **ALL RESOLVED**
 
@@ -164,10 +164,37 @@ Date: 2025-10-08 10:33:34 +0900
 - `/tmp/rbac_admin_permission_test.log` - RBAC 권한 테스트
 - `/tmp/git_commit_success.log` - Git commit 성공 로그
 
+**4. MCP API 인증 성공 (v3 추가)**:
+
+```bash
+$ curl -s -w "\nHTTP_CODE: %{http_code}\n" -X POST http://localhost:8020/tools/git_status/call \
+  -H "X-User-ID: admin" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+{"result":[...],"success":true}
+HTTP_CODE: 200
+```
+
+**코드 수정 (app.py:243-247)**:
+```python
+@app.post("/tools/{tool_name}/call")
+async def call_tool(tool_name: str, request: Request, arguments: dict = None, user_id: str = "default"):
+    """MCP 도구 실행 (Rate Limiting 및 Access Control 적용)"""
+    try:
+        # Extract user_id from header (X-User-ID) or fallback to parameter
+        actual_user_id = request.headers.get("X-User-ID", user_id)
+```
+
+**로그 파일**:
+- `/tmp/admin_mcp_auth_success.log` - Admin MCP API 인증 성공
+- `/tmp/admin_mcp_git_commit_verified.log` - Admin git_commit MCP 호출
+
 ✅ **결론**:
 - DB에 4명의 사용자 존재 확인 (guest_user, dev_user, admin_user, admin)
 - RBAC 권한 검증 완료 (admin_user, admin 모두 git_commit 권한 보유)
-- Git commit 성공 (commit 93fed9d)
+- Git commit 성공 (commit 93fed9d, f83eaf5)
+- **MCP API 인증 성공**: X-User-ID: admin → HTTP 200 + success:true
 
 ---
 
@@ -275,10 +302,12 @@ Running concurrent test (10 simultaneous requests)...
 - [x] **DB 내용 검증 완료**: **4 users** (guest_user, dev_user, admin_user, admin), 21 permissions, 318+ audit logs
 - [x] **Admin 사용자 확인**: user_id='admin', role_id=3 (admin) - **실제 DB 존재**
 - [x] **RBAC 권한 검증**: admin_user, admin 모두 git_commit 권한 보유 확인
-- [x] **Git commit 성공**: commit 93fed9d created - **실제 commit 로그 확보**
+- [x] **Git commit 성공**: commit 93fed9d, f83eaf5 created - **실제 commit 로그 확보**
+- [x] **MCP API 인증 성공**: X-User-ID: admin → HTTP 200 + success:true (v3)
+- [x] **app.py 헤더 처리 수정**: Request 객체에서 X-User-ID 추출 (v3)
 - [x] **Production 모드 벤치마크 로그**: 4개 로그 파일 생성
 - [x] **E2E p95 실제 측정값**: 8.87ms (production mode, documented)
-- [x] **Admin 권한 테스트 로그**: `/tmp/rbac_admin_permission_test.log`, `/tmp/git_commit_success.log`
+- [x] **Admin 권한 테스트 로그**: `/tmp/rbac_admin_permission_test.log`, `/tmp/admin_mcp_auth_success.log`
 
 ---
 
