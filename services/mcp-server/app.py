@@ -90,14 +90,64 @@ CODE_MODEL_NAME = os.getenv("API_GATEWAY_CODE_MODEL", "code-7b")
 
 def resolve_path(path: str, working_dir: Optional[str] = None) -> Path:
     """
-    DEPRECATED: Use secure_resolve_path from safe_api module instead
-    This function is kept for backward compatibility but delegates to secure implementation
+    Resolve file path, supporting both project-relative and global filesystem paths
+    Handles host path mapping for container environment (/mnt/host prefix)
     """
+    # Try secure path resolution first for workspace paths
     try:
         return secure_resolve_path(path, working_dir)
-    except SecurityError as e:
-        # For backward compatibility, convert SecurityError to ValueError
-        raise ValueError(str(e))
+    except SecurityError:
+        pass  # Fall through to global filesystem handling
+
+    # Handle global filesystem paths (outside workspace)
+    if working_dir:
+        working_path = Path(working_dir)
+
+        # Convert host absolute paths to container paths
+        if working_path.is_absolute() and not working_path.exists():
+            working_path = Path('/mnt/host') / working_path.relative_to('/')
+
+        if path.startswith('/'):
+            # Absolute path
+            target_path = Path(path)
+            if not target_path.exists():
+                target_path = Path('/mnt/host') / target_path.relative_to('/')
+            return target_path
+        else:
+            # Relative path
+            return working_path / path
+    else:
+        # No working_dir specified, use PROJECT_ROOT
+        return Path(PROJECT_ROOT) / path
+
+def resolve_git_env(work_tree_path: str) -> dict:
+    """
+    Resolve git environment for worktree support
+    Returns git environment variables (GIT_DIR, GIT_WORK_TREE) for subprocess
+    """
+    work_tree = Path(work_tree_path)
+    git_file = work_tree / ".git"
+
+    # Check if .git is a file (worktree) or directory (normal repo)
+    if git_file.is_file():
+        # Read gitdir path from .git file
+        gitdir_content = git_file.read_text().strip()
+        if gitdir_content.startswith("gitdir:"):
+            gitdir_path = gitdir_content.split(":", 1)[1].strip()
+            gitdir_path = Path(gitdir_path)
+
+            # Convert to container path if needed
+            if gitdir_path.is_absolute() and not gitdir_path.exists():
+                # Try /mnt/host prefix for container
+                gitdir_path = Path("/mnt/host") / gitdir_path.relative_to("/")
+
+            return {
+                "GIT_DIR": str(gitdir_path),
+                "GIT_WORK_TREE": str(work_tree)
+            }
+
+    # Normal git repository or .git doesn't exist
+    return {}
 
 # MCP 서버 인스턴스
 mcp = FastMCP("Local AI MCP Server")
@@ -591,13 +641,18 @@ async def git_status(path: str = ".", working_dir: Optional[str] = None) -> Exec
         git_cwd = PROJECT_ROOT
 
     try:
+        # Resolve git environment for worktree support
+        git_env = resolve_git_env(git_cwd)
+        proc_env = {**os.environ, **git_env} if git_env else None
+
         # 현재 디렉토리의 Git 저장소 자동 감지
         proc = await asyncio.create_subprocess_exec(
             "git",
             "status", "--porcelain",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=git_cwd
+            cwd=git_cwd,
+            env=proc_env
         )
         stdout, stderr = await proc.communicate()
 
@@ -650,6 +705,10 @@ async def git_diff(
         ]
 
     try:
+        # Resolve git environment for worktree support
+        git_env = resolve_git_env(git_cwd)
+        proc_env = {**os.environ, **git_env} if git_env else None
+
         if staged:
             cmd_args.append("--cached")
 
@@ -661,6 +720,7 @@ async def git_diff(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=git_cwd,
+            env=proc_env
         )
         stdout, stderr = await proc.communicate()
 
@@ -703,6 +763,10 @@ async def git_log(max_count: int = 10, oneline: bool = True, working_dir: Option
         git_cwd = PROJECT_ROOT
 
     try:
+        # Resolve git environment for worktree support
+        git_env = resolve_git_env(git_cwd)
+        proc_env = {**os.environ, **git_env} if git_env else None
+
         cmd_args = [
             "git",
             "log",
@@ -716,7 +780,8 @@ async def git_log(max_count: int = 10, oneline: bool = True, working_dir: Option
             *cmd_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=git_cwd
+            cwd=git_cwd,
+            env=proc_env
         )
         stdout, stderr = await proc.communicate()
 
@@ -759,6 +824,10 @@ async def git_add(file_paths: str, working_dir: Optional[str] = None) -> Executi
         git_cwd = PROJECT_ROOT
 
     try:
+        # Resolve git environment for worktree support
+        git_env = resolve_git_env(git_cwd)
+        proc_env = {**os.environ, **git_env} if git_env else None
+
         # 여러 파일 지원을 위해 공백으로 분리
         files = file_paths.split() if file_paths.strip() else ["."]
 
@@ -771,7 +840,8 @@ async def git_add(file_paths: str, working_dir: Optional[str] = None) -> Executi
             *cmd_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=git_cwd
+            cwd=git_cwd,
+            env=proc_env
         )
         stdout, stderr = await proc.communicate()
 
@@ -802,7 +872,7 @@ async def git_add(file_paths: str, working_dir: Optional[str] = None) -> Executi
 
 @mcp.tool()
 async def git_commit(message: str, add_all: bool = False, working_dir: Optional[str] = None) -> ExecutionResult:
-    """Git 커밋 생성 (전역 Git 지원)"""
+    """Git 커밋 생성 (전역 Git 지원, Worktree 지원)"""
     # working_dir가 제공되면 해당 디렉토리 사용
     if working_dir:
         git_cwd = str(resolve_path(".", working_dir))
@@ -825,6 +895,10 @@ async def git_commit(message: str, add_all: bool = False, working_dir: Optional[
             if not add_result.success:
                 return add_result
 
+        # Resolve git environment for worktree support
+        git_env = resolve_git_env(git_cwd)
+        proc_env = {**os.environ, **git_env} if git_env else None
+
         cmd_args = [
             "git",
             "commit",
@@ -835,7 +909,8 @@ async def git_commit(message: str, add_all: bool = False, working_dir: Optional[
             *cmd_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=git_cwd
+            cwd=git_cwd,
+            env=proc_env
         )
         stdout, stderr = await proc.communicate()
 
