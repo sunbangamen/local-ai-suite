@@ -1275,6 +1275,8 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
             )
 
         # 현재 로드된 모델 확인
+        # NOTE: Phase 3에서는 단일 'inference' 컨테이너 사용
+        # Phase 2 이중화 구조(inference-chat/inference-code)와 다름
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.get("http://inference:8001/v1/models", timeout=10)
@@ -1295,7 +1297,8 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
                 print(f"현재 모델 확인 실패: {e}")
 
         # Docker 컨테이너 재시작으로 모델 교체
-        # inference 컨테이너의 환경변수를 변경하고 재시작
+        # NOTE: Phase 3 전용 기능 - 단일 'inference' 컨테이너 사용
+        # Phase 2에서는 이중화(inference-chat/inference-code)로 모델 스위치 불필요
         switch_command = [
             'docker', 'compose', '-f', '/mnt/workspace/docker/compose.p3.yml',
             'stop', 'inference'
@@ -1367,7 +1370,12 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
 
 @mcp.tool()
 async def get_current_model() -> Dict[str, Any]:
-    """현재 로드된 모델 정보를 조회합니다."""
+    """
+    현재 로드된 모델 정보를 조회합니다.
+
+    NOTE: Phase 3 전용 - 단일 'inference' 컨테이너 조회
+    Phase 2에서는 inference-chat:8001, inference-code:8004로 분리됨
+    """
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get("http://inference:8001/v1/models", timeout=10)

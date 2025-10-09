@@ -4,7 +4,7 @@
 **제목**: [Enhancement] Service Reliability 개선 - LLM 이중화 및 자동 복구
 **완료일**: 2025-10-09
 **소요 시간**: 1일 (집중 작업)
-**상태**: ✅ **구현 완료** (Phase 1-4 완료, Phase 5 테스트 대기)
+**상태**: ⚠️ **코드 구현 완료, 통합 테스트 대기 중** (Phase 1-4 완료, Phase 5 미완료)
 
 ---
 
@@ -66,7 +66,10 @@ async def health():
   - `services/rag/requirements.txt`에 tenacity>=8.2.3 추가
   - `_upsert_points()`, `_search()` 함수에 @retry 데코레이터 적용
 - ✅ RAG 에러 응답 개선 (503 + Retry-After 헤더)
+  - `services/rag/app.py:372-377` 503 응답 시 `Retry-After: 30` 헤더 추가
 - ✅ Qdrant 재시도 환경변수 추가 (QDRANT_MAX_RETRIES, QDRANT_RETRY_MIN_WAIT, QDRANT_RETRY_MAX_WAIT)
+- ✅ MCP 서버 Phase 2/3 구분 주석 추가
+  - `services/mcp-server/app.py:1278,1300,1376` Phase 3 전용 기능임을 명시
 
 **재시도 설정**:
 ```python
@@ -162,30 +165,35 @@ $ docker compose -f docker/compose.p2.yml config > /dev/null
 
 ## 📝 남은 작업 (Phase 5 - 통합 테스트)
 
-### 실제 배포 및 테스트 필요 ⏳
+### ⚠️ 실제 배포 및 테스트 필요 (미완료)
 
-1. **Phase 2 실제 기동 테스트**
+**중요**: 아래 테스트들은 **아직 수행되지 않았습니다**. 코드 구현만 완료된 상태입니다.
+
+1. **Phase 2 실제 기동 테스트** ⏳
+   - [ ] **선행 조건**: `Qwen2.5-3B-Instruct-Q4_K_M.gguf` 모델 파일 다운로드 필요
    - [ ] `docker compose -f docker/compose.p2.yml up -d` 실행
    - [ ] 모든 컨테이너 healthy 확인
    - [ ] GPU 메모리 사용량 확인 (nvidia-smi)
-   - [ ] 3B 모델 파일 존재 여부 확인
+   - [ ] 예상 VRAM: ~5.2GB (3B 2.2GB + 7B 2.5GB + 시스템 0.5GB)
 
-2. **Failover 시나리오 테스트**
-   - [ ] inference-chat 강제 종료
-   - [ ] API Gateway 로그에서 failover 확인
-   - [ ] inference-code로 트래픽 전환 확인
-   - [ ] 30초 이내 자동 복구 확인
+2. **Failover 시나리오 테스트** ⏳
+   - [ ] inference-chat 강제 종료 (`docker stop inference-chat`)
+   - [ ] API Gateway 로그에서 failover 확인 (`docker logs api-gateway --tail 50`)
+   - [ ] inference-code로 트래픽 전환 확인 (LiteLLM priority=2)
+   - [ ] 30초 이내 자동 복구 확인 (재시도 3회 × 10초)
+   - [ ] **예상 결과**: Chat 요청이 Code 서버로 자동 전환
 
-3. **의존성 복구 테스트**
-   - [ ] Qdrant 재시작
-   - [ ] RAG 재시도 로그 확인 (tenacity)
+3. **의존성 복구 테스트** ⏳
+   - [ ] Qdrant 재시작 (`docker restart qdrant`)
+   - [ ] RAG 재시도 로그 확인 (tenacity exponential backoff)
    - [ ] 5분 이내 정상 동작 재개 확인
+   - [ ] RAG `/health` 엔드포인트에서 503 → 200 전환 확인
 
-4. **부하 테스트**
-   - [ ] 동시 10개 Chat 요청
-   - [ ] 동시 10개 Code 요청
-   - [ ] GPU 메모리 안정성 확인
-   - [ ] 응답 시간 측정
+4. **부하 테스트** ⏳
+   - [ ] 동시 10개 Chat 요청 (inference-chat 부하 테스트)
+   - [ ] 동시 10개 Code 요청 (inference-code 부하 테스트)
+   - [ ] GPU 메모리 안정성 확인 (OOM 미발생)
+   - [ ] 응답 시간 측정 (베이스라인 대비 성능 저하 확인)
 
 ---
 
@@ -204,10 +212,13 @@ CHAT_MODEL=Qwen2.5-7B-Instruct-Q4_K_M.gguf
 CODE_N_GPU_LAYERS=10  # Code 모델 GPU 레이어 더 감소
 ```
 
-### 2. Phase 3 MCP 컨테이너 이름 참조
+### 2. Phase 3 MCP 컨테이너 이름 참조 ✅ (주석 추가로 해결)
 **문제**: `services/mcp-server/app.py`에서 `inference` 컨테이너 하드코딩
-**영향**: Phase 3 모델 스위치 기능 미동작 (Phase 2에는 영향 없음)
-**해결**: Phase 3 배포 시 수정 필요
+**영향**: Phase 3 모델 스위치 기능 전용 (Phase 2에는 영향 없음)
+**해결**: ✅ Phase 2/3 구분 주석 추가 완료
+- Phase 3는 단일 `inference` 컨테이너 사용 (현재 코드 정상)
+- Phase 2는 이중화 구조로 모델 스위치 불필요
+- 향후 Phase 2용 MCP는 별도 구현 필요
 
 ### 3. LiteLLM priority 기능 동작 검증 필요
 **문제**: LiteLLM `priority` 파라미터가 모든 버전에서 지원되지 않을 수 있음
@@ -282,27 +293,30 @@ CODE_N_GPU_LAYERS=10  # Code 모델 GPU 레이어 더 감소
 
 ## ✅ 완료 기준 (DoD) 달성 현황
 
-### 코드 구현 (100% 완료)
+### 코드 구현 (100% 완료) ✅
 - ✅ `compose.p2.yml` 이중화 구조 적용
 - ✅ `config.p2.yaml` 페일오버 라우터 구성
 - ✅ `.env.example` 타임아웃 환경변수 추가
 - ✅ Embedding/Qdrant healthcheck 추가
-- ✅ RAG `/health` 엔드포인트 강화
+- ✅ RAG `/health` 엔드포인트 강화 (503 + Retry-After 헤더)
 - ✅ `depends_on: service_healthy` 조건 적용
 - ✅ RAG Qdrant 호출 재시도 로직 (tenacity)
+- ✅ MCP Phase 2/3 구분 주석 추가
 
-### 문서화 (100% 완료)
-- ✅ 아키텍처 비교 문서
-- ✅ GPU 메모리 검증 문서
-- ✅ 헬스체크 스펙 문서
-- ✅ 운영 가이드 (`SERVICE_RELIABILITY.md`)
-- ✅ 구현 완료 보고서 (본 문서)
+### 문서화 (100% 완료) ✅
+- ✅ 아키텍처 비교 문서 (PHASE2_VS_PHASE3_COMPARISON.md)
+- ✅ GPU 메모리 검증 문서 (GPU_MEMORY_VERIFICATION.md)
+- ✅ 헬스체크 스펙 문서 (HEALTHCHECK_SPECIFICATION.md)
+- ✅ 운영 가이드 (SERVICE_RELIABILITY.md, 500줄)
+- ✅ 구현 계획서 (ri_7.md)
+- ✅ 구현 완료 보고서 (fb_7.md, 본 문서)
 
-### 테스트 (0% - 실제 배포 대기 중)
-- ⏳ Failover 테스트 (inference-chat 장애 시나리오)
-- ⏳ 의존성 복구 테스트 (Qdrant 재시작)
-- ⏳ 타임아웃 시나리오 테스트
-- ⏳ GPU 메모리 실측
+### 테스트 (0% - 실제 배포 대기 중) ⏳
+- ⏳ **미완료**: Failover 테스트 (inference-chat 장애 시나리오)
+- ⏳ **미완료**: 의존성 복구 테스트 (Qdrant 재시작)
+- ⏳ **미완료**: 타임아웃 시나리오 테스트
+- ⏳ **미완료**: GPU 메모리 실측 (예상: 5.2GB)
+- ⏳ **차단 요인**: Qwen2.5-3B 모델 파일 미존재
 
 ---
 
@@ -362,26 +376,37 @@ CODE_N_GPU_LAYERS=10  # Code 모델 GPU 레이어 더 감소
 
 ## 🎉 결론
 
-Issue #14 "Service Reliability 개선"의 **구현이 완료**되었습니다.
+Issue #14 "Service Reliability 개선"의 **코드 구현이 완료**되었습니다.
 
-**주요 성과**:
-1. ✅ SPOF 제거 (LLM 서버 이중화)
-2. ✅ GPU 메모리 최적화 (3B + 7B = 5.2GB)
-3. ✅ 자동 재시도 메커니즘 (Qdrant failover)
-4. ✅ 포괄적인 운영 문서 작성
+### 주요 성과 ✅
+1. ✅ **SPOF 제거**: LLM 서버 이중화 구조 구현
+2. ✅ **GPU 메모리 최적화**: 3B + 7B 구성 (예상 5.2GB)
+3. ✅ **자동 재시도**: Qdrant failover 메커니즘 구현
+4. ✅ **포괄적 문서화**: 1,500줄 운영/아키텍처 가이드
 
-**남은 과제**:
-- ⏳ 실제 배포 및 통합 테스트
-- ⏳ 3B 모델 파일 다운로드
-- ⏳ Failover/복구 시간 실측
+### 남은 과제 ⏳
+**중요**: 아래 테스트들은 **미완료 상태**입니다.
 
-**권장 사항**:
-1. 3B 모델 다운로드 후 Phase 2 배포
-2. 1주일 운영 후 안정성 평가
-3. 평가 완료 시 Phase 3 마이그레이션 검토
+1. ⏳ **선행 조건**: Qwen2.5-3B-Instruct-Q4_K_M.gguf 모델 다운로드
+2. ⏳ **실제 배포**: Phase 2 서비스 기동 및 healthcheck 검증
+3. ⏳ **Failover 테스트**: inference-chat 장애 시 자동 전환 확인
+4. ⏳ **GPU 메모리 실측**: nvidia-smi로 실제 사용량 측정
+5. ⏳ **성능 측정**: Failover 시간, 재연결 시간, 응답 시간 측정
+
+### 구현 완료도
+- **코드**: 100% ✅
+- **문서**: 100% ✅
+- **테스트**: 0% ⏳
+
+### 권장 사항
+1. **즉시**: 3B 모델 다운로드 (`/mnt/e/ai-models/`)
+2. **1일차**: Phase 2 배포 및 기본 테스트
+3. **1주차**: Failover/부하 테스트 및 안정성 평가
+4. **평가 후**: Phase 3 마이그레이션 또는 프로덕션 적용 검토
 
 ---
 
 **작성자**: Claude Code
+**최종 수정**: 2025-10-09 (불일치 수정)
 **검토자**: 시스템 아키텍트
-**승인 대기**: 통합 테스트 완료 후 최종 승인
+**승인 상태**: ⏳ 통합 테스트 완료 대기 중

@@ -368,9 +368,13 @@ async def health(llm: bool = Query(False, description="LLM까지 점검하려면
         },
     }
 
-    # 의존성 실패 시 503 Service Unavailable 반환
+    # 의존성 실패 시 503 Service Unavailable 반환 (Retry-After 헤더 포함)
     if status == "degraded":
-        return JSONResponse(status_code=503, content=response_body)
+        return JSONResponse(
+            status_code=503,
+            content=response_body,
+            headers={"Retry-After": "30"}  # 30초 후 재시도 권장
+        )
 
     return response_body
 
