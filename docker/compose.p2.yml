@@ -1,5 +1,6 @@
 services:
-  inference:
+  # Chat 모델 서버 (일반 대화용 - 3B 모델)
+  inference-chat:
     image: ghcr.io/ggerganov/llama.cpp:server
     restart: unless-stopped
     ports: ["${INFERENCE_PORT:-8001}:8001"]
@@ -15,17 +16,17 @@ services:
       resources:
         limits:
           cpus: '4.0'
-          memory: 8G
+          memory: 6G
         reservations:
           devices:
             - capabilities: ["gpu"]
     command: >
       --host 0.0.0.0 --port 8001
-      --model /models/${CHAT_MODEL:-Qwen2.5-7B-Instruct-Q4_K_M.gguf}
+      --model /models/${CHAT_MODEL:-Qwen2.5-3B-Instruct-Q4_K_M.gguf}
       -t 4
       -c 1024
       -b 128
-      --n-gpu-layers ${LLAMA_N_GPU_LAYERS:-999}
+      --n-gpu-layers ${CHAT_N_GPU_LAYERS:-999}
       --parallel ${LLAMA_PARALLEL:-1}
       --cont-batching
       --temp ${LLAMA_TEMP:-0.3}
@@ -36,6 +37,47 @@ services:
       interval: 20s
       timeout: 5s
       retries: 5
+      start_period: 30s
+
+  # Code 모델 서버 (프로그래밍 전용 - 7B 모델)
+  inference-code:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    restart: unless-stopped
+    ports: ["8004:8001"]
+    volumes:
+      - type: bind
+        source: ${MODELS_DIR:-/mnt/e/ai-models}
+        target: /models
+        read_only: true
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 6G
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+    command: >
+      --host 0.0.0.0 --port 8001
+      --model /models/${CODE_MODEL:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}
+      -t 4
+      -c 1024
+      -b 128
+      --n-gpu-layers ${CODE_N_GPU_LAYERS:-20}
+      --parallel ${LLAMA_PARALLEL:-1}
+      --cont-batching
+      --temp ${LLAMA_TEMP:-0.3}
+      --top-p ${LLAMA_TOP_P:-0.9}
+      --repeat-penalty ${LLAMA_REPEAT_PENALTY:-1.05}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   api-gateway:
     image: ghcr.io/berriai/litellm:main-latest
@@ -47,9 +89,12 @@ services:
     command: ["--config", "/app/config.yaml", "--port", "8000", "--host", "0.0.0.0"]
     environment:
       - LITELLM_LOG=warning
-      - TIMEOUT=60
+      - TIMEOUT=${LLM_REQUEST_TIMEOUT:-60}
     depends_on:
-      - inference
+      inference-chat:
+        condition: service_healthy
+      inference-code:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -68,6 +113,7 @@ services:
     environment:
       - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
       - EMBEDDING_URL=${EMBEDDING_URL:-http://embedding:8003}
+      - API_GATEWAY_URL=${API_GATEWAY_URL:-http://api-gateway:8000}
       # LLM 호출 제한(속도/안정화)
       - RAG_LLM_TIMEOUT=${RAG_LLM_TIMEOUT:-120}
       - RAG_LLM_MAX_TOKENS=${RAG_LLM_MAX_TOKENS:-256}
@@ -78,10 +124,19 @@ services:
       - RAG_CHUNK_OVERLAP=${RAG_CHUNK_OVERLAP:-100}
       - API_GATEWAY_CHAT_MODEL=${API_GATEWAY_CHAT_MODEL:-chat-7b}
       - API_GATEWAY_CODE_MODEL=${API_GATEWAY_CODE_MODEL:-code-7b}
+      # Qdrant 재시도 설정
+      - QDRANT_MAX_RETRIES=${QDRANT_MAX_RETRIES:-3}
+      - QDRANT_RETRY_MIN_WAIT=${QDRANT_RETRY_MIN_WAIT:-2}
+      - QDRANT_RETRY_MAX_WAIT=${QDRANT_RETRY_MAX_WAIT:-10}
+      - QDRANT_TIMEOUT=${QDRANT_TIMEOUT:-30}
+      - EMBEDDING_TIMEOUT=${EMBEDDING_TIMEOUT:-30}
     depends_on:
-      - qdrant
-      - embedding
-      - api-gateway
+      qdrant:
+        condition: service_healthy
+      embedding:
+        condition: service_healthy
+      api-gateway:
+        condition: service_healthy
 
   embedding:
     build:
@@ -91,6 +146,12 @@ services:
     ports: ["${EMBEDDING_PORT:-8003}:8003"]
     environment:
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -100,6 +161,14 @@ services:
       - "6334:6334"
     volumes:
       - ${DATA_DIR:-/mnt/e/ai-data}/vectors/qdrant:/qdrant/storage
+    healthcheck:
+      # /proc/net/tcp에서 포트 6333(hex:18BD)이 LISTEN 상태인지 확인
+      # start_period를 30초로 설정하여 소켓 생성 대기 시간 확보
+      test: ["CMD-SHELL", "grep -q ':18BD' /proc/net/tcp || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 # No named volumes needed - using external SSD host paths
 # SQLite databases are stored as files in ${DATA_DIR}/sqlite/

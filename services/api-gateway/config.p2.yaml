@@ -1,25 +1,44 @@
-# LiteLLM OpenAI 호환 게이트웨이 설정 (Phase 2: 단일 inference 서버)
+# LiteLLM OpenAI 호환 게이트웨이 설정 (Phase 2: 이중화 inference 서버 + Failover)
 model_list:
-  # 채팅 모델 (일반 대화용) - 같은 서버 사용
+  # 채팅 모델 Primary (inference-chat 3B)
   - model_name: chat-7b
     litellm_params:
       model: openai/chat/completions
-      api_base: http://inference:8001/v1
+      api_base: http://inference-chat:8001/v1
       api_key: sk-noop
       timeout: 60
       stream: true
       max_output_tokens: 512
+      priority: 1
 
-  # 코딩 모델 (프로그래밍 전용) - 같은 서버 사용
+  # 채팅 모델 Fallback (inference-code로 백업)
+  - model_name: chat-7b
+    litellm_params:
+      model: openai/chat/completions
+      api_base: http://inference-code:8001/v1
+      api_key: sk-noop
+      timeout: 60
+      stream: true
+      max_output_tokens: 512
+      priority: 2
+
+  # 코딩 모델 (inference-code 7B)
   - model_name: code-7b
     litellm_params:
       model: openai/chat/completions
-      api_base: http://inference:8001/v1
+      api_base: http://inference-code:8001/v1
       api_key: sk-noop
       timeout: 60
       stream: true
       max_output_tokens: 1024
 
 router:
+  # 페일오버 및 재시도 설정
+  num_retries: 3
+  retry_on_status_codes: [500, 502, 503, 504, 408]
+  retry_strategy: "sequence"  # priority 순서대로 재시도
+  timeout: 60
+
+  # 헬스체크
   health_check:
     enabled: true

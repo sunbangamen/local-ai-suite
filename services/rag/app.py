@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 from prometheus_fastapi_instrumentator import Instrumentator
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from database import db
 
@@ -44,6 +45,11 @@ RAG_LLM_TEMPERATURE = float(os.getenv("RAG_LLM_TEMPERATURE", "0.3"))
 RAG_TOPK = int(os.getenv("RAG_TOPK", "4"))
 RAG_CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "512"))
 RAG_CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "100"))
+
+# Qdrant Retry Configuration (Issue #14)
+QDRANT_MAX_RETRIES = int(os.getenv("QDRANT_MAX_RETRIES", "3"))
+QDRANT_RETRY_MIN_WAIT = int(os.getenv("QDRANT_RETRY_MIN_WAIT", "2"))
+QDRANT_RETRY_MAX_WAIT = int(os.getenv("QDRANT_RETRY_MAX_WAIT", "10"))
 
 DOCUMENTS_DIR = os.getenv("DOCUMENTS_DIR", "./documents")
 COLLECTION_DEFAULT = os.getenv("RAG_DEFAULT_COLLECTION", "myproj")
@@ -204,7 +210,16 @@ def _ensure_collection(collection: str, dim: int):
     )
 
 
+@retry(
+    stop=stop_after_attempt(QDRANT_MAX_RETRIES),
+    wait=wait_exponential(multiplier=1, min=QDRANT_RETRY_MIN_WAIT, max=QDRANT_RETRY_MAX_WAIT),
+    retry=retry_if_exception_type((ConnectionError, TimeoutError, Exception)),
+    reraise=True
+)
 def _upsert_points(collection: str, embeddings: List[List[float]], payloads: List[Dict[str, Any]]):
+    """
+    Qdrant upsert with automatic retry on connection/timeout errors
+    """
     assert qdrant is not None
     points = []
     for idx, (vec, pl) in enumerate(zip(embeddings, payloads)):
@@ -212,7 +227,16 @@ def _upsert_points(collection: str, embeddings: List[List[float]], payloads: Lis
     qdrant.upsert(collection_name=collection, points=points)
 
 
+@retry(
+    stop=stop_after_attempt(QDRANT_MAX_RETRIES),
+    wait=wait_exponential(multiplier=1, min=QDRANT_RETRY_MIN_WAIT, max=QDRANT_RETRY_MAX_WAIT),
+    retry=retry_if_exception_type((ConnectionError, TimeoutError, Exception)),
+    reraise=True
+)
 def _search(collection: str, query_vec: List[float], topk: int) -> List[Dict[str, Any]]:
+    """
+    Qdrant search with automatic retry on connection/timeout errors
+    """
     assert qdrant is not None
     res = qdrant.search(
         collection_name=collection,
@@ -266,40 +290,75 @@ async def on_startup():
 # -------- Routes --------
 @app.get("/health")
 async def health(llm: bool = Query(False, description="LLM까지 점검하려면 true")):
+    """
+    RAG 서비스 헬스체크 (의존성 포함)
+    - Qdrant, Embedding, API Gateway 연결 상태 확인
+    - 의존성 실패 시 503 반환
+    """
+    from fastapi.responses import JSONResponse
+
     # Qdrant 체크
     q_ok = False
+    q_error = None
     try:
         assert qdrant is not None
         _ = qdrant.get_collections()
         q_ok = True
-    except Exception:
+    except Exception as e:
         q_ok = False
+        q_error = str(e)[:100]
 
     # 임베딩 체크
     e_ok = False
+    e_error = None
     dim = None
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             dim = await _probe_embedding_dim(client)
             e_ok = dim > 0
-    except Exception:
+    except Exception as e:
         e_ok = False
+        e_error = str(e)[:100]
+
+    # API Gateway 체크
+    gw_ok = False
+    gw_error = None
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{RAG_LLM_API_BASE.rstrip('/v1')}/health")
+            gw_ok = resp.status_code == 200
+    except Exception as e:
+        gw_ok = False
+        gw_error = str(e)[:100]
 
     # LLM 체크(옵션)
     l_ok = None
+    l_error = None
     if llm:
         try:
             async with httpx.AsyncClient() as client:
                 ans, _ = await _llm_answer(client, "You are a health checker.", "Reply with 'ok'.")
                 l_ok = ans.strip().lower().startswith("ok")
-        except Exception:
+        except Exception as e:
             l_ok = False
+            l_error = str(e)[:100]
 
-    return {
-        "qdrant": q_ok,
-        "embedding": e_ok,
-        "embed_dim": dim,
-        "llm": l_ok,
+    # 헬스 상태 판정
+    status = "healthy"
+    if not q_ok or not e_ok or not gw_ok:
+        status = "degraded"
+    if llm and l_ok is False:
+        status = "degraded"
+
+    response_body = {
+        "status": status,
+        "service": "rag",
+        "dependencies": {
+            "qdrant": {"status": "healthy" if q_ok else "unhealthy", "error": q_error},
+            "embedding": {"status": "healthy" if e_ok else "unhealthy", "dim": dim, "error": e_error},
+            "api_gateway": {"status": "healthy" if gw_ok else "unhealthy", "error": gw_error},
+            "llm": {"status": "healthy" if l_ok else ("unhealthy" if l_ok is False else "not_checked"), "error": l_error},
+        },
         "config": {
             "RAG_TOPK": RAG_TOPK,
             "RAG_CHUNK_SIZE": RAG_CHUNK_SIZE,
@@ -308,6 +367,12 @@ async def health(llm: bool = Query(False, description="LLM까지 점검하려면
             "RAG_LLM_MAX_TOKENS": RAG_LLM_MAX_TOKENS,
         },
     }
+
+    # 의존성 실패 시 503 Service Unavailable 반환
+    if status == "degraded":
+        return JSONResponse(status_code=503, content=response_body)
+
+    return response_body
 
 
 @app.post("/index", response_model=IndexResponse)
