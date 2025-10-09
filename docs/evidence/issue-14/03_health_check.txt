@@ -1,0 +1,19 @@
+=== Phase 2 헬스체크 테스트 ===
+
+[inference-chat]
+{"status":"ok"} ✅ healthy
+
+[inference-code]
+{"status":"ok"} ✅ healthy
+
+[api-gateway]
+{"healthy_endpoints":[{"api_base":"http://inference-chat:8001/v1","timeout":60.0,"use_in_pass_through":false,"use_litellm_proxy":false,"merge_reasoning_content_in_choices":false,"model":"openai/chat/completions","stream":true,"max_output_tokens":512,"priority":1,"litellm_metadata":{"tags":["litellm-internal-health-check"],"user_api_key_hash":"litellm-internal-health-check","user_api_key_alias":"litellm-internal-health-check","user_api_key_spend":0.0,"user_api_key_max_budget":null,"user_api_key_team_id":"litellm-internal-health-check","user_api_key_user_id":null,"user_api_key_org_id":null,"user_api_key_team_alias":"litellm-internal-health-check","user_api_key_end_user_id":null,"user_api_key_user_email":null,"user_api_key_request_route":null,"user_api_key_budget_reset_at":null,"user_api_key":"litellm-internal-health-check","user_api_end_user_max_budget":null},"cache":{"no-cache":true}},{"api_base":"http://inference-code:8001/v1","timeout":60.0,"use_in_pass_through":false,"use_litellm_proxy":false,"merge_reasoning_content_in_choices":false,"model":"openai/chat/completions","stream":true,"max_output_tokens":512,"priority":2,"litellm_metadata":{"tags":["litellm-internal-health-check"],"user_api_key_hash":"litellm-internal-health-check","user_api_key_alias":"litellm-internal-health-check","user_api_key_spend":0.0,"user_api_key_max_budget":null,"user_api_key_team_id":"litellm-internal-health-check","user_api_key_user_id":null,"user_api_key_org_id":null,"user_api_key_team_alias":"litellm-internal-health-check","user_api_key_end_user_id":null,"user_api_key_user_email":null,"user_api_key_request_route":null,"user_api_key_budget_reset_at":null,"user_api_key":"litellm-internal-health-check","user_api_end_user_max_budget":null},"cache":{"no-cache":true}},{"api_base":"http://inference-code:8001/v1","timeout":60.0,"use_in_pass_through":false,"use_litellm_proxy":false,"merge_reasoning_content_in_choices":false,"model":"openai/chat/completions","stream":true,"max_output_tokens":1024,"litellm_metadata":{"tags":["litellm-internal-health-check"],"user_api_key_hash":"litellm-internal-health-check","user_api_key_alias":"litellm-internal-health-check","user_api_key_spend":0.0,"user_api_key_max_budget":null,"user_api_key_team_id":"litellm-internal-health-check","user_api_key_user_id":null,"user_api_key_org_id":null,"user_api_key_team_alias":"litellm-internal-health-check","user_api_key_end_user_id":null,"user_api_key_user_email":null,"user_api_key_request_route":null,"user_api_key_budget_reset_at":null,"user_api_key":"litellm-internal-health-check","user_api_end_user_max_budget":null},"cache":{"no-cache":true}}],"unhealthy_endpoints":[],"healthy_count":3,"unhealthy_count":0} ✅ healthy
+
+[rag]
+{"qdrant":true,"embedding":true,"embed_dim":384,"llm":null,"config":{"RAG_TOPK":4,"RAG_CHUNK_SIZE":512,"RAG_CHUNK_OVERLAP":100,"RAG_LLM_TIMEOUT":120.0,"RAG_LLM_MAX_TOKENS":256}} ✅ healthy
+
+[embedding]
+{"ok":true,"model":"BAAI/bge-small-en-v1.5","dim":384,"batch_size":64,"normalize":true,"threads":0} ✅ healthy
+
+[qdrant]
+{"result":{"collections":[{"name":"memory_13d57514"},{"name":"memory_64556d5e"},{"name":"memory_f623612b"},{"name":"memory_76daf135"},{"name":"memory_5308fcdc"},{"name":"myproj"},{"name":"default"},{"name":"memory_d0567dcb"},{"name":"memory_default-"}]},"status":"ok","time":0.000016476} ✅ healthy

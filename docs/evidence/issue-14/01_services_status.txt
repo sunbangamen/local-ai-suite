@@ -1,0 +1,7 @@
+NAME                      IMAGE                                     COMMAND                  SERVICE          CREATED       STATUS                 PORTS
+docker-api-gateway-1      ghcr.io/berriai/litellm:main-latest       "docker/prod_entrypo…"   api-gateway      2 hours ago   Up 2 hours (healthy)   0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+docker-embedding-1        docker-embedding                          "uvicorn app:app --h…"   embedding        2 hours ago   Up 2 hours (healthy)   0.0.0.0:8003->8003/tcp, [::]:8003->8003/tcp
+docker-inference-chat-1   ghcr.io/ggerganov/llama.cpp:server-cuda   "/app/llama-server -…"   inference-chat   2 hours ago   Up 2 hours (healthy)   0.0.0.0:8001->8001/tcp, [::]:8001->8001/tcp
+docker-inference-code-1   ghcr.io/ggerganov/llama.cpp:server-cuda   "/app/llama-server -…"   inference-code   2 hours ago   Up 2 hours (healthy)   0.0.0.0:8004->8001/tcp, [::]:8004->8001/tcp
+docker-qdrant-1           qdrant/qdrant:latest                      "./entrypoint.sh"        qdrant           2 hours ago   Up 2 hours (healthy)   0.0.0.0:6333-6334->6333-6334/tcp, [::]:6333-6334->6333-6334/tcp
+docker-rag-1              docker-rag                                "uvicorn app:app --h…"   rag              2 hours ago   Up 2 hours (healthy)   0.0.0.0:8002->8002/tcp, [::]:8002->8002/tcp

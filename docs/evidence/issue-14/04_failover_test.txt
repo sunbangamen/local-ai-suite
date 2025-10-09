@@ -1,0 +1,36 @@
+=== LiteLLM Failover 테스트 ===
+
+[1. 정상 상태 테스트]
+요청 시각: 2025-10-09 15:31:49
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0{"id":"chatcmpl-aFnWD5rdjAQ6JpdQb38JptViYC0jNeAZ","created":1759991510,"model":"chat/completions","object":"chat.completion","system_fingerprint":"b5332-7c28a74e","choices":[{"finish_reason":"length","index":0,"message":{"content":"Hello! How can I assist you today? Is","role":"assistant"},"provider_specific_fields":{}}],"usage":{"completion_tokens":10,"prompt_tokens":9,"total_tokens":19},"timings":{"prompt_n":6,"prompt_ms":56.888,"prompt_per_token_ms":9.481333333333334,"prompt_per_second":105.4703979749683100   717  100   627  100    90   1680    241 --:--:-- --:--:-- --:--:--  1917100   717  100   627  100    90   1649    236 --:--:-- --:--:-- --:--:--  1886
+6,"predicted_n":10,"predicted_ms":249.39,"predicted_per_token_ms":24.939,"predicted_per_second":40.09783872649265}}
+HTTP Status: 200
+Time: 0.380053s
+ echo [2. inference-chat 중지] echo 중지 시각: $(date '+%Y-%m-%d %H:%M:%S') docker stop docker-inference-chat-1 sleep 2 docker ps
+
+[2. inference-chat 중지]
+중지 시각: 2025-10-09 15:32:09
+docker-inference-chat-1
+실행 중인 inference 서비스:
+NAMES                     STATUS
+docker-inference-code-1   Up 3 hours (healthy)
+
+[3. Failover 테스트 - inference-code로 자동 전환]
+요청 시각: 2025-10-09 15:32:52
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0 13   716    0     0  100    98      0     85  0:00:01  0:00:01 --:--:--    85{"id":"chatcmpl-OFTk4qblL4W6OfI6QbTMSoIEbOBRIcsM","created":1759991573,"model":"chat/completions","object":"chat.completion","system_fingerprint":"b5332-7c28a74e","choices":[{"finish_reason":"length","index":0,"message":{"content":"I'm sorry, but I'm not sure what","role":"assistant"},"provider_specific_fields":{}}],"usage":{"completion_tokens":10,"prompt_tokens":11,"total_tokens":21},"timings":{"prompt_n":8,"prompt_ms":540.513,"prompt_per_token_ms":67.564125,"prompt_per_second":14.800754098421313,"predicte100   716  100   618  100    98    537     85  0:00:01  0:00:01 --:--:--   622
+d_n":10,"predicted_ms":554.901,"predicted_per_token_ms":55.4901,"predicted_per_second":18.02123261626849}}
+HTTP Status: 200
+Time: 1.150364s
+ echo [4. API Gateway Failover 로그 확인] docker logs docker-api-gateway-1 --since 3m
+
+[5. inference-chat 재시작]
+재시작 시각: 2025-10-09 15:33:26
+docker-inference-chat-1
+대기 중 (30초)...
+NAMES                     STATUS
+docker-inference-chat-1   Up 30 seconds (healthy)
+docker-inference-code-1   Up 3 hours (healthy)
