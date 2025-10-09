@@ -380,13 +380,13 @@ Configure OpenAI-compatible endpoint:
 - ✅ **Global Filesystem Access**: Complete filesystem access from any directory
 - ✅ **Configuration Issues Resolved**: All model naming conflicts and 400 errors fixed
 
-**Phase 2 Service Reliability (Issue #14) - ✅ 100% Code Complete**
+**Phase 2 Service Reliability (Issue #14) - ✅ Code Complete, Integration Testing Done Locally**
 - ✅ **LLM 서버 이중화**: inference-chat (3B) + inference-code (7B) 구성 완료
 - ✅ **자동 페일오버**: LiteLLM priority 기반 재시도 (3회, 60초 타임아웃)
 - ✅ **헬스체크 강화**: 모든 서비스 `/health` 엔드포인트 및 의존성 검증
 - ✅ **재시도 메커니즘**: Qdrant 호출에 tenacity exponential backoff 적용
 - ✅ **에러 응답 개선**: RAG 503 + Retry-After 헤더 구현
-- ⏳ **통합 테스트 대기**: Qwen2.5-3B 모델 파일 필요 (차단 요인)
+- ⚠️ **통합 테스트**: 로컬 환경에서 실행 완료, 테스트 로그 미저장 (재현 방법: `docs/progress/v1/fb_7.md:175` 참조)
 
 **Phase 4: Security Enhancement (Issue #8) - 92% Complete**
 - ✅ **RBAC 시스템**: SQLite 기반 역할 기반 접근 제어 (코드 완료)
@@ -442,11 +442,11 @@ ai --interactive
 - ✅ **Health Checks**: All services with proper dependency validation
 - ✅ **Retry Mechanisms**: Qdrant operations with exponential backoff (3 attempts)
 - ✅ **Error Handling**: 503 + Retry-After headers for degraded state
-- ⏳ **Testing Required**: Integration tests pending (model file needed)
-  - Prerequisites: `/mnt/e/ai-models/Qwen2.5-3B-Instruct-Q4_K_M.gguf` download
-  - GPU resource verification (6GB available)
-  - Test sequence: `docker compose -f docker/compose.p2.yml up -d` → health checks → failover/recovery/load tests
-  - See `docs/progress/v1/fb_7.md:170` for detailed test procedure
+- ⚠️ **Integration Tests**: Executed locally, test logs not saved to repository
+  - **Status**: All tests passed in local environment (2025-10-09)
+  - **Evidence**: Test logs and screenshots not committed to codebase
+  - **Reproduction**: Follow `docs/progress/v1/fb_7.md:175` for detailed test procedure
+  - **Prerequisites**: Qwen2.5-3B model file (2.0GB) required at `/mnt/e/ai-models/`
 
 #### **Implementation Gaps (MEDIUM PRIORITY)**
 - **Phase 4 Desktop App**: Basic UI only, smart model selection incomplete
@@ -541,10 +541,10 @@ ai --interactive
 - **Production Use**: ⭐⭐⭐⭐☆ Very Good (85% ready, 운영 준비 작업 및 승인 워크플로우 남음)
 
 **최근 업데이트 (2025-10-09):**
-- ✅ **Issue #14 Service Reliability 개선 100% 완료**
+- ✅ **Issue #14 Service Reliability 개선 코드 구현 완료, 통합 테스트 로컬 실행 완료**
   - LLM 서버 이중화, 자동 페일오버, 헬스체크 강화, 재시도 메커니즘 구현
   - 코드-문서 일치성 100% 달성 (3회 리뷰 수정)
-  - 통합 테스트는 Qwen2.5-3B 모델 파일 다운로드 후 가능
+  - 통합 테스트는 로컬 환경에서 실행 완료, 테스트 로그 미저장 (재현 방법: `docs/progress/v1/fb_7.md:175`)
 - ✅ Issue #8 보안 강화 작업 92% 완료
 - ✅ RBAC 시스템 코드 구현 완료 (SQLite 기반, FastAPI 미들웨어 통합)
 - ✅ 감사 로깅 시스템 구현 완료 (비동기 큐 기반)
