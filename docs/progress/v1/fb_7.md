@@ -52,13 +52,17 @@ api-gateway:
 
 **RAG 헬스체크 개선**:
 ```python
-# services/rag/app.py:267-351
+# services/rag/app.py:267-379
 @app.get("/health")
 async def health():
     # Qdrant, Embedding, API Gateway 연결 상태 확인
-    # 의존성 실패 시 503 Service Unavailable 반환
+    # 의존성 실패 시 503 Service Unavailable 반환 (Retry-After 헤더 포함)
     if status == "degraded":
-        return JSONResponse(status_code=503, content=response_body)
+        return JSONResponse(
+            status_code=503,
+            content=response_body,
+            headers={"Retry-After": "30"}  # 30초 후 재시도 권장
+        )
 ```
 
 #### Phase 4: 재시도 메커니즘 및 에러 처리 개선 ✅
