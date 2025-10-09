@@ -1247,6 +1247,129 @@ class ModelSwitchResult(BaseModel):
     current_model: str
     switch_time_seconds: Optional[float] = None
 
+async def _detect_phase() -> tuple[bool, str]:
+    """
+    docker compose ps 명령으로 실행 중인 서비스를 확인하여 Phase 판별
+
+    Returns:
+        (is_phase2, compose_file): Phase 2 여부와 compose 파일 경로
+        is_phase2가 None이면 감지 실패
+    """
+    try:
+        # Phase 2 확인 (compose.p2.yml)
+        result_p2 = subprocess.run(
+            ['docker', 'compose', '-f', '/mnt/workspace/docker/compose.p2.yml', 'ps', '--services'],
+            capture_output=True, text=True, cwd='/mnt/workspace'
+        )
+
+        if result_p2.returncode == 0:
+            services = set(result_p2.stdout.strip().split('\n'))
+            # inference-chat와 inference-code가 모두 있으면 Phase 2
+            if 'inference-chat' in services and 'inference-code' in services:
+                return True, 'docker/compose.p2.yml'
+
+        # Phase 3 확인 (compose.p3.yml)
+        result_p3 = subprocess.run(
+            ['docker', 'compose', '-f', '/mnt/workspace/docker/compose.p3.yml', 'ps', '--services'],
+            capture_output=True, text=True, cwd='/mnt/workspace'
+        )
+
+        if result_p3.returncode == 0:
+            services = set(result_p3.stdout.strip().split('\n'))
+            # inference 서비스만 있으면 Phase 3
+            if 'inference' in services:
+                return False, 'docker/compose.p3.yml'
+
+        # 둘 다 없으면 감지 실패
+        return None, None
+
+    except Exception as e:
+        print(f"Phase 감지 중 오류: {e}")
+        return None, None
+
+async def _get_model_info(service_url: str) -> tuple[bool, str]:
+    """
+    서비스의 현재 로드된 모델 정보 조회
+
+    Args:
+        service_url: 서비스 URL (예: http://inference-chat:8001)
+
+    Returns:
+        (success, model_name): 성공 여부와 모델 파일명
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{service_url}/v1/models", timeout=10)
+            if response.status_code == 200:
+                models_data = response.json()
+                if models_data.get('data'):
+                    model_path = models_data['data'][0]['id']
+                    model_name = model_path.split('/')[-1] if '/' in model_path else model_path
+                    return True, model_name
+        return False, "unknown"
+    except Exception as e:
+        print(f"모델 정보 조회 실패 ({service_url}): {e}")
+        return False, "unknown"
+
+async def _restart_service(compose_file: str, service_name: str, env_vars: dict = None) -> tuple[bool, str]:
+    """
+    Docker Compose 서비스 재시작
+
+    Args:
+        compose_file: compose 파일 경로
+        service_name: 서비스 이름
+        env_vars: 환경변수 딕셔너리 (선택)
+
+    Returns:
+        (success, message): 성공 여부와 메시지
+    """
+    try:
+        # 서비스 중지
+        stop_cmd = ['docker', 'compose', '-f', f'/mnt/workspace/{compose_file}', 'stop', service_name]
+        result = subprocess.run(stop_cmd, capture_output=True, text=True, cwd='/mnt/workspace')
+        if result.returncode != 0:
+            return False, f"서비스 중지 실패: {result.stderr}"
+
+        # 환경변수 설정
+        env = os.environ.copy()
+        if env_vars:
+            env.update(env_vars)
+
+        # 서비스 재시작
+        start_cmd = ['docker', 'compose', '-f', f'/mnt/workspace/{compose_file}', 'up', '-d', service_name]
+        result = subprocess.run(start_cmd, capture_output=True, text=True, cwd='/mnt/workspace', env=env)
+        if result.returncode != 0:
+            return False, f"서비스 시작 실패: {result.stderr}"
+
+        return True, "서비스 재시작 성공"
+
+    except Exception as e:
+        return False, f"재시작 중 오류: {e}"
+
+async def _wait_for_health(service_url: str, max_wait: int = 30) -> bool:
+    """
+    서비스 헬스체크 대기
+
+    Args:
+        service_url: 서비스 URL (예: http://inference-chat:8001)
+        max_wait: 최대 대기 시간 (초)
+
+    Returns:
+        bool: 헬스체크 성공 여부
+    """
+    health_url = f"{service_url}/health"
+    for attempt in range(max_wait):
+        await asyncio.sleep(1)
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(health_url, timeout=5)
+                if response.status_code == 200:
+                    print(f"✅ 헬스체크 성공 (시도 {attempt + 1}/{max_wait})")
+                    return True
+        except:
+            continue
+    return False
+
 @mcp.tool()
 async def switch_model(model_type: str) -> ModelSwitchResult:
     """
@@ -1274,92 +1397,153 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
                 current_model="unknown"
             )
 
-        # 현재 로드된 모델 확인
-        # NOTE: Phase 3에서는 단일 'inference' 컨테이너 사용
-        # Phase 2 이중화 구조(inference-chat/inference-code)와 다름
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get("http://inference:8001/v1/models", timeout=10)
-                current_models = response.json()
-                current_model_path = current_models['data'][0]['id'] if current_models['data'] else "unknown"
-                current_model_name = current_model_path.split('/')[-1] if '/' in current_model_path else current_model_path
+        # Phase 감지: docker compose ps 기반으로 실제 실행 중인 서비스 확인
+        # Phase 2: inference-chat + inference-code (이중화)
+        # Phase 3: inference (단일)
+        is_phase2, compose_file = await _detect_phase()
+        if is_phase2 is None:
+            return ModelSwitchResult(
+                success=False,
+                message="Phase 감지 실패: docker compose 서비스 목록을 확인할 수 없습니다.",
+                current_model="unknown"
+            )
 
-                # 이미 원하는 모델이 로드된 경우
-                if target_model == current_model_name:
+        if is_phase2:
+            # Phase 2: 이중화 구조
+            # inference-chat (chat 모델), inference-code (code 모델)
+            service_name = 'inference-chat' if model_type == 'chat' else 'inference-code'
+            service_url = f"http://{service_name}:8001"
+
+            # 1. 현재 모델 확인
+            success, current_model_name = await _get_model_info(service_url)
+            if not success:
+                return ModelSwitchResult(
+                    success=False,
+                    message=f"Phase 2: {service_name} 모델 정보 조회 실패",
+                    current_model="unknown"
+                )
+
+            # 2. 기대하는 모델과 비교
+            # Phase 2에서는 각 서비스가 .env의 환경변수로 지정된 모델을 사용해야 함
+            # CHAT_MODEL 또는 CODE_MODEL 환경변수와 일치하는지 확인
+            expected_model = target_model
+
+            if expected_model.lower() == current_model_name.lower():
+                # 이미 올바른 모델 실행 중
+                end_time = time.time()
+                return ModelSwitchResult(
+                    success=True,
+                    message=f"Phase 2: {model_type} 모델은 {service_name}에서 이미 실행 중입니다 ({current_model_name}).",
+                    current_model=current_model_name,
+                    switch_time_seconds=round(time.time() - start_time, 1)
+                )
+            else:
+                # 모델이 다르면 서비스 재시작 필요
+                print(f"⚠️  Phase 2: {service_name}의 모델이 기대값과 다릅니다.")
+                print(f"   현재: {current_model_name}, 기대: {expected_model}")
+                print(f"🔄 {service_name} 재시작 중...")
+
+                # 환경변수 설정 (필요시)
+                env_vars = {}
+                if model_type == 'chat':
+                    env_vars['CHAT_MODEL'] = target_model
+                else:
+                    env_vars['CODE_MODEL'] = target_model
+
+                # 서비스 재시작
+                restart_success, restart_msg = await _restart_service(compose_file, service_name, env_vars)
+                if not restart_success:
                     return ModelSwitchResult(
-                        success=True,
-                        message=f"이미 {model_type} 모델({target_model})이 로드되어 있습니다.",
-                        current_model=target_model,
-                        switch_time_seconds=0.0
+                        success=False,
+                        message=f"Phase 2: {service_name} 재시작 실패 - {restart_msg}",
+                        current_model=current_model_name
                     )
 
-            except Exception as e:
-                print(f"현재 모델 확인 실패: {e}")
+                # 헬스체크 대기
+                print(f"⏳ {service_name} 헬스체크 대기 중...")
+                if not await _wait_for_health(service_url, max_wait=30):
+                    return ModelSwitchResult(
+                        success=False,
+                        message=f"Phase 2: {service_name} 헬스체크 타임아웃 (30초)",
+                        current_model="unknown"
+                    )
 
-        # Docker 컨테이너 재시작으로 모델 교체
-        # NOTE: Phase 3 전용 기능 - 단일 'inference' 컨테이너 사용
-        # Phase 2에서는 이중화(inference-chat/inference-code)로 모델 스위치 불필요
-        switch_command = [
-            'docker', 'compose', '-f', '/mnt/workspace/docker/compose.p3.yml',
-            'stop', 'inference'
-        ]
+                # 재시작 후 모델 확인
+                success, new_model_name = await _get_model_info(service_url)
+                end_time = time.time()
 
-        print(f"🔄 inference 컨테이너 중지 중...")
-        result = subprocess.run(switch_command, capture_output=True, text=True, cwd='/mnt/workspace')
-        if result.returncode != 0:
-            return ModelSwitchResult(
-                success=False,
-                message=f"inference 컨테이너 중지 실패: {result.stderr}",
-                current_model="unknown"
-            )
+                if success and new_model_name.lower() == expected_model.lower():
+                    return ModelSwitchResult(
+                        success=True,
+                        message=f"Phase 2: {service_name} 재시작 완료, {model_type} 모델({new_model_name}) 로드됨",
+                        current_model=new_model_name,
+                        switch_time_seconds=round(end_time - start_time, 1)
+                    )
+                else:
+                    return ModelSwitchResult(
+                        success=False,
+                        message=f"Phase 2: 재시작 후 모델 검증 실패 (현재: {new_model_name}, 기대: {expected_model})",
+                        current_model=new_model_name
+                    )
 
-        # 환경변수 설정하여 컨테이너 재시작
-        env = os.environ.copy()
-        env['CHAT_MODEL'] = target_model  # 동적으로 모델 변경
-
-        start_command = [
-            'docker', 'compose', '-f', '/mnt/workspace/docker/compose.p3.yml',
-            'up', '-d', 'inference'
-        ]
-
-        print(f"🚀 {target_model} 모델로 inference 컨테이너 시작 중...")
-        result = subprocess.run(start_command, capture_output=True, text=True,
-                              cwd='/mnt/workspace', env=env)
-        if result.returncode != 0:
-            return ModelSwitchResult(
-                success=False,
-                message=f"inference 컨테이너 시작 실패: {result.stderr}",
-                current_model="unknown"
-            )
-
-        # 서버가 준비될 때까지 대기 (최대 30초)
-        print("⏳ 새 모델 로딩 대기 중...")
-        for attempt in range(30):
-            await asyncio.sleep(1)
-            try:
-                async with httpx.AsyncClient() as client:
-                    health_response = await client.get("http://inference:8001/health", timeout=5)
-                    if health_response.status_code == 200:
-                        print(f"✅ 모델 교체 완료 (시도 {attempt + 1}/30)")
-                        break
-            except:
-                continue
         else:
-            return ModelSwitchResult(
-                success=False,
-                message="모델 교체 후 서버가 응답하지 않습니다 (30초 타임아웃)",
-                current_model="unknown"
-            )
+            # Phase 3: 단일 inference 컨테이너 - 재시작으로 모델 교체
+            service_name = 'inference'
+            service_url = "http://inference:8001"
 
-        end_time = time.time()
-        switch_time = end_time - start_time
+            # 1. 현재 로드된 모델 확인
+            success, current_model_name = await _get_model_info(service_url)
 
-        return ModelSwitchResult(
-            success=True,
-            message=f"{model_type} 모델({target_model})로 성공적으로 교체되었습니다.",
-            current_model=target_model,
-            switch_time_seconds=round(switch_time, 1)
-        )
+            # 이미 원하는 모델이 로드된 경우
+            if success and target_model.lower() == current_model_name.lower():
+                return ModelSwitchResult(
+                    success=True,
+                    message=f"Phase 3: 이미 {model_type} 모델({target_model})이 로드되어 있습니다.",
+                    current_model=target_model,
+                    switch_time_seconds=round(time.time() - start_time, 1)
+                )
+
+            # 2. 모델이 다르면 컨테이너 재시작
+            print(f"🔄 Phase 3: {current_model_name} → {target_model} 모델 교체 중...")
+
+            # 환경변수 설정
+            env_vars = {'CHAT_MODEL': target_model}
+
+            # 서비스 재시작
+            restart_success, restart_msg = await _restart_service(compose_file, service_name, env_vars)
+            if not restart_success:
+                return ModelSwitchResult(
+                    success=False,
+                    message=f"Phase 3: {service_name} 재시작 실패 - {restart_msg}",
+                    current_model=current_model_name if success else "unknown"
+                )
+
+            # 3. 헬스체크 대기
+            print("⏳ Phase 3: 새 모델 로딩 대기 중...")
+            if not await _wait_for_health(service_url, max_wait=30):
+                return ModelSwitchResult(
+                    success=False,
+                    message="Phase 3: 모델 교체 후 서버가 응답하지 않습니다 (30초 타임아웃)",
+                    current_model="unknown"
+                )
+
+            # 4. 재시작 후 모델 검증
+            success, new_model_name = await _get_model_info(service_url)
+            end_time = time.time()
+
+            if success and new_model_name.lower() == target_model.lower():
+                return ModelSwitchResult(
+                    success=True,
+                    message=f"Phase 3: {model_type} 모델({target_model})로 성공적으로 교체되었습니다.",
+                    current_model=new_model_name,
+                    switch_time_seconds=round(end_time - start_time, 1)
+                )
+            else:
+                return ModelSwitchResult(
+                    success=False,
+                    message=f"Phase 3: 재시작 후 모델 검증 실패 (현재: {new_model_name}, 기대: {target_model})",
+                    current_model=new_model_name
+                )
 
     except Exception as e:
         return ModelSwitchResult(
@@ -1373,31 +1557,50 @@ async def get_current_model() -> Dict[str, Any]:
     """
     현재 로드된 모델 정보를 조회합니다.
 
-    NOTE: Phase 3 전용 - 단일 'inference' 컨테이너 조회
-    Phase 2에서는 inference-chat:8001, inference-code:8004로 분리됨
+    Phase 2: inference-chat (chat 모델), inference-code (code 모델) 모두 조회
+    Phase 3: 단일 inference 컨테이너 조회
     """
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get("http://inference:8001/v1/models", timeout=10)
-            models_data = response.json()
+        # Phase 감지
+        is_phase2, compose_file = await _detect_phase()
+        if is_phase2 is None:
+            return {"error": "Phase 감지 실패: docker compose 서비스 목록을 확인할 수 없습니다."}
 
-            if models_data.get('data'):
-                model_info = models_data['data'][0]
-                model_path = model_info['id']
-                model_name = model_path.split('/')[-1] if '/' in model_path else model_path
+        if is_phase2:
+            # Phase 2: 두 서비스 모두 조회
+            chat_success, chat_model = await _get_model_info("http://inference-chat:8001")
+            code_success, code_model = await _get_model_info("http://inference-code:8001")
 
+            return {
+                "phase": "Phase 2 (Dual LLM)",
+                "chat_model": chat_model if chat_success else f"unavailable",
+                "code_model": code_model if code_success else f"unavailable",
+                "service_chat": "inference-chat:8001",
+                "service_code": "inference-code:8004",
+                "compose_file": compose_file
+            }
+
+        else:
+            # Phase 3: 단일 inference 컨테이너 조회
+            success, model_name = await _get_model_info("http://inference:8001")
+
+            if success:
                 # 모델 타입 추정
                 model_type = 'code' if 'coder' in model_name.lower() else 'chat'
 
                 return {
+                    "phase": "Phase 3 (Single LLM)",
                     "current_model": model_name,
                     "model_type": model_type,
-                    "model_path": model_path,
-                    "size_gb": round(model_info.get('meta', {}).get('size', 0) / (1024**3), 1),
-                    "parameters": model_info.get('meta', {}).get('n_params', 0)
+                    "service": "inference:8001",
+                    "compose_file": compose_file
                 }
             else:
-                return {"error": "모델 정보를 가져올 수 없습니다."}
+                return {
+                    "phase": "Phase 3",
+                    "error": "모델 정보를 가져올 수 없습니다.",
+                    "compose_file": compose_file
+                }
 
     except Exception as e:
         return {"error": f"모델 정보 조회 실패: {str(e)}"}

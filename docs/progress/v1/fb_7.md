@@ -417,6 +417,183 @@ CODE_N_GPU_LAYERS=10  # Code 모델 GPU 레이어 더 감소
 
 ---
 
+## ⭐ MCP 모델 스위치 Phase 2/3 호환성 구현 (2025-10-09 추가)
+
+### 배경
+Issue #14의 Phase 2 이중화 구조 도입으로 MCP 서버의 `switch_model`과 `get_current_model` 도구가 Phase 2에서 동작하지 않는 문제 발생. Phase 3 전용 하드코딩된 로직을 Phase 2/3 모두 지원하도록 개선.
+
+### 주요 변경 사항
+
+#### 1. Phase 감지 로직 개선
+**기존**: 파일 존재 여부로 판별 (`os.path.exists`)
+```python
+is_phase2 = os.path.exists('/mnt/workspace/docker/compose.p2.yml')
+```
+
+**개선**: `docker compose ps` 기반 실제 실행 서비스 확인
+```python
+async def _detect_phase() -> tuple[bool, str]:
+    # Phase 2: inference-chat + inference-code 확인
+    result_p2 = subprocess.run(['docker', 'compose', '-f', '.../compose.p2.yml', 'ps', '--services'], ...)
+    if 'inference-chat' in services and 'inference-code' in services:
+        return True, 'docker/compose.p2.yml'
+
+    # Phase 3: inference 확인
+    result_p3 = subprocess.run(['docker', 'compose', '-f', '.../compose.p3.yml', 'ps', '--services'], ...)
+    if 'inference' in services:
+        return False, 'docker/compose.p3.yml'
+```
+
+**장점**:
+- 파일만 존재하고 서비스가 없는 경우 방지
+- 실제 실행 중인 서비스 기반 정확한 판별
+
+#### 2. 헬퍼 함수 추가 (DRY 원칙)
+```python
+async def _get_model_info(service_url: str) -> tuple[bool, str]
+    """서비스의 현재 로드된 모델 정보 조회"""
+
+async def _restart_service(compose_file: str, service_name: str, env_vars: dict) -> tuple[bool, str]
+    """Docker Compose 서비스 재시작"""
+
+async def _wait_for_health(service_url: str, max_wait: int = 30) -> bool
+    """서비스 헬스체크 대기 (최대 30초)"""
+```
+
+#### 3. Phase 2 로직 개선
+**기존**: 무조건 "이미 실행 중" 메시지 반환
+
+**개선**: 실제 모델 확인 후 필요시 재시작
+```python
+# 1. 현재 모델 확인
+success, current_model_name = await _get_model_info(service_url)
+
+# 2. 기대 모델과 비교 (.env 환경변수)
+expected_model = target_model  # CHAT_MODEL 또는 CODE_MODEL
+
+if expected_model.lower() == current_model_name.lower():
+    return "이미 실행 중"
+else:
+    # 모델 불일치 시 재시작
+    await _restart_service(compose_file, service_name, env_vars)
+    await _wait_for_health(service_url, max_wait=30)
+    # 재시작 후 모델 검증
+    success, new_model_name = await _get_model_info(service_url)
+```
+
+**개선 효과**:
+- 환경변수와 실제 모델 불일치 자동 해결
+- Phase 2에서도 모델 교체 가능
+- 서비스 재시작 후 헬스체크 및 검증 강화
+
+#### 4. Phase 3 로직 유지
+기존 동작을 헬퍼 함수로 리팩토링하여 코드 중복 제거, 동작은 동일 유지
+
+### 검증 시나리오
+
+#### Phase 2 검증
+```bash
+# 1. Phase 감지
+docker compose -f docker/compose.p2.yml ps --services
+# 출력: inference-chat, inference-code
+
+# 2. 모델 조회
+ai --mcp get_current_model
+# 출력:
+# {
+#   "phase": "Phase 2 (Dual LLM)",
+#   "chat_model": "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+#   "code_model": "qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+#   "service_chat": "inference-chat:8001",
+#   "service_code": "inference-code:8004",
+#   "compose_file": "docker/compose.p2.yml"
+# }
+
+# 3. 모델 스위치 (이미 실행 중)
+ai --mcp switch_model --mcp-args '{"model_type": "chat"}'
+# 출력:
+# {
+#   "success": true,
+#   "message": "Phase 2: chat 모델은 inference-chat에서 이미 실행 중입니다 (Qwen2.5-3B-Instruct-Q4_K_M.gguf).",
+#   "current_model": "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+#   "switch_time_seconds": 0.1
+# }
+
+# 4. 모델 불일치 시 재시작 (환경변수 변경 후)
+echo "CHAT_MODEL=Qwen2.5-7B-Instruct-Q4_K_M.gguf" >> .env
+ai --mcp switch_model --mcp-args '{"model_type": "chat"}'
+# 예상 동작:
+# - 현재 모델: Qwen2.5-3B-Instruct-Q4_K_M.gguf
+# - 기대 모델: Qwen2.5-7B-Instruct-Q4_K_M.gguf
+# - inference-chat 서비스 재시작
+# - 헬스체크 대기 (최대 30초)
+# - 새 모델 검증 후 성공 반환
+```
+
+#### Phase 3 검증
+```bash
+# 1. Phase 감지
+docker compose -f docker/compose.p3.yml ps --services
+# 출력: inference
+
+# 2. 모델 조회
+ai --mcp get_current_model
+# 출력:
+# {
+#   "phase": "Phase 3 (Single LLM)",
+#   "current_model": "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+#   "model_type": "chat",
+#   "service": "inference:8001",
+#   "compose_file": "docker/compose.p3.yml"
+# }
+
+# 3. 모델 교체
+ai --mcp switch_model --mcp-args '{"model_type": "code"}'
+# 예상 동작:
+# - inference 컨테이너 중지
+# - CHAT_MODEL 환경변수 설정
+# - inference 컨테이너 재시작
+# - 헬스체크 대기 (최대 30초)
+# - 새 모델 검증 후 성공 반환
+```
+
+### DoD 검증 (ri_7.md 요구사항)
+
+- [x] **MCP 모델 스위치가 Phase 2/3 모두에서 동작**
+  - Phase 감지 로직으로 자동 판별
+  - 각 Phase별 적절한 서비스 선택
+
+- [x] **Phase 2에서는 적절한 메시지 반환**
+  - 모델 일치 시: "이미 실행 중" 메시지
+  - 모델 불일치 시: 재시작 후 성공 메시지
+  - 실제 모델 검증 포함
+
+- [x] **Phase 3에서는 기존 동작 유지**
+  - 헬퍼 함수로 리팩토링
+  - 재시작 → 헬스체크 → 검증 흐름 동일
+
+- [x] **코드에 Phase 구분 로직 명확히 문서화**
+  - `_detect_phase()`: docker compose ps 기반 감지
+  - 각 함수에 Phase별 동작 주석 추가
+  - 헬퍼 함수 docstring 작성
+
+### 관련 파일
+- **코드**: `services/mcp-server/app.py` (lines 1240-1606)
+  - 헬퍼 함수: `_detect_phase`, `_get_model_info`, `_restart_service`, `_wait_for_health`
+  - `switch_model()`: Phase 2/3 분기 처리
+  - `get_current_model()`: Phase 2/3 분기 처리
+- **검증 문서**: `/tmp/mcp_phase2_phase3_verification.md` (상세 시나리오)
+- **요구사항**: `docs/progress/v1/ri_7.md`
+
+### 개선 효과
+1. ✅ **정확한 Phase 감지**: 파일이 아닌 실제 실행 서비스 기반
+2. ✅ **Phase 2 모델 불일치 해결**: 환경변수와 실제 모델 차이 자동 수정
+3. ✅ **코드 중복 제거**: 헬퍼 함수로 공통 로직 추출 (DRY 원칙)
+4. ✅ **강화된 검증**: 재시작 후 모델 정보 재확인
+5. ✅ **명확한 에러 메시지**: Phase별, 단계별 상세한 에러 메시지
+
+---
+
 ## ✅ 완료 기준 (DoD) 달성 현황
 
 ### 코드 구현 (100% 완료) ✅
@@ -428,6 +605,7 @@ CODE_N_GPU_LAYERS=10  # Code 모델 GPU 레이어 더 감소
 - ✅ `depends_on: service_healthy` 조건 적용
 - ✅ RAG Qdrant 호출 재시도 로직 (tenacity)
 - ✅ MCP Phase 2/3 구분 주석 추가
+- ✅ **MCP 모델 스위치 Phase 2/3 호환성 구현** ⭐ (2025-10-09 추가)
 
 ### 문서화 (100% 완료) ✅
 - ✅ 아키텍처 비교 문서 (PHASE2_VS_PHASE3_COMPARISON.md)
@@ -469,7 +647,7 @@ CODE_N_GPU_LAYERS=10  # Code 모델 GPU 레이어 더 감소
    ```
 
 ### 선택적 개선 사항
-1. **Phase 3 MCP 수정** (별도 이슈로 분리 가능)
+1. ~~**Phase 3 MCP 수정** (별도 이슈로 분리 가능)~~ → ✅ **완료** (2025-10-09 추가 구현)
 2. **Prometheus 메트릭 대시보드** (모니터링 강화)
 3. **자동화된 통합 테스트** (CI/CD 파이프라인)
 
