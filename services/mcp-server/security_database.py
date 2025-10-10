@@ -227,6 +227,137 @@ class SecurityDatabase:
                         return (False, f"Permission denied: {permission_name}")
 
     # ========================================================================
+    # Test Helper Methods (for test_approval_workflow.py)
+    # ========================================================================
+
+    async def insert_user(
+        self,
+        user_id: str,
+        role: str,
+        attributes: str = "{}"
+    ) -> bool:
+        """
+        Insert user for testing (simplified version)
+
+        Args:
+            user_id: User identifier
+            role: Role name (will look up or create role_id)
+            attributes: JSON attributes
+
+        Returns:
+            True if successful
+        """
+        try:
+            async with self.get_connection() as db:
+                # Get or create role
+                role_row = await self.get_role_by_name(role)
+                if not role_row:
+                    # Create basic role if doesn't exist
+                    await db.execute(
+                        "INSERT INTO security_roles (role_name, description) VALUES (?, ?)",
+                        (role, f"Auto-created role: {role}")
+                    )
+                    await db.commit()
+                    role_row = await self.get_role_by_name(role)
+
+                role_id = role_row['role_id']
+
+                # Insert user
+                await db.execute(
+                    """
+                    INSERT INTO security_users (user_id, username, role_id)
+                    VALUES (?, ?, ?)
+                    """,
+                    (user_id, user_id, role_id)
+                )
+                await db.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to insert test user: {e}")
+            return False
+
+    async def insert_permission(
+        self,
+        permission_name: str,
+        description: str,
+        sensitivity_level: str = "MEDIUM",
+        resource_type: str = "tool",
+        action: str = "execute"
+    ) -> bool:
+        """
+        Insert permission for testing (matches actual schema)
+
+        Args:
+            permission_name: Permission/tool name
+            description: Description
+            sensitivity_level: LOW/MEDIUM/HIGH/CRITICAL
+            resource_type: Resource type (tool, file, system)
+            action: Action (read, write, execute)
+
+        Returns:
+            True if successful
+        """
+        try:
+            async with self.get_connection() as db:
+                await db.execute(
+                    """
+                    INSERT INTO security_permissions (
+                        permission_name, resource_type, action,
+                        description, sensitivity_level
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (permission_name, resource_type, action, description, sensitivity_level)
+                )
+                await db.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to insert test permission: {e}")
+            return False
+
+    async def assign_permission_to_role(
+        self,
+        role_name: str,
+        permission_name: str
+    ) -> bool:
+        """
+        Assign permission to role (for testing)
+
+        Args:
+            role_name: Role name
+            permission_name: Permission name
+
+        Returns:
+            True if successful
+        """
+        try:
+            async with self.get_connection() as db:
+                # Get role_id
+                role = await self.get_role_by_name(role_name)
+                if not role:
+                    logger.error(f"Role not found: {role_name}")
+                    return False
+
+                # Get permission_id
+                permission = await self.get_permission_by_name(permission_name)
+                if not permission:
+                    logger.error(f"Permission not found: {permission_name}")
+                    return False
+
+                # Insert mapping
+                await db.execute(
+                    """
+                    INSERT OR IGNORE INTO security_role_permissions (role_id, permission_id)
+                    VALUES (?, ?)
+                    """,
+                    (role['role_id'], permission['permission_id'])
+                )
+                await db.commit()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to assign permission to role: {e}")
+            return False
+
+    # ========================================================================
     # Audit Log Operations
     # ========================================================================
 
@@ -290,6 +421,17 @@ class SecurityDatabase:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
 
+    async def query_audit_logs(
+        self,
+        user_id: Optional[str] = None,
+        tool_name: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> List[Dict]:
+        """Alias for get_audit_logs (for test compatibility)"""
+        return await self.get_audit_logs(user_id, tool_name, status, limit, offset)
+
     async def get_audit_stats(self, hours: int = 24) -> Dict:
         """Get audit log statistics for last N hours"""
         async with self.get_connection() as db:
@@ -349,6 +491,178 @@ class SecurityDatabase:
                 "success_rate": (success_count / total * 100) if total > 0 else 0,
                 "hours": hours
             }
+
+    # ========================================================================
+    # Approval Request Operations (Issue #16)
+    # ========================================================================
+
+    async def create_approval_request(
+        self,
+        request_id: str,
+        tool_name: str,
+        user_id: str,
+        role: str,
+        request_data: str,
+        timeout_seconds: int
+    ) -> bool:
+        """
+        Create approval request
+
+        Args:
+            request_id: UUID for the request
+            tool_name: MCP tool name
+            user_id: User requesting approval
+            role: User's role
+            request_data: JSON serialized tool arguments
+            timeout_seconds: Timeout in seconds
+
+        Returns:
+            True if created successfully
+        """
+        try:
+            async with self.get_connection() as db:
+                await db.execute(
+                    """
+                    INSERT INTO approval_requests (
+                        request_id, tool_name, user_id, role, request_data, expires_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, datetime('now', ?))
+                    """,
+                    (request_id, tool_name, user_id, role, request_data, f'+{timeout_seconds} seconds')
+                )
+                await db.commit()
+                logger.info(f"Approval request created: {request_id} for {tool_name}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to create approval request: {e}")
+            return False
+
+    async def get_approval_request(self, request_id: str) -> Optional[Dict]:
+        """
+        Get approval request by ID
+
+        Args:
+            request_id: Request UUID (full or short prefix)
+
+        Returns:
+            Request dict or None
+        """
+        async with self.get_connection() as db:
+            # Try exact match first
+            async with db.execute(
+                "SELECT * FROM approval_requests WHERE request_id = ?",
+                (request_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return dict(row)
+
+            # Try prefix match if exact fails (for short IDs)
+            async with db.execute(
+                "SELECT * FROM approval_requests WHERE request_id LIKE ?",
+                (f'{request_id}%',)
+            ) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
+
+    async def update_approval_status(
+        self,
+        request_id: str,
+        status: str,
+        responder_id: str,
+        response_reason: str
+    ) -> bool:
+        """
+        Update approval request status
+
+        Args:
+            request_id: Request UUID
+            status: New status (approved/rejected/timeout/expired)
+            responder_id: User who responded
+            response_reason: Reason for decision
+
+        Returns:
+            True if updated successfully, False if not found or already processed
+        """
+        try:
+            async with self.get_connection() as db:
+                # Check if request exists and is still pending
+                async with db.execute(
+                    "SELECT status FROM approval_requests WHERE request_id = ?",
+                    (request_id,)
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if not row:
+                        logger.warning(f"Approval request not found: {request_id}")
+                        return False
+                    if row[0] != 'pending':
+                        logger.warning(f"Approval request already processed: {request_id} (status={row[0]})")
+                        return False
+
+                # Update status
+                await db.execute(
+                    """
+                    UPDATE approval_requests
+                    SET status = ?, responder_id = ?, response_reason = ?, responded_at = datetime('now')
+                    WHERE request_id = ? AND status = 'pending'
+                    """,
+                    (status, responder_id, response_reason, request_id)
+                )
+                await db.commit()
+                logger.info(f"Approval request {status}: {request_id} by {responder_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to update approval status: {e}")
+            return False
+
+    async def list_pending_approvals(self, limit: int = 50) -> List[Dict]:
+        """
+        List pending approval requests
+
+        Args:
+            limit: Maximum number of requests to return
+
+        Returns:
+            List of pending requests
+        """
+        async with self.get_connection() as db:
+            async with db.execute(
+                """
+                SELECT * FROM pending_approvals
+                LIMIT ?
+                """,
+                (limit,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
+
+    async def cleanup_expired_approvals(self) -> int:
+        """
+        Cleanup expired approval requests
+
+        Returns:
+            Number of requests marked as expired
+        """
+        try:
+            async with self.get_connection() as db:
+                # Mark expired requests
+                cursor = await db.execute(
+                    """
+                    UPDATE approval_requests
+                    SET status = 'expired', responded_at = datetime('now')
+                    WHERE status = 'pending' AND datetime('now') >= expires_at
+                    """
+                )
+                count = cursor.rowcount
+                await db.commit()
+
+                if count > 0:
+                    logger.info(f"Marked {count} approval requests as expired")
+
+                return count
+        except Exception as e:
+            logger.error(f"Failed to cleanup expired approvals: {e}")
+            return 0
 
     # ========================================================================
     # Maintenance Operations

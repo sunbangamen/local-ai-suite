@@ -68,13 +68,58 @@ class RBACMiddleware(BaseHTTPMiddleware):
             f"allowed={allowed}, time={check_time:.2f}ms"
         )
 
-        # TODO: Approval workflow not implemented yet
-        # If allowed and require_approval=True, should wait for approval here
-        # Example:
-        #   if allowed and await self.rbac_manager.requires_approval(tool_name):
-        #       approval_status = await self._wait_for_approval(user_id, tool_name)
-        #       if not approval_status:
-        #           return JSONResponse(status_code=403, content={"error": "Approval denied"})
+        # Approval workflow integration (Issue #16)
+        if allowed and await self.rbac_manager.requires_approval(tool_name):
+            logger.info(f"Tool {tool_name} requires approval for user {user_id}")
+
+            # Extract request data for approval context
+            request_data = {}
+            body_bytes = b""
+            try:
+                if request.method == "POST":
+                    body_bytes = await request.body()
+                    if body_bytes:
+                        request_data = json.loads(body_bytes.decode())
+                        # Restore body for downstream handlers
+                        async def receive():
+                            return {"type": "http.request", "body": body_bytes}
+                        request._receive = receive
+            except Exception as e:
+                logger.warning(f"Failed to extract request body: {e}")
+
+            # Wait for approval
+            approval_granted = await self.rbac_manager._wait_for_approval(
+                user_id=user_id,
+                tool_name=tool_name,
+                request_data=request_data,
+                timeout=SecuritySettings.get_approval_timeout()
+            )
+
+            if not approval_granted:
+                # Approval denied or timed out
+                logger.warning(f"Approval denied/timeout: user={user_id}, tool={tool_name}")
+
+                # Audit logging
+                try:
+                    await self.audit_logger.log_denied(
+                        user_id,
+                        tool_name,
+                        "Approval denied or timed out"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to log approval denial: {e}")
+
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "error": "Approval required",
+                        "detail": "Request requires administrator approval but was denied or timed out",
+                        "user_id": user_id,
+                        "tool_name": tool_name
+                    }
+                )
+
+            logger.info(f"Approval granted: user={user_id}, tool={tool_name}")
 
         if not allowed:
             # Permission denied - log and return 403

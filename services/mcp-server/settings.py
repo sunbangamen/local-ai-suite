@@ -33,6 +33,11 @@ class SecuritySettings:
     RATE_LIMIT_ENABLED: bool = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
     APPROVAL_WORKFLOW_ENABLED: bool = os.getenv("APPROVAL_WORKFLOW_ENABLED", "false").lower() == "true"
 
+    # Approval Workflow Settings (Issue #16)
+    APPROVAL_TIMEOUT: int = int(os.getenv("APPROVAL_TIMEOUT", "300"))  # 5 minutes
+    APPROVAL_POLLING_INTERVAL: int = int(os.getenv("APPROVAL_POLLING_INTERVAL", "1"))  # 1 second
+    APPROVAL_MAX_PENDING: int = int(os.getenv("APPROVAL_MAX_PENDING", "50"))
+
     # Paths
     DATA_DIR: str = os.getenv("DATA_DIR", "/mnt/e/ai-data")
 
@@ -60,9 +65,24 @@ class SecuritySettings:
         return cls.RATE_LIMIT_ENABLED
 
     @classmethod
-    def is_approval_workflow_enabled(cls) -> bool:
+    def is_approval_enabled(cls) -> bool:
         """승인 워크플로우 활성화 여부"""
         return cls.APPROVAL_WORKFLOW_ENABLED
+
+    @classmethod
+    def get_approval_timeout(cls) -> int:
+        """승인 요청 타임아웃 (초)"""
+        return cls.APPROVAL_TIMEOUT
+
+    @classmethod
+    def get_approval_polling_interval(cls) -> int:
+        """승인 폴링 간격 (초)"""
+        return cls.APPROVAL_POLLING_INTERVAL
+
+    @classmethod
+    def get_approval_max_pending(cls) -> int:
+        """최대 대기 승인 요청 수"""
+        return cls.APPROVAL_MAX_PENDING
 
     @classmethod
     def get_security_mode(cls) -> str:

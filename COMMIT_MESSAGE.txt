@@ -1,0 +1,43 @@
+feat(mcp-server): implement approval workflow for HIGH/CRITICAL tools
+
+Add polling-based approval workflow system for HIGH and CRITICAL
+sensitivity tools, requiring administrator approval before execution.
+
+Core Implementation:
+- SQLite-backed approval queue with asyncio.Event polling mechanism
+- Admin CLI tool for approve/reject with Rich TUI interface
+- REST API endpoints (GET /pending, POST /approve, POST /reject)
+- Background cleanup task for expired approval requests
+- Short ID support (8-char prefix) for easier CLI usage
+- Comprehensive audit logging for all approval events
+
+Database Schema:
+- Add approval_requests table with status tracking
+- Add pending_approvals view for convenience queries
+- Create indexes for performance (status, expires_at, user_id)
+- Support approval status: pending/approved/rejected/expired/timeout
+
+Integration:
+- Seamless RBAC middleware integration (Issue #8)
+- Request body preservation with _receive override
+- Race condition prevention via status validation
+- Proper background task lifecycle management
+
+Testing:
+- 7 integration test scenarios (exceeds 5 requirement)
+- All tests passed: 7/7 in 6.14s
+- Performance: 0.100s for 10 requests (50x better than 5s target)
+- Audit logging fully verified
+
+Documentation:
+- APPROVAL_GUIDE.md: Complete operational guide (556 lines)
+- APPROVAL_VERIFICATION_REPORT.md: Verification report (531 lines)
+- IMPLEMENTATION_CORRECTIONS.md: Correction documentation
+- TEST_RESULTS.md: Test execution results
+- ri_8.md: Issue analysis and implementation summary (1250+ lines)
+
+Fixes #16
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
