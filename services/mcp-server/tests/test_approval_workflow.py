@@ -21,6 +21,7 @@ Requirements:
 
 import asyncio
 import pytest
+import pytest_asyncio
 import json
 import uuid
 from pathlib import Path
@@ -41,7 +42,7 @@ from settings import SecuritySettings
 # Test Fixtures
 # ============================================================================
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_db(tmp_path):
     """Create temporary test database"""
     db_path = tmp_path / "test_security.db"
@@ -110,7 +111,7 @@ async def _setup_test_data(db: SecurityDatabase):
     await db.assign_permission_to_role("admin", "test_medium_tool")
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def rbac_manager(test_db):
     """Create RBACManager instance with test database"""
     # RBACManager uses get_security_database(), so we can't easily inject test_db
@@ -118,7 +119,7 @@ async def rbac_manager(test_db):
     yield test_db
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def audit_logger(test_db):
     """Create AuditLogger instance for testing"""
     logger = AuditLogger(queue_size=100)

@@ -6,6 +6,7 @@ E2E tests for RBAC middleware with audit logging
 
 import asyncio
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 import sys
 from pathlib import Path
@@ -23,10 +24,12 @@ def anyio_backend():
     return "asyncio"
 
 
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module")
 async def client():
     """HTTP client for testing"""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    from httpx import ASGITransport
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
 
