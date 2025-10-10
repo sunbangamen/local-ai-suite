@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Header, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel
@@ -185,6 +185,44 @@ async def ensure_utf8_content_type(request: Request, call_next):
         response.headers["content-type"] = "application/json; charset=utf-8"
     return response
 
+# ============================================================================
+# Background Tasks (Issue #16)
+# ============================================================================
+
+async def approval_cleanup_task():
+    """
+    백그라운드 작업: 만료된 승인 요청 정리
+    1분마다 실행되어 타임아웃된 요청을 expired 상태로 변경
+    """
+    import logging
+    from security_database import get_security_database
+
+    logger = logging.getLogger(__name__)
+    logger.info("Approval cleanup task started")
+
+    while True:
+        try:
+            await asyncio.sleep(60)  # 1분 대기
+
+            db = get_security_database()
+            count = await db.cleanup_expired_approvals()
+
+            if count > 0:
+                logger.info(f"Cleaned up {count} expired approval requests")
+
+        except asyncio.CancelledError:
+            logger.info("Approval cleanup task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Error in approval cleanup task: {e}")
+            # 에러 발생 시에도 계속 실행
+            await asyncio.sleep(60)
+
+
+# ============================================================================
+# Application Lifecycle Events
+# ============================================================================
+
 @app.on_event("startup")
 async def startup_event():
     """애플리케이션 시작 시 초기화"""
@@ -229,6 +267,11 @@ async def startup_event():
             logger.error(f"Failed to start audit logger: {e}")
             raise
 
+        # 4. Approval workflow cleanup task (Issue #16)
+        if settings.is_approval_enabled():
+            logger.info("Starting approval workflow cleanup task...")
+            asyncio.create_task(approval_cleanup_task())
+
         logger.info("RBAC system initialized successfully")
     else:
         logger.info("RBAC system disabled (RBAC_ENABLED=false)")
@@ -270,6 +313,169 @@ async def get_tool_security_info(tool_name: str):
     """도구의 보안 정보 조회"""
     access_control = get_access_control()
     return access_control.get_tool_info(tool_name)
+
+# ============================================================================
+# Approval Workflow API Endpoints (Issue #16)
+# ============================================================================
+
+@app.get("/api/approvals/pending")
+async def get_pending_approvals(
+    limit: int = 50,
+    user_id: str = Header(None, alias="X-User-ID")
+):
+    """
+    대기 중인 승인 요청 목록 조회 (admin only)
+
+    Args:
+        limit: 최대 반환 개수
+        user_id: 요청 사용자 (X-User-ID 헤더)
+
+    Returns:
+        대기 중인 승인 요청 목록
+    """
+    from security_database import get_security_database
+    from rbac_manager import get_rbac_manager
+
+    # Admin 권한 체크
+    rbac = get_rbac_manager()
+    role = await rbac.get_user_role(user_id or "anonymous")
+    if role != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # 대기 중인 승인 요청 조회
+    db = get_security_database()
+    requests = await db.list_pending_approvals(limit)
+
+    return {
+        "pending_approvals": requests,
+        "count": len(requests)
+    }
+
+@app.post("/api/approvals/{request_id}/approve")
+async def approve_request(
+    request_id: str,
+    reason: str = Body(..., embed=True),
+    user_id: str = Header(None, alias="X-User-ID")
+):
+    """
+    승인 요청 승인
+
+    Args:
+        request_id: 승인 요청 ID
+        reason: 승인 사유
+        user_id: 승인자 ID (X-User-ID 헤더)
+
+    Returns:
+        승인 결과
+    """
+    from security_database import get_security_database
+    from rbac_manager import get_rbac_manager
+    from audit_logger import get_audit_logger
+
+    # Admin 권한 체크
+    rbac = get_rbac_manager()
+    role = await rbac.get_user_role(user_id or "anonymous")
+    if role != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # 승인 처리
+    db = get_security_database()
+
+    # Get original request to extract user_id and tool_name
+    original_request = await db.get_approval_request(request_id)
+    if not original_request:
+        raise HTTPException(status_code=404, detail="Approval request not found")
+
+    success = await db.update_approval_status(
+        request_id=request_id,
+        status='approved',
+        responder_id=user_id or "admin",
+        response_reason=reason
+    )
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Approval request already processed")
+
+    # 감사 로그 기록 (enhanced with specific approval logging)
+    audit = get_audit_logger()
+    await audit.log_approval_granted(
+        user_id=original_request['user_id'],
+        tool_name=original_request['tool_name'],
+        request_id=request_id,
+        responder_id=user_id or "admin",
+        reason=reason
+    )
+
+    return {
+        "status": "approved",
+        "request_id": request_id,
+        "responder": user_id
+    }
+
+@app.post("/api/approvals/{request_id}/reject")
+async def reject_request(
+    request_id: str,
+    reason: str = Body(..., embed=True),
+    user_id: str = Header(None, alias="X-User-ID")
+):
+    """
+    승인 요청 거부
+
+    Args:
+        request_id: 승인 요청 ID
+        reason: 거부 사유
+        user_id: 거부자 ID (X-User-ID 헤더)
+
+    Returns:
+        거부 결과
+    """
+    from security_database import get_security_database
+    from rbac_manager import get_rbac_manager
+    from audit_logger import get_audit_logger
+
+    # Admin 권한 체크
+    rbac = get_rbac_manager()
+    role = await rbac.get_user_role(user_id or "anonymous")
+    if role != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # 거부 처리
+    db = get_security_database()
+
+    # Get original request to extract user_id and tool_name
+    original_request = await db.get_approval_request(request_id)
+    if not original_request:
+        raise HTTPException(status_code=404, detail="Approval request not found")
+
+    success = await db.update_approval_status(
+        request_id=request_id,
+        status='rejected',
+        responder_id=user_id or "admin",
+        response_reason=reason
+    )
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Approval request already processed")
+
+    # 감사 로그 기록 (enhanced with specific approval logging)
+    audit = get_audit_logger()
+    await audit.log_approval_rejected(
+        user_id=original_request['user_id'],
+        tool_name=original_request['tool_name'],
+        request_id=request_id,
+        responder_id=user_id or "admin",
+        reason=reason
+    )
+
+    return {
+        "status": "rejected",
+        "request_id": request_id,
+        "responder": user_id
+    }
+
+# ============================================================================
+# MCP Tools API
+# ============================================================================
 
 # MCP 도구 목록 API 엔드포인트 (올바른 FastMCP 사용법)
 @app.get("/tools")

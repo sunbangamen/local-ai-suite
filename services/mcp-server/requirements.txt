@@ -10,3 +10,6 @@ notion-client
 pillow
 prometheus-fastapi-instrumentator>=7.0.0
 aiosqlite>=0.19.0
+rich>=13.0.0
+pytest>=7.0.0
+pytest-asyncio>=0.21.0

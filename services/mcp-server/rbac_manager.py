@@ -119,39 +119,144 @@ class RBACManager:
 
         return [p["permission_name"] for p in permissions]
 
-    # TODO: Approval workflow methods not implemented yet
+    # ========================================================================
+    # Approval Workflow (Issue #16)
+    # ========================================================================
+
     async def requires_approval(self, tool_name: str) -> bool:
         """
         Check if tool requires approval workflow
-
-        NOTE: This is a placeholder. Actual implementation needed.
-        Should query tool_permissions or access_control to check require_approval flag.
 
         Args:
             tool_name: MCP tool name
 
         Returns:
-            True if approval required, False otherwise
+            True if approval required (HIGH/CRITICAL sensitivity), False otherwise
         """
-        # Placeholder - always returns False until implemented
-        return False
+        from settings import SecuritySettings
 
-    async def _wait_for_approval(self, user_id: str, tool_name: str) -> bool:
+        # Check if approval workflow is enabled
+        if not SecuritySettings.is_approval_enabled():
+            return False
+
+        # Query permission sensitivity level
+        permission = await self.db.get_permission_by_name(tool_name)
+        if not permission:
+            return False
+
+        # Require approval for HIGH and CRITICAL tools
+        sensitivity_level = permission.get('sensitivity_level', 'MEDIUM')
+        return sensitivity_level in ['HIGH', 'CRITICAL']
+
+    async def _wait_for_approval(
+        self,
+        user_id: str,
+        tool_name: str,
+        request_data: dict,
+        timeout: int = 300
+    ) -> bool:
         """
         Wait for approval from admin/approver
-
-        NOTE: This is a placeholder. Actual implementation needed.
-        Should implement approval request queue, notification, and response handling.
 
         Args:
             user_id: User requesting approval
             tool_name: Tool requiring approval
+            request_data: Tool arguments (for audit trail)
+            timeout: Timeout in seconds (default 300 = 5 minutes)
 
         Returns:
-            True if approved, False if denied
+            True if approved, False if rejected/timeout
         """
-        # Placeholder - always returns False until implemented
-        return False
+        import uuid
+        import json
+        from settings import SecuritySettings
+
+        # Get timeout from settings
+        timeout = SecuritySettings.get_approval_timeout()
+
+        # 1. Create approval request
+        request_id = str(uuid.uuid4())
+        role = await self.get_user_role(user_id) or 'unknown'
+
+        success = await self.db.create_approval_request(
+            request_id=request_id,
+            tool_name=tool_name,
+            user_id=user_id,
+            role=role,
+            request_data=json.dumps(request_data),
+            timeout_seconds=timeout
+        )
+
+        if not success:
+            logger.error(f"Failed to create approval request for {user_id}:{tool_name}")
+            return False
+
+        # Log approval request creation
+        from audit_logger import get_audit_logger
+        audit_logger = get_audit_logger()
+        try:
+            await audit_logger.log_approval_requested(
+                user_id=user_id,
+                tool_name=tool_name,
+                request_id=request_id,
+                request_data=request_data
+            )
+        except Exception as e:
+            logger.error(f"Failed to log approval request: {e}")
+
+        # 2. Wait for approval with polling
+        approval_event = asyncio.Event()
+        poll_interval = SecuritySettings.get_approval_polling_interval()
+
+        async def poll_approval():
+            """Poll database for approval status"""
+            while not approval_event.is_set():
+                request = await self.db.get_approval_request(request_id)
+                if not request:
+                    logger.error(f"Approval request disappeared: {request_id}")
+                    return 'error'
+
+                status = request['status']
+                if status in ['approved', 'rejected', 'expired', 'timeout']:
+                    approval_event.set()
+                    return status
+
+                await asyncio.sleep(poll_interval)
+
+        # 3. Wait with timeout
+        try:
+            logger.info(f"Waiting for approval: {request_id} ({tool_name}) - timeout={timeout}s")
+            status = await asyncio.wait_for(poll_approval(), timeout=timeout)
+
+            if status == 'approved':
+                logger.info(f"Approval granted: {request_id}")
+                return True
+            else:
+                logger.warning(f"Approval {status}: {request_id}")
+                return False
+
+        except asyncio.TimeoutError:
+            # Mark as timeout in database
+            await self.db.update_approval_status(
+                request_id=request_id,
+                status='timeout',
+                responder_id='system',
+                response_reason='Request timed out'
+            )
+            logger.warning(f"Approval request timed out: {request_id}")
+
+            # Log timeout event
+            try:
+                await audit_logger.log_approval_timeout(
+                    user_id=user_id,
+                    tool_name=tool_name,
+                    request_id=request_id,
+                    timeout_seconds=timeout
+                )
+            except Exception as e:
+                logger.error(f"Failed to log approval timeout: {e}")
+
+            return False
 
     async def invalidate_user_cache(self, user_id: str) -> None:
         """

@@ -174,6 +174,117 @@ class AuditLogger:
             execution_time_ms=execution_time_ms
         )
 
+    # Approval Workflow Logging Methods (Issue #16)
+
+    async def log_approval_requested(
+        self,
+        user_id: str,
+        tool_name: str,
+        request_id: str,
+        request_data: Optional[Dict] = None
+    ) -> None:
+        """
+        Log approval request creation
+
+        Args:
+            user_id: User requesting approval
+            tool_name: MCP tool name
+            request_id: Approval request ID
+            request_data: Request parameters
+        """
+        await self.log_tool_call(
+            user_id=user_id,
+            tool_name=tool_name,
+            action="approval_requested",
+            status="pending",
+            request_data={"request_id": request_id, **(request_data or {})}
+        )
+
+    async def log_approval_granted(
+        self,
+        user_id: str,
+        tool_name: str,
+        request_id: str,
+        responder_id: str,
+        reason: Optional[str] = None
+    ) -> None:
+        """
+        Log approval granted event
+
+        Args:
+            user_id: User who made the request
+            tool_name: MCP tool name
+            request_id: Approval request ID
+            responder_id: Admin who approved
+            reason: Approval reason
+        """
+        await self.log_tool_call(
+            user_id=user_id,
+            tool_name=tool_name,
+            action="approval_granted",
+            status="approved",
+            request_data={
+                "request_id": request_id,
+                "responder_id": responder_id,
+                "reason": reason
+            }
+        )
+
+    async def log_approval_rejected(
+        self,
+        user_id: str,
+        tool_name: str,
+        request_id: str,
+        responder_id: str,
+        reason: Optional[str] = None
+    ) -> None:
+        """
+        Log approval rejected event
+
+        Args:
+            user_id: User who made the request
+            tool_name: MCP tool name
+            request_id: Approval request ID
+            responder_id: Admin who rejected
+            reason: Rejection reason
+        """
+        await self.log_tool_call(
+            user_id=user_id,
+            tool_name=tool_name,
+            action="approval_rejected",
+            status="rejected",
+            error_message=reason,
+            request_data={
+                "request_id": request_id,
+                "responder_id": responder_id
+            }
+        )
+
+    async def log_approval_timeout(
+        self,
+        user_id: str,
+        tool_name: str,
+        request_id: str,
+        timeout_seconds: int
+    ) -> None:
+        """
+        Log approval timeout event
+
+        Args:
+            user_id: User who made the request
+            tool_name: MCP tool name
+            request_id: Approval request ID
+            timeout_seconds: Timeout duration
+        """
+        await self.log_tool_call(
+            user_id=user_id,
+            tool_name=tool_name,
+            action="approval_timeout",
+            status="timeout",
+            error_message=f"Approval request timed out after {timeout_seconds}s",
+            request_data={"request_id": request_id}
+        )
+
     async def _async_writer(self) -> None:
         """Background task for writing audit logs to database"""
         logger.info("Audit logger writer task started")
