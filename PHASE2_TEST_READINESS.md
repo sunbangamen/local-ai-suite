@@ -142,11 +142,111 @@ pytest tests/test_approval_workflow.py -v
 pytest tests/security/test_wal_mode.py -v
 ```
 
-### Test Results (To be populated after execution)
+### Test Results (Executed 2025-10-10)
 
-**Status**: Tests NOT executed (pip not available in local environment)
+**Status**: ⚠️ EXECUTED WITH BLOCKERS
 
-**Recommendation**: Execute tests in Docker container or CI/CD pipeline
+**Execution Date**: 2025-10-10
+**Environment**: docker-mcp-server-1
+**Dependencies**: ✅ pytest, pytest-asyncio, httpx, aiosqlite installed
+
+#### Results Summary
+
+| Test Suite | Total | Passed | Failed | Skipped | Status |
+|------------|-------|--------|--------|---------|--------|
+| RBAC Integration | 10 | 2 | 0 | 8 | ⚠️ Blocked |
+| Approval Workflow | 7 | 0 | 7 | 0 | ❌ Failed |
+| **Total** | **17** | **2** | **7** | **8** | **⚠️ Blocked** |
+
+#### Detailed Results
+
+**1. RBAC Integration Tests** (`test_rbac_integration.py`)
+```bash
+# Command executed:
+docker exec docker-mcp-server-1 python -m pytest /app/tests/integration/test_rbac_integration.py -v --tb=short
+
+# Results: 2 passed, 8 skipped
+✅ test_audit_logger_lifecycle - PASSED
+✅ test_audit_logger_log_event - PASSED
+⏭️ test_guest_denied_execute_python - SKIPPED (RBAC disabled)
+⏭️ test_developer_allowed_execute_python - SKIPPED (RBAC disabled)
+⏭️ test_guest_allowed_read_file - SKIPPED (RBAC disabled)
+⏭️ test_developer_denied_git_commit - SKIPPED (RBAC disabled)
+⏭️ test_admin_allowed_all_tools - SKIPPED (RBAC disabled)
+⏭️ test_rbac_audit_logging - SKIPPED (RBAC disabled)
+⏭️ test_concurrent_requests - SKIPPED (RBAC disabled)
+⏭️ test_invalid_user - SKIPPED (RBAC disabled)
+```
+
+**2. Approval Workflow Tests** (`test_approval_workflow.py`)
+```bash
+# Command executed:
+docker exec docker-mcp-server-1 python -m pytest /app/tests/test_approval_workflow.py -v --tb=short
+
+# Results: 0 passed, 7 failed
+❌ test_approval_granted_flow - FAILED (AttributeError: async_generator)
+❌ test_approval_rejected_flow - FAILED (AttributeError: async_generator)
+❌ test_approval_timeout_flow - FAILED (AttributeError: async_generator)
+❌ test_concurrent_approval_requests - FAILED (AttributeError: async_generator)
+❌ test_permission_validation_flow - FAILED (AttributeError: async_generator)
+❌ test_audit_logging_flow - FAILED (AttributeError: async_generator)
+❌ test_performance_bulk_approvals - FAILED (AttributeError: async_generator)
+```
+
+#### Blocker Issues
+
+**Issue #1: RBAC Disabled (8 tests skipped)**
+- **Root Cause**: `RBAC_ENABLED=false` in test environment
+- **Impact**: Cannot validate core RBAC permission logic
+- **Fix Required**:
+  ```bash
+  # Option 1: Environment variable at runtime
+  docker exec docker-mcp-server-1 bash -c "export RBAC_ENABLED=true && python -m pytest ..."
+
+  # Option 2: Docker compose configuration
+  # Add to docker/compose.p3.yml services.mcp-server.environment:
+  #   - RBAC_ENABLED=true
+  ```
+
+**Issue #2: Async Fixture Bug (7 tests failed)**
+- **Root Cause**: Fixtures using `@pytest.fixture` instead of `@pytest_asyncio.fixture` for async generators
+- **Error**: `AttributeError: 'async_generator' object has no attribute 'get_permission_by_name'`
+- **Impact**: All approval workflow tests failing
+- **Fix Required**:
+  ```python
+  # File: tests/test_approval_workflow.py
+  # Change all async fixtures from:
+  @pytest.fixture
+  async def fixture_name():
+      async with context:
+          yield value
+
+  # To:
+  @pytest_asyncio.fixture
+  async def fixture_name():
+      async with context:
+          yield value
+  ```
+
+#### Logs Generated
+
+- ✅ `TEST_RBAC_INTEGRATION.log` - Full pytest output with skip reasons
+- ✅ `TEST_APPROVAL_WORKFLOW.log` - Full pytest output with error tracebacks
+- ✅ `TEST_RESULTS_ISSUE18.md` - Comprehensive analysis document
+
+#### Next Steps
+
+1. **Fix Async Fixtures** (5 minutes)
+   - Update `@pytest.fixture` → `@pytest_asyncio.fixture` in test_approval_workflow.py
+   - Rerun approval workflow tests
+
+2. **Enable RBAC** (2 minutes)
+   - Set `RBAC_ENABLED=true` in test environment
+   - Rerun RBAC integration tests
+
+3. **Full Test Execution** (10 minutes)
+   - Execute all 17 tests with fixes applied
+   - Document passing results
 
 **Alternative validation**: Manual API testing with curl
 ```bash
@@ -177,21 +277,35 @@ for row in cursor.fetchall():
 
 ## Phase 2 Summary
 
-**Status**: ⚠️ PARTIALLY COMPLETE
+**Status**: ⚠️ EXECUTED WITH BLOCKERS
 
 **Completed**:
 - ✅ Test files verified and reviewed (10+ test cases available)
 - ✅ Test scenarios documented (13 scenarios covering all requirements)
 - ✅ Test execution guide created (Docker and local options)
 - ✅ Manual testing commands provided as alternative
+- ✅ Automated pytest execution in Docker environment
+- ✅ Test results logs generated (TEST_RBAC_INTEGRATION.log, TEST_APPROVAL_WORKFLOW.log)
+- ✅ Comprehensive test results document (TEST_RESULTS_ISSUE18.md)
 
-**Not Completed**:
-- ❌ Automated pytest execution (requires Docker environment or pip)
-- ❌ Test results logs
+**Blocked**:
+- ⚠️ RBAC integration tests: 8/10 skipped (RBAC_ENABLED=false)
+- ❌ Approval workflow tests: 7/7 failed (async fixture decorator bug)
+- ⏸️ WAL mode tests: Not executed yet
+
+**Test Results**:
+- **Passed**: 2/17 tests (11.8%) - Audit logger functionality
+- **Failed**: 7/17 tests (41.2%) - Approval workflow (fixture bug)
+- **Skipped**: 8/17 tests (47.0%) - RBAC disabled
+
+**Root Causes Identified**:
+1. Environment configuration: `RBAC_ENABLED=false` prevents permission testing
+2. Test implementation bug: `@pytest.fixture` should be `@pytest_asyncio.fixture` for async generators
 
 **Recommendation**:
-- Option 1: Execute tests in Docker container when MCP server is deployed
-- Option 2: Execute tests in CI/CD pipeline
-- Option 3: Manual API testing with curl commands (quick validation)
+- **Immediate**: Fix async fixture decorators (5 minutes)
+- **Immediate**: Enable RBAC in test environment (2 minutes)
+- **Then**: Rerun all 17 tests and document passing results (10 minutes)
+- **Alternative**: Manual API testing with curl commands if pytest blockers persist
 
-**Next**: Proceed to Phase 3 (Performance Benchmark) which can be executed independently
+**Next**: Fix blockers and complete Phase 2, then proceed to Phase 3 (Performance Benchmark)
