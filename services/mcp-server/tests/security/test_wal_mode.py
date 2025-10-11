@@ -45,7 +45,9 @@ class TestWALModeConcurrency:
         async def read_role(reader_id: int):
             """Simulate concurrent reader"""
             async with db.get_connection() as conn:
-                async with conn.execute("SELECT * FROM security_roles WHERE role_name = 'test_role'") as cursor:
+                async with conn.execute(
+                    "SELECT * FROM security_roles WHERE role_name = 'test_role'"
+                ) as cursor:
                     result = await cursor.fetchone()
                     assert result is not None
                     return reader_id
@@ -73,7 +75,7 @@ class TestWALModeConcurrency:
                     user_id=f"writer_user_{i}",
                     tool_name="test_tool",
                     action="test",
-                    status="success"
+                    status="success",
                 )
                 write_count += 1
                 await asyncio.sleep(0.01)  # Small delay
@@ -109,7 +111,7 @@ class TestWALModeConcurrency:
                         user_id=f"user_{writer_id}",
                         tool_name="test_tool",
                         action="write",
-                        status="success"
+                        status="success",
                     )
                     await asyncio.sleep(0.01)
             except aiosqlite.OperationalError as e:
@@ -121,7 +123,9 @@ class TestWALModeConcurrency:
         await asyncio.gather(*tasks)
 
         # WAL mode should prevent locking errors (allow some tolerance for SQLite behavior)
-        assert len(errors) == 0, f"WAL mode should prevent locked errors, got: {len(errors)}"
+        assert (
+            len(errors) == 0
+        ), f"WAL mode should prevent locked errors, got: {len(errors)}"
 
     @pytest.mark.asyncio
     async def test_wal_checkpoint(self, temp_db_path):
@@ -135,7 +139,7 @@ class TestWALModeConcurrency:
                 user_id=f"user_{i}",
                 tool_name="test_tool",
                 action="test",
-                status="success"
+                status="success",
             )
 
         # Checkpoint WAL
@@ -159,14 +163,14 @@ class TestWALModeConcurrency:
                 # Insert in transaction
                 await conn.execute(
                     "INSERT INTO security_roles (role_name, description) VALUES (?, ?)",
-                    (f"role_{tx_id}", f"Transaction {tx_id}")
+                    (f"role_{tx_id}", f"Transaction {tx_id}"),
                 )
                 await conn.commit()
 
                 # Read back
                 async with conn.execute(
                     "SELECT role_name FROM security_roles WHERE role_name = ?",
-                    (f"role_{tx_id}",)
+                    (f"role_{tx_id}",),
                 ) as cursor:
                     result = await cursor.fetchone()
                     results.append(result[0])
@@ -176,7 +180,9 @@ class TestWALModeConcurrency:
         await asyncio.gather(*tasks)
 
         assert len(results) == 5, "All transactions should complete"
-        assert set(results) == {f"role_{i}" for i in range(5)}, "All roles should be created"
+        assert set(results) == {
+            f"role_{i}" for i in range(5)
+        }, "All roles should be created"
 
 
 @pytest.mark.integration
@@ -227,7 +233,7 @@ class TestDatabasePerformance:
                 tool_name="test_tool",
                 action="test",
                 status="success",
-                execution_time_ms=50
+                execution_time_ms=50,
             )
             end = time.time()
             latencies.append((end - start) * 1000)
@@ -240,7 +246,9 @@ class TestDatabasePerformance:
         print(f"  P95: {p95_latency:.2f}ms")
 
         # Note: Actual async implementation will queue this, making it <1ms
-        assert p95_latency < 50, f"P95 latency should be <50ms for direct insert, got {p95_latency:.2f}ms"
+        assert (
+            p95_latency < 50
+        ), f"P95 latency should be <50ms for direct insert, got {p95_latency:.2f}ms"
 
 
 if __name__ == "__main__":

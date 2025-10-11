@@ -53,7 +53,7 @@ class SecurityDatabase:
             schema_path = Path(__file__).parent / "scripts" / "security_schema.sql"
             if schema_path.exists():
                 async with aiosqlite.connect(self.db_path) as db:
-                    with open(schema_path, 'r') as f:
+                    with open(schema_path, "r") as f:
                         schema_sql = f.read()
                     await db.executescript(schema_sql)
                     await db.commit()
@@ -80,17 +80,12 @@ class SecurityDatabase:
         async with self.get_connection() as db:
             async with db.execute(
                 "SELECT * FROM security_users WHERE user_id = ? AND is_active = 1",
-                (user_id,)
+                (user_id,),
             ) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
 
-    async def create_user(
-        self,
-        user_id: str,
-        username: str,
-        role_id: int
-    ) -> bool:
+    async def create_user(self, user_id: str, username: str, role_id: int) -> bool:
         """Create new user"""
         try:
             async with self.get_connection() as db:
@@ -99,7 +94,7 @@ class SecurityDatabase:
                     INSERT INTO security_users (user_id, username, role_id)
                     VALUES (?, ?, ?)
                     """,
-                    (user_id, username, role_id)
+                    (user_id, username, role_id),
                 )
                 await db.commit()
                 logger.info(f"User created: {user_id} (role_id={role_id})")
@@ -114,7 +109,7 @@ class SecurityDatabase:
             async with self.get_connection() as db:
                 await db.execute(
                     "UPDATE security_users SET role_id = ? WHERE user_id = ?",
-                    (role_id, user_id)
+                    (role_id, user_id),
                 )
                 await db.commit()
                 logger.info(f"User role updated: {user_id} -> role_id={role_id}")
@@ -131,8 +126,7 @@ class SecurityDatabase:
         """Get role by ID"""
         async with self.get_connection() as db:
             async with db.execute(
-                "SELECT * FROM security_roles WHERE role_id = ?",
-                (role_id,)
+                "SELECT * FROM security_roles WHERE role_id = ?", (role_id,)
             ) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
@@ -141,8 +135,7 @@ class SecurityDatabase:
         """Get role by name"""
         async with self.get_connection() as db:
             async with db.execute(
-                "SELECT * FROM security_roles WHERE role_name = ?",
-                (role_name,)
+                "SELECT * FROM security_roles WHERE role_name = ?", (role_name,)
             ) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
@@ -163,7 +156,7 @@ class SecurityDatabase:
         async with self.get_connection() as db:
             async with db.execute(
                 "SELECT * FROM security_permissions WHERE permission_id = ?",
-                (permission_id,)
+                (permission_id,),
             ) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
@@ -173,7 +166,7 @@ class SecurityDatabase:
         async with self.get_connection() as db:
             async with db.execute(
                 "SELECT * FROM security_permissions WHERE permission_name = ?",
-                (permission_name,)
+                (permission_name,),
             ) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
@@ -188,15 +181,13 @@ class SecurityDatabase:
                 JOIN security_role_permissions rp ON p.permission_id = rp.permission_id
                 WHERE rp.role_id = ?
                 """,
-                (role_id,)
+                (role_id,),
             ) as cursor:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
 
     async def check_permission(
-        self,
-        user_id: str,
-        permission_name: str
+        self, user_id: str, permission_name: str
     ) -> Tuple[bool, str]:
         """
         Check if user has permission
@@ -211,7 +202,7 @@ class SecurityDatabase:
                 FROM v_user_permissions
                 WHERE user_id = ? AND permission_name = ?
                 """,
-                (user_id, permission_name)
+                (user_id, permission_name),
             ) as cursor:
                 row = await cursor.fetchone()
                 has_permission = bool(row[0]) if row else False
@@ -231,10 +222,7 @@ class SecurityDatabase:
     # ========================================================================
 
     async def insert_user(
-        self,
-        user_id: str,
-        role: str,
-        attributes: str = "{}"
+        self, user_id: str, role: str, attributes: str = "{}"
     ) -> bool:
         """
         Insert user for testing (simplified version)
@@ -255,12 +243,12 @@ class SecurityDatabase:
                     # Create basic role if doesn't exist
                     await db.execute(
                         "INSERT INTO security_roles (role_name, description) VALUES (?, ?)",
-                        (role, f"Auto-created role: {role}")
+                        (role, f"Auto-created role: {role}"),
                     )
                     await db.commit()
                     role_row = await self.get_role_by_name(role)
 
-                role_id = role_row['role_id']
+                role_id = role_row["role_id"]
 
                 # Insert user
                 await db.execute(
@@ -268,7 +256,7 @@ class SecurityDatabase:
                     INSERT INTO security_users (user_id, username, role_id)
                     VALUES (?, ?, ?)
                     """,
-                    (user_id, user_id, role_id)
+                    (user_id, user_id, role_id),
                 )
                 await db.commit()
                 return True
@@ -282,7 +270,7 @@ class SecurityDatabase:
         description: str,
         sensitivity_level: str = "MEDIUM",
         resource_type: str = "tool",
-        action: str = "execute"
+        action: str = "execute",
     ) -> bool:
         """
         Insert permission for testing (matches actual schema)
@@ -306,7 +294,13 @@ class SecurityDatabase:
                         description, sensitivity_level
                     ) VALUES (?, ?, ?, ?, ?)
                     """,
-                    (permission_name, resource_type, action, description, sensitivity_level)
+                    (
+                        permission_name,
+                        resource_type,
+                        action,
+                        description,
+                        sensitivity_level,
+                    ),
                 )
                 await db.commit()
                 return True
@@ -315,9 +309,7 @@ class SecurityDatabase:
             return False
 
     async def assign_permission_to_role(
-        self,
-        role_name: str,
-        permission_name: str
+        self, role_name: str, permission_name: str
     ) -> bool:
         """
         Assign permission to role (for testing)
@@ -349,7 +341,7 @@ class SecurityDatabase:
                     INSERT OR IGNORE INTO security_role_permissions (role_id, permission_id)
                     VALUES (?, ?)
                     """,
-                    (role['role_id'], permission['permission_id'])
+                    (role["role_id"], permission["permission_id"]),
                 )
                 await db.commit()
                 return True
@@ -369,7 +361,7 @@ class SecurityDatabase:
         status: str,
         error_message: Optional[str] = None,
         execution_time_ms: Optional[int] = None,
-        request_data: Optional[str] = None
+        request_data: Optional[str] = None,
     ) -> int:
         """
         Insert audit log entry
@@ -384,7 +376,15 @@ class SecurityDatabase:
                 (user_id, tool_name, action, status, error_message, execution_time_ms, request_data)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (user_id, tool_name, action, status, error_message, execution_time_ms, request_data)
+                (
+                    user_id,
+                    tool_name,
+                    action,
+                    status,
+                    error_message,
+                    execution_time_ms,
+                    request_data,
+                ),
             )
             await db.commit()
             return cursor.lastrowid
@@ -395,7 +395,7 @@ class SecurityDatabase:
         tool_name: Optional[str] = None,
         status: Optional[str] = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[Dict]:
         """Query audit logs with filters"""
         query = "SELECT * FROM security_audit_logs WHERE 1=1"
@@ -427,7 +427,7 @@ class SecurityDatabase:
         tool_name: Optional[str] = None,
         status: Optional[str] = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
     ) -> List[Dict]:
         """Alias for get_audit_logs (for test compatibility)"""
         return await self.get_audit_logs(user_id, tool_name, status, limit, offset)
@@ -442,7 +442,7 @@ class SecurityDatabase:
                 FROM security_audit_logs
                 WHERE timestamp >= datetime('now', ?)
                 """,
-                (f'-{hours} hours',)
+                (f"-{hours} hours",),
             ) as cursor:
                 row = await cursor.fetchone()
                 total = row[0] if row else 0
@@ -454,7 +454,7 @@ class SecurityDatabase:
                 FROM security_audit_logs
                 WHERE timestamp >= datetime('now', ?) AND status = 'success'
                 """,
-                (f'-{hours} hours',)
+                (f"-{hours} hours",),
             ) as cursor:
                 row = await cursor.fetchone()
                 success_count = row[0] if row else 0
@@ -466,7 +466,7 @@ class SecurityDatabase:
                 FROM security_audit_logs
                 WHERE timestamp >= datetime('now', ?) AND status = 'denied'
                 """,
-                (f'-{hours} hours',)
+                (f"-{hours} hours",),
             ) as cursor:
                 row = await cursor.fetchone()
                 denied_count = row[0] if row else 0
@@ -478,7 +478,7 @@ class SecurityDatabase:
                 FROM security_audit_logs
                 WHERE timestamp >= datetime('now', ?) AND status = 'error'
                 """,
-                (f'-{hours} hours',)
+                (f"-{hours} hours",),
             ) as cursor:
                 row = await cursor.fetchone()
                 error_count = row[0] if row else 0
@@ -489,7 +489,7 @@ class SecurityDatabase:
                 "denied_count": denied_count,
                 "error_count": error_count,
                 "success_rate": (success_count / total * 100) if total > 0 else 0,
-                "hours": hours
+                "hours": hours,
             }
 
     # ========================================================================
@@ -503,7 +503,7 @@ class SecurityDatabase:
         user_id: str,
         role: str,
         request_data: str,
-        timeout_seconds: int
+        timeout_seconds: int,
     ) -> bool:
         """
         Create approval request
@@ -528,7 +528,14 @@ class SecurityDatabase:
                     )
                     VALUES (?, ?, ?, ?, ?, datetime('now', ?))
                     """,
-                    (request_id, tool_name, user_id, role, request_data, f'+{timeout_seconds} seconds')
+                    (
+                        request_id,
+                        tool_name,
+                        user_id,
+                        role,
+                        request_data,
+                        f"+{timeout_seconds} seconds",
+                    ),
                 )
                 await db.commit()
                 logger.info(f"Approval request created: {request_id} for {tool_name}")
@@ -550,8 +557,7 @@ class SecurityDatabase:
         async with self.get_connection() as db:
             # Try exact match first
             async with db.execute(
-                "SELECT * FROM approval_requests WHERE request_id = ?",
-                (request_id,)
+                "SELECT * FROM approval_requests WHERE request_id = ?", (request_id,)
             ) as cursor:
                 row = await cursor.fetchone()
                 if row:
@@ -560,17 +566,13 @@ class SecurityDatabase:
             # Try prefix match if exact fails (for short IDs)
             async with db.execute(
                 "SELECT * FROM approval_requests WHERE request_id LIKE ?",
-                (f'{request_id}%',)
+                (f"{request_id}%",),
             ) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
 
     async def update_approval_status(
-        self,
-        request_id: str,
-        status: str,
-        responder_id: str,
-        response_reason: str
+        self, request_id: str, status: str, responder_id: str, response_reason: str
     ) -> bool:
         """
         Update approval request status
@@ -589,14 +591,16 @@ class SecurityDatabase:
                 # Check if request exists and is still pending
                 async with db.execute(
                     "SELECT status FROM approval_requests WHERE request_id = ?",
-                    (request_id,)
+                    (request_id,),
                 ) as cursor:
                     row = await cursor.fetchone()
                     if not row:
                         logger.warning(f"Approval request not found: {request_id}")
                         return False
-                    if row[0] != 'pending':
-                        logger.warning(f"Approval request already processed: {request_id} (status={row[0]})")
+                    if row[0] != "pending":
+                        logger.warning(
+                            f"Approval request already processed: {request_id} (status={row[0]})"
+                        )
                         return False
 
                 # Update status
@@ -606,10 +610,12 @@ class SecurityDatabase:
                     SET status = ?, responder_id = ?, response_reason = ?, responded_at = datetime('now')
                     WHERE request_id = ? AND status = 'pending'
                     """,
-                    (status, responder_id, response_reason, request_id)
+                    (status, responder_id, response_reason, request_id),
                 )
                 await db.commit()
-                logger.info(f"Approval request {status}: {request_id} by {responder_id}")
+                logger.info(
+                    f"Approval request {status}: {request_id} by {responder_id}"
+                )
                 return True
         except Exception as e:
             logger.error(f"Failed to update approval status: {e}")
@@ -631,7 +637,7 @@ class SecurityDatabase:
                 SELECT * FROM pending_approvals
                 LIMIT ?
                 """,
-                (limit,)
+                (limit,),
             ) as cursor:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
@@ -707,7 +713,7 @@ class SecurityDatabase:
                 "wal_size_mb": round(wal_size / 1024 / 1024, 2),
                 "journal_mode": journal_mode,
                 "page_count": page_count,
-                "page_size": page_size
+                "page_size": page_size,
             }
 
 

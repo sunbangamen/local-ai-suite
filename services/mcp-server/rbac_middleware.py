@@ -80,9 +80,11 @@ class RBACMiddleware(BaseHTTPMiddleware):
                     body_bytes = await request.body()
                     if body_bytes:
                         request_data = json.loads(body_bytes.decode())
+
                         # Restore body for downstream handlers
                         async def receive():
                             return {"type": "http.request", "body": body_bytes}
+
                         request._receive = receive
             except Exception as e:
                 logger.warning(f"Failed to extract request body: {e}")
@@ -92,19 +94,19 @@ class RBACMiddleware(BaseHTTPMiddleware):
                 user_id=user_id,
                 tool_name=tool_name,
                 request_data=request_data,
-                timeout=SecuritySettings.get_approval_timeout()
+                timeout=SecuritySettings.get_approval_timeout(),
             )
 
             if not approval_granted:
                 # Approval denied or timed out
-                logger.warning(f"Approval denied/timeout: user={user_id}, tool={tool_name}")
+                logger.warning(
+                    f"Approval denied/timeout: user={user_id}, tool={tool_name}"
+                )
 
                 # Audit logging
                 try:
                     await self.audit_logger.log_denied(
-                        user_id,
-                        tool_name,
-                        "Approval denied or timed out"
+                        user_id, tool_name, "Approval denied or timed out"
                     )
                 except Exception as e:
                     logger.error(f"Failed to log approval denial: {e}")
@@ -115,8 +117,8 @@ class RBACMiddleware(BaseHTTPMiddleware):
                         "error": "Approval required",
                         "detail": "Request requires administrator approval but was denied or timed out",
                         "user_id": user_id,
-                        "tool_name": tool_name
-                    }
+                        "tool_name": tool_name,
+                    },
                 )
 
             logger.info(f"Approval granted: user={user_id}, tool={tool_name}")
@@ -139,8 +141,8 @@ class RBACMiddleware(BaseHTTPMiddleware):
                     "error": "Permission denied",
                     "detail": reason,
                     "user_id": user_id,
-                    "tool_name": tool_name
-                }
+                    "tool_name": tool_name,
+                },
             )
 
         # Permission granted - continue to handler
@@ -153,7 +155,7 @@ class RBACMiddleware(BaseHTTPMiddleware):
             await self.audit_logger.log_success(
                 user_id=user_id,
                 tool_name=tool_name,
-                execution_time_ms=execution_time_ms
+                execution_time_ms=execution_time_ms,
             )
         except Exception as e:
             logger.error(f"Failed to log successful access: {e}")

@@ -25,31 +25,57 @@ class SecurePathValidator:
         # 위험한 시스템 경로들 (멀티플랫폼 지원)
         self.dangerous_system_paths = {
             # Linux/Unix 시스템 경로
-            "/etc", "/root", "/bin", "/sbin", "/usr/bin", "/usr/sbin",
-            "/boot", "/sys", "/proc", "/dev", "/var/log", "/var/lib",
+            "/etc",
+            "/root",
+            "/bin",
+            "/sbin",
+            "/usr/bin",
+            "/usr/sbin",
+            "/boot",
+            "/sys",
+            "/proc",
+            "/dev",
+            "/var/log",
+            "/var/lib",
             # Windows 시스템 경로
-            "C:\\Windows", "C:\\Windows\\System32", "C:\\Windows\\SysWOW64",
-            "C:\\Users\\Administrator", "C:\\ProgramData", "C:\\Program Files",
-            "C:\\Program Files (x86)", "\\\\.\\pipe", "\\\\.\\mailslot",
+            "C:\\Windows",
+            "C:\\Windows\\System32",
+            "C:\\Windows\\SysWOW64",
+            "C:\\Users\\Administrator",
+            "C:\\ProgramData",
+            "C:\\Program Files",
+            "C:\\Program Files (x86)",
+            "\\\\.\\pipe",
+            "\\\\.\\mailslot",
             # Windows 특수 경로 패턴
-            "\\\\?\\"
+            "\\\\?\\",
         }
 
         # 민감한 파일들 (멀티플랫폼 지원)
         self.sensitive_files = {
             # Linux/Unix 중요 파일
-            "/etc/passwd", "/etc/shadow", "/etc/group", "/etc/sudoers",
-            "/root/.ssh", "/root/.bash_history", "/root/.bash_profile",
-            "/etc/hosts", "/etc/fstab", "/etc/crontab", "/etc/ssl",
+            "/etc/passwd",
+            "/etc/shadow",
+            "/etc/group",
+            "/etc/sudoers",
+            "/root/.ssh",
+            "/root/.bash_history",
+            "/root/.bash_profile",
+            "/etc/hosts",
+            "/etc/fstab",
+            "/etc/crontab",
+            "/etc/ssl",
             # Windows 중요 파일
             "C:\\Windows\\System32\\config\\SAM",
             "C:\\Windows\\System32\\config\\SYSTEM",
             "C:\\Windows\\System32\\config\\SECURITY",
             "C:\\Users\\Administrator\\NTUSER.DAT",
-            "C:\\ProgramData\\Microsoft\\Crypto"
+            "C:\\ProgramData\\Microsoft\\Crypto",
         }
 
-    def validate_and_resolve_path(self, path: str, working_dir: Optional[str] = None) -> Path:
+    def validate_and_resolve_path(
+        self, path: str, working_dir: Optional[str] = None
+    ) -> Path:
         """
         경로 검증 및 안전한 해석
 
@@ -82,7 +108,7 @@ class SecurePathValidator:
         self._validate_sensitive_file_access(real_path, path)
 
         # 6단계: 최종 작업공간 경계 재검증 (is_relative_to 활용)
-        if hasattr(real_path, 'is_relative_to'):
+        if hasattr(real_path, "is_relative_to"):
             workspace_roots = [self.project_root.resolve(), self.host_root.resolve()]
             is_safe = False
             for root in workspace_roots:
@@ -93,7 +119,9 @@ class SecurePathValidator:
                 except (ValueError, OSError):
                     continue
             if not is_safe:
-                raise SecurityError(f"Final boundary check failed: {path} -> {real_path}")
+                raise SecurityError(
+                    f"Final boundary check failed: {path} -> {real_path}"
+                )
 
         return real_path
 
@@ -109,7 +137,7 @@ class SecurePathValidator:
                 base_path = Path(path)
             else:
                 # HOST_ROOT에 매핑
-                base_path = self.host_root / path.lstrip('/')
+                base_path = self.host_root / path.lstrip("/")
         else:
             # 기본: PROJECT_ROOT 기준
             base_path = self.project_root / path
@@ -119,16 +147,13 @@ class SecurePathValidator:
     def _validate_workspace_boundary(self, resolved_path: Path, original_path: str):
         """작업공간 경계 검증"""
         # PROJECT_ROOT와 HOST_ROOT 모두에 대해 검증
-        workspace_roots = [
-            self.project_root.resolve(),
-            self.host_root.resolve()
-        ]
+        workspace_roots = [self.project_root.resolve(), self.host_root.resolve()]
 
         is_within_workspace = False
         for workspace_root in workspace_roots:
             try:
                 # Python 3.9+ 방식
-                if hasattr(resolved_path, 'is_relative_to'):
+                if hasattr(resolved_path, "is_relative_to"):
                     if resolved_path.is_relative_to(workspace_root):
                         is_within_workspace = True
                         break
@@ -141,7 +166,9 @@ class SecurePathValidator:
                 continue
 
         if not is_within_workspace:
-            raise SecurityError(f"Path traversal blocked: {original_path} -> {resolved_path}")
+            raise SecurityError(
+                f"Path traversal blocked: {original_path} -> {resolved_path}"
+            )
 
     def _validate_system_path_access(self, resolved_path: Path, original_path: str):
         """시스템 경로 접근 검증 (경로 구분자 정규화 지원)"""
@@ -155,11 +182,13 @@ class SecurePathValidator:
         try:
             # Windows 스타일 정규화 (\\)
             for path in [resolved_str, original_path, original_normalized]:
-                if '/' in path or '\\' in path:
+                if "/" in path or "\\" in path:
                     try:
                         # Windows 경로로 정규화 시도
                         win_path = PureWindowsPath(path)
-                        paths_to_check.append(str(win_path.as_posix()))  # POSIX 스타일 (/)
+                        paths_to_check.append(
+                            str(win_path.as_posix())
+                        )  # POSIX 스타일 (/)
                         paths_to_check.append(str(win_path))  # Windows 스타일 (\\)
 
                         # POSIX 경로로 정규화 시도
@@ -177,38 +206,54 @@ class SecurePathValidator:
 
         for check_path in paths_to_check:
             # 경로 구분자 정규화 (양방향 대체)
-            normalized_check = check_path.replace('\\', '/').replace('//', '/')
+            normalized_check = check_path.replace("\\", "/").replace("//", "/")
             check_path_lower = normalized_check.lower()
 
             for dangerous_path in self.dangerous_system_paths:
                 # 위험 경로도 양방향 정규화
-                normalized_dangerous = dangerous_path.replace('\\', '/').replace('//', '/')
+                normalized_dangerous = dangerous_path.replace("\\", "/").replace(
+                    "//", "/"
+                )
                 dangerous_lower = normalized_dangerous.lower()
 
                 # 정확한 매치 또는 하위 경로 검사
-                if (check_path_lower == dangerous_lower or
-                    check_path_lower.startswith(dangerous_lower + "/") or
-                    check_path_lower.startswith(dangerous_lower.rstrip('/') + "/")):
-                    raise SecurityError(f"System path access blocked: {original_path} -> {resolved_path}")
+                if (
+                    check_path_lower == dangerous_lower
+                    or check_path_lower.startswith(dangerous_lower + "/")
+                    or check_path_lower.startswith(dangerous_lower.rstrip("/") + "/")
+                ):
+                    raise SecurityError(
+                        f"System path access blocked: {original_path} -> {resolved_path}"
+                    )
 
                 # 원본 경로도 추가 검사 (정규화 전)
                 original_check_lower = check_path.lower()
                 original_dangerous_lower = dangerous_path.lower()
-                if (original_check_lower == original_dangerous_lower or
-                    original_check_lower.startswith(original_dangerous_lower + "/") or
-                    original_check_lower.startswith(original_dangerous_lower + "\\") or
-                    original_check_lower.startswith(original_dangerous_lower + os.sep)):
-                    raise SecurityError(f"System path access blocked: {original_path} -> {resolved_path}")
+                if (
+                    original_check_lower == original_dangerous_lower
+                    or original_check_lower.startswith(original_dangerous_lower + "/")
+                    or original_check_lower.startswith(original_dangerous_lower + "\\")
+                    or original_check_lower.startswith(
+                        original_dangerous_lower + os.sep
+                    )
+                ):
+                    raise SecurityError(
+                        f"System path access blocked: {original_path} -> {resolved_path}"
+                    )
 
         # 추가: Windows 특수 패턴 검사
         for check_path in paths_to_check:
-            if ("\\\\.\\" in check_path or
-                "\\\\?\\" in check_path or
-                "//." in check_path or
-                "//?" in check_path or
-                check_path.lower().replace('\\', '/').startswith("c:/windows") or
-                "administrator" in check_path.lower()):
-                raise SecurityError(f"Windows system path blocked: {original_path} -> {resolved_path}")
+            if (
+                "\\\\.\\" in check_path
+                or "\\\\?\\" in check_path
+                or "//." in check_path
+                or "//?" in check_path
+                or check_path.lower().replace("\\", "/").startswith("c:/windows")
+                or "administrator" in check_path.lower()
+            ):
+                raise SecurityError(
+                    f"Windows system path blocked: {original_path} -> {resolved_path}"
+                )
 
     def _validate_sensitive_file_access(self, resolved_path: Path, original_path: str):
         """민감한 파일 접근 검증 (경로 구분자 정규화 지원)"""
@@ -222,11 +267,13 @@ class SecurePathValidator:
         try:
             # Windows 스타일 정규화 (\\)
             for path in [resolved_str, original_path, original_normalized]:
-                if '/' in path or '\\' in path:
+                if "/" in path or "\\" in path:
                     try:
                         # Windows 경로로 정규화 시도
                         win_path = PureWindowsPath(path)
-                        paths_to_check.append(str(win_path.as_posix()))  # POSIX 스타일 (/)
+                        paths_to_check.append(
+                            str(win_path.as_posix())
+                        )  # POSIX 스타일 (/)
                         paths_to_check.append(str(win_path))  # Windows 스타일 (\\)
 
                         # POSIX 경로로 정규화 시도
@@ -244,30 +291,42 @@ class SecurePathValidator:
 
         for check_path in paths_to_check:
             # 경로 구분자 정규화 (양방향 대체)
-            normalized_check = check_path.replace('\\', '/').replace('//', '/')
+            normalized_check = check_path.replace("\\", "/").replace("//", "/")
             check_path_lower = normalized_check.lower()
 
             for sensitive_file in self.sensitive_files:
                 # 민감 파일 경로도 양방향 정규화
-                normalized_sensitive = sensitive_file.replace('\\', '/').replace('//', '/')
+                normalized_sensitive = sensitive_file.replace("\\", "/").replace(
+                    "//", "/"
+                )
                 sensitive_lower = normalized_sensitive.lower()
 
                 # 정확한 매치 또는 하위 경로 검사
-                if (check_path_lower == sensitive_lower or
-                    check_path_lower.startswith(sensitive_lower + "/") or
-                    check_path_lower.startswith(sensitive_lower.rstrip('/') + "/") or
-                    sensitive_lower in check_path_lower):  # 파일명이 포함된 경우도 검사
-                    raise SecurityError(f"Sensitive file access blocked: {original_path} -> {resolved_path}")
+                if (
+                    check_path_lower == sensitive_lower
+                    or check_path_lower.startswith(sensitive_lower + "/")
+                    or check_path_lower.startswith(sensitive_lower.rstrip("/") + "/")
+                    or sensitive_lower in check_path_lower
+                ):  # 파일명이 포함된 경우도 검사
+                    raise SecurityError(
+                        f"Sensitive file access blocked: {original_path} -> {resolved_path}"
+                    )
 
                 # 원본 경로도 추가 검사 (정규화 전)
                 original_check_lower = check_path.lower()
                 original_sensitive_lower = sensitive_file.lower()
-                if (original_check_lower == original_sensitive_lower or
-                    original_check_lower.startswith(original_sensitive_lower + "/") or
-                    original_check_lower.startswith(original_sensitive_lower + "\\") or
-                    original_check_lower.startswith(original_sensitive_lower + os.sep) or
-                    original_sensitive_lower in original_check_lower):
-                    raise SecurityError(f"Sensitive file access blocked: {original_path} -> {resolved_path}")
+                if (
+                    original_check_lower == original_sensitive_lower
+                    or original_check_lower.startswith(original_sensitive_lower + "/")
+                    or original_check_lower.startswith(original_sensitive_lower + "\\")
+                    or original_check_lower.startswith(
+                        original_sensitive_lower + os.sep
+                    )
+                    or original_sensitive_lower in original_check_lower
+                ):
+                    raise SecurityError(
+                        f"Sensitive file access blocked: {original_path} -> {resolved_path}"
+                    )
 
 
 class SafeFileAPI:
@@ -276,7 +335,9 @@ class SafeFileAPI:
     def __init__(self):
         self.path_validator = SecurePathValidator()
 
-    def read_text(self, path: str, working_dir: Optional[str] = None, encoding: str = 'utf-8') -> str:
+    def read_text(
+        self, path: str, working_dir: Optional[str] = None, encoding: str = "utf-8"
+    ) -> str:
         """
         안전한 파일 읽기
 
@@ -301,7 +362,13 @@ class SafeFileAPI:
         except (OSError, UnicodeDecodeError) as e:
             raise IOError(f"Failed to read file: {str(e)}")
 
-    def write_text(self, path: str, content: str, working_dir: Optional[str] = None, encoding: str = 'utf-8') -> None:
+    def write_text(
+        self,
+        path: str,
+        content: str,
+        working_dir: Optional[str] = None,
+        encoding: str = "utf-8",
+    ) -> None:
         """
         안전한 파일 쓰기
 
@@ -348,7 +415,9 @@ class SafeFileAPI:
         except (OSError, PermissionError) as e:
             raise IOError(f"Failed to list directory: {str(e)}")
 
-    def get_file_info(self, path: str, working_dir: Optional[str] = None) -> Dict[str, Any]:
+    def get_file_info(
+        self, path: str, working_dir: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         안전한 파일 정보 조회
 
@@ -373,7 +442,7 @@ class SafeFileAPI:
                 "is_directory": safe_path.is_dir(),
                 "size": stat.st_size,
                 "modified": stat.st_mtime,
-                "permissions": oct(stat.st_mode)[-3:]
+                "permissions": oct(stat.st_mode)[-3:],
             }
         except (OSError, PermissionError) as e:
             raise IOError(f"Failed to get file info: {str(e)}")
@@ -384,21 +453,50 @@ class SafeCommandExecutor:
 
     # 허용된 명령어 화이트리스트
     ALLOWED_COMMANDS = {
-        'git', 'ls', 'pwd', 'cat', 'head', 'tail', 'grep', 'find',
-        'python', 'python3', 'pip', 'npm', 'node'
+        "git",
+        "ls",
+        "pwd",
+        "cat",
+        "head",
+        "tail",
+        "grep",
+        "find",
+        "python",
+        "python3",
+        "pip",
+        "npm",
+        "node",
     }
 
     # 위험한 명령어 블랙리스트
     DANGEROUS_COMMANDS = {
-        'rm', 'rmdir', 'sudo', 'su', 'chmod', 'chown', 'kill', 'killall',
-        'shutdown', 'reboot', 'halt', 'init', 'service', 'systemctl',
-        'dd', 'fdisk', 'mount', 'umount', 'format'
+        "rm",
+        "rmdir",
+        "sudo",
+        "su",
+        "chmod",
+        "chown",
+        "kill",
+        "killall",
+        "shutdown",
+        "reboot",
+        "halt",
+        "init",
+        "service",
+        "systemctl",
+        "dd",
+        "fdisk",
+        "mount",
+        "umount",
+        "format",
     }
 
     def __init__(self, path_validator: SecurePathValidator):
         self.path_validator = path_validator
 
-    async def execute_command(self, command: str, working_dir: Optional[str] = None, timeout: int = 30) -> Dict[str, Any]:
+    async def execute_command(
+        self, command: str, working_dir: Optional[str] = None, timeout: int = 30
+    ) -> Dict[str, Any]:
         """
         안전한 명령어 실행
 
@@ -415,16 +513,15 @@ class SafeCommandExecutor:
 
         # 작업 디렉토리 검증
         if working_dir:
-            safe_cwd = str(self.path_validator.validate_and_resolve_path(".", working_dir))
+            safe_cwd = str(
+                self.path_validator.validate_and_resolve_path(".", working_dir)
+            )
         else:
             safe_cwd = os.getenv("PROJECT_ROOT", "/mnt/workspace")
 
         try:
             proc = await asyncio.create_subprocess_shell(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                cwd=safe_cwd
+                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=safe_cwd
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
 
@@ -433,7 +530,7 @@ class SafeCommandExecutor:
                 "stdout": stdout.decode() if stdout else "",
                 "stderr": stderr.decode() if stderr else "",
                 "returncode": proc.returncode or 0,
-                "success": proc.returncode == 0
+                "success": proc.returncode == 0,
             }
         except asyncio.TimeoutError:
             return {
@@ -441,7 +538,7 @@ class SafeCommandExecutor:
                 "stdout": "",
                 "stderr": f"Command timed out ({timeout}s)",
                 "returncode": 124,
-                "success": False
+                "success": False,
             }
         except Exception as e:
             return {
@@ -449,7 +546,7 @@ class SafeCommandExecutor:
                 "stdout": "",
                 "stderr": f"Command execution error: {str(e)}",
                 "returncode": 1,
-                "success": False
+                "success": False,
             }
 
     def _validate_command(self, command: str):

@@ -28,6 +28,7 @@ def anyio_backend():
 async def client():
     """HTTP client for testing"""
     from httpx import ASGITransport
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
@@ -48,11 +49,13 @@ class TestRBACIntegration:
         response = await client.post(
             "/tools/execute_python/call",
             headers={"X-User-ID": "guest_user"},
-            json={"arguments": {"code": "print(2+2)", "timeout": 30}}
+            json={"arguments": {"code": "print(2+2)", "timeout": 30}},
         )
 
         # Should return 403 Forbidden
-        assert response.status_code == 403, f"Expected 403, got {response.status_code}: {response.text}"
+        assert (
+            response.status_code == 403
+        ), f"Expected 403, got {response.status_code}: {response.text}"
 
         data = response.json()
         assert "error" in data
@@ -62,7 +65,9 @@ class TestRBACIntegration:
 
         # Verify audit log entry
         db = get_security_database()
-        logs = await db.get_audit_logs(user_id="guest_user", tool_name="execute_python", limit=1)
+        logs = await db.get_audit_logs(
+            user_id="guest_user", tool_name="execute_python", limit=1
+        )
 
         assert len(logs) > 0, "Audit log should be created"
         log = logs[0]
@@ -80,16 +85,20 @@ class TestRBACIntegration:
         response = await client.post(
             "/tools/execute_python/call",
             headers={"X-User-ID": "dev_user"},
-            json={"arguments": {"code": "print(2+2)", "timeout": 30}}
+            json={"arguments": {"code": "print(2+2)", "timeout": 30}},
         )
 
         # Should return 200 OK (or error from actual execution)
         # The important thing is NOT 403
-        assert response.status_code != 403, f"Developer should not be denied: {response.text}"
+        assert (
+            response.status_code != 403
+        ), f"Developer should not be denied: {response.text}"
 
         # Verify audit log entry
         db = get_security_database()
-        logs = await db.get_audit_logs(user_id="dev_user", tool_name="execute_python", limit=1)
+        logs = await db.get_audit_logs(
+            user_id="dev_user", tool_name="execute_python", limit=1
+        )
 
         assert len(logs) > 0, "Audit log should be created"
         log = logs[0]
@@ -108,7 +117,7 @@ class TestRBACIntegration:
         response = await client.post(
             "/tools/read_file/call",
             headers={"X-User-ID": "guest_user"},
-            json={"arguments": {"path": "/tmp/test.txt"}}
+            json={"arguments": {"path": "/tmp/test.txt"}},
         )
 
         # Should NOT return 403 (guest has read_file permission)
@@ -124,7 +133,7 @@ class TestRBACIntegration:
         response = await client.post(
             "/tools/git_commit/call",
             headers={"X-User-ID": "admin_user"},
-            json={"arguments": {"message": "test commit"}}
+            json={"arguments": {"message": "test commit"}},
         )
 
         # Should NOT return 403 (admin has git_commit permission)
@@ -140,11 +149,13 @@ class TestRBACIntegration:
         response = await client.post(
             "/tools/git_commit/call",
             headers={"X-User-ID": "dev_user"},
-            json={"arguments": {"message": "test commit"}}
+            json={"arguments": {"message": "test commit"}},
         )
 
         # Should return 403 Forbidden (developer doesn't have git_commit)
-        assert response.status_code == 403, f"Developer should be denied git_commit: {response.text}"
+        assert (
+            response.status_code == 403
+        ), f"Developer should be denied git_commit: {response.text}"
 
         data = response.json()
         assert data["error"] == "Permission denied"
@@ -159,7 +170,7 @@ class TestRBACIntegration:
         response = await client.post(
             "/tools/read_file/call",
             headers={"X-User-ID": "unknown_user_123"},
-            json={"arguments": {"path": "/tmp/test.txt"}}
+            json={"arguments": {"path": "/tmp/test.txt"}},
         )
 
         # Should return 403 Forbidden
@@ -175,7 +186,7 @@ class TestRBACIntegration:
         response = await client.post(
             "/tools/read_file/call",
             # No X-User-ID header - should default to "default"
-            json={"arguments": {"path": "/tmp/test.txt"}}
+            json={"arguments": {"path": "/tmp/test.txt"}},
         )
 
         # Behavior depends on whether "default" user exists
@@ -202,7 +213,7 @@ class TestRBACIntegration:
             await client.post(
                 "/tools/read_file/call",
                 headers={"X-User-ID": "guest_user"},
-                json={"arguments": {"path": f"/tmp/test{i}.txt"}}
+                json={"arguments": {"path": f"/tmp/test{i}.txt"}},
             )
 
         # Wait for async logging
@@ -210,7 +221,9 @@ class TestRBACIntegration:
 
         # Count logs created after start_time
         all_logs = await db.get_audit_logs(limit=1000)
-        new_logs = [log for log in all_logs if log.get("timestamp", "") >= str(start_time)]
+        new_logs = [
+            log for log in all_logs if log.get("timestamp", "") >= str(start_time)
+        ]
         new_count = len(new_logs)
 
         assert new_count >= 5, f"Expected at least 5 new audit logs, got {new_count}"
@@ -235,7 +248,7 @@ class TestAuditLoggerLifecycle:
                 user_id=f"user_{i}",
                 tool_name="test_tool",
                 action="test",
-                status="success"
+                status="success",
             )
 
         # Queue should handle overflow gracefully

@@ -2,6 +2,7 @@
 Mock LLM Inference Server for CI Testing
 OpenAI-compatible API that returns mock responses without GPU/models
 """
+
 import os
 import time
 import uuid
@@ -43,11 +44,7 @@ class ChatCompletionResponse(BaseModel):
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    return {
-        "status": "ok",
-        "model": MODEL_NAME,
-        "backend": "mock"
-    }
+    return {"status": "ok", "model": MODEL_NAME, "backend": "mock"}
 
 
 @app.get("/v1/models")
@@ -60,9 +57,9 @@ async def list_models():
                 "id": MODEL_NAME,
                 "object": "model",
                 "created": int(time.time()),
-                "owned_by": "mock-inference"
+                "owned_by": "mock-inference",
             }
-        ]
+        ],
     }
 
 
@@ -83,7 +80,15 @@ async def chat_completions(request: ChatCompletionRequest):
     mock_content = f"Mock response to: {user_message[:50]}..."
 
     # Check if it's a code-related query (basic heuristic)
-    code_keywords = ["code", "function", "python", "javascript", "def", "class", "import"]
+    code_keywords = [
+        "code",
+        "function",
+        "python",
+        "javascript",
+        "def",
+        "class",
+        "import",
+    ]
     is_code = any(keyword in user_message.lower() for keyword in code_keywords)
 
     if is_code:
@@ -96,18 +101,16 @@ async def chat_completions(request: ChatCompletionRequest):
         choices=[
             {
                 "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": mock_content
-                },
-                "finish_reason": "stop"
+                "message": {"role": "assistant", "content": mock_content},
+                "finish_reason": "stop",
             }
         ],
         usage={
             "prompt_tokens": sum(len(m.content.split()) for m in request.messages),
             "completion_tokens": len(mock_content.split()),
-            "total_tokens": sum(len(m.content.split()) for m in request.messages) + len(mock_content.split())
-        }
+            "total_tokens": sum(len(m.content.split()) for m in request.messages)
+            + len(mock_content.split()),
+        },
     )
 
     return response
@@ -119,7 +122,7 @@ async def root():
     return {
         "message": "Mock LLM Inference Server",
         "model": MODEL_NAME,
-        "endpoints": ["/health", "/v1/models", "/v1/chat/completions"]
+        "endpoints": ["/health", "/v1/models", "/v1/chat/completions"],
     }
 
 

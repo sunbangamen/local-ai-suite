@@ -14,7 +14,12 @@ from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 from prometheus_fastapi_instrumentator import Instrumentator
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 from database import db
 
@@ -89,6 +94,7 @@ class QueryResponse(BaseModel):
     cached: Optional[bool] = False
     response_time_ms: Optional[int] = None
 
+
 class AnalyticsResponse(BaseModel):
     total_searches: int
     avg_response_time: float
@@ -107,6 +113,7 @@ def _approx_tokens(text: str) -> int:
 
 # 한국어 문장 분할기 (품질 향상)
 _SENT_SPLIT = re.compile(r"(?<=[.!?])\s+|(?<=\n)\s*")
+
 
 def _split_sentences_ko(text: str, max_chars: int = 400) -> List[str]:
     """
@@ -146,14 +153,18 @@ def _sliding_chunks(text: str, chunk_tokens: int, overlap_tokens: int) -> List[s
 
 async def _probe_embedding_dim(client: httpx.AsyncClient) -> int:
     # 임베딩 서비스 규약: POST /embed  { "texts": ["..."] } -> { "embeddings": [[...]] }
-    r = await client.post(f"{EMBEDDING_URL}/embed", json={"texts": ["dimension probe"]}, timeout=30.0)
+    r = await client.post(
+        f"{EMBEDDING_URL}/embed", json={"texts": ["dimension probe"]}, timeout=30.0
+    )
     r.raise_for_status()
     data = r.json()
     emb = data["embeddings"][0]
     return len(emb)
 
 
-async def _embed_texts(client: httpx.AsyncClient, texts: List[str]) -> List[List[float]]:
+async def _embed_texts(
+    client: httpx.AsyncClient, texts: List[str]
+) -> List[List[float]]:
     r = await client.post(f"{EMBEDDING_URL}/embed", json={"texts": texts}, timeout=60.0)
     r.raise_for_status()
     data = r.json()
@@ -163,12 +174,51 @@ async def _embed_texts(client: httpx.AsyncClient, texts: List[str]) -> List[List
 def _detect_model_for_query(query: str) -> str:
     """쿼리 내용 분석하여 적절한 모델 선택"""
     code_keywords = [
-        'function', 'class', 'import', 'export', 'const', 'let', 'var',
-        'def', 'return', 'if', 'for', 'while', 'try', 'catch', 'async', 'await',
-        '코드', '함수', '프로그래밍', '버그', 'API', 'HTML', 'CSS', 'JavaScript',
-        'Python', 'React', '개발', '구현', '디버그', '스크립트', '라이브러리',
-        'npm', 'pip', 'git', 'docker', '배포', '테스트', '알고리즘',
-        '```', 'console.log', 'print(', 'error', 'exception', '코딩', '프로그램'
+        "function",
+        "class",
+        "import",
+        "export",
+        "const",
+        "let",
+        "var",
+        "def",
+        "return",
+        "if",
+        "for",
+        "while",
+        "try",
+        "catch",
+        "async",
+        "await",
+        "코드",
+        "함수",
+        "프로그래밍",
+        "버그",
+        "API",
+        "HTML",
+        "CSS",
+        "JavaScript",
+        "Python",
+        "React",
+        "개발",
+        "구현",
+        "디버그",
+        "스크립트",
+        "라이브러리",
+        "npm",
+        "pip",
+        "git",
+        "docker",
+        "배포",
+        "테스트",
+        "알고리즘",
+        "```",
+        "console.log",
+        "print(",
+        "error",
+        "exception",
+        "코딩",
+        "프로그램",
     ]
 
     query_lower = query.lower()
@@ -176,7 +226,10 @@ def _detect_model_for_query(query: str) -> str:
 
     return CODE_MODEL_NAME if has_code_keywords else CHAT_MODEL_NAME
 
-async def _llm_answer(client: httpx.AsyncClient, system: str, user: str) -> Tuple[str, Dict[str, Any]]:
+
+async def _llm_answer(
+    client: httpx.AsyncClient, system: str, user: str
+) -> Tuple[str, Dict[str, Any]]:
     # 쿼리 내용에 따라 적절한 모델 선택
     selected_model = _detect_model_for_query(user)
     logger.info(f"RAG 모델 선택: {selected_model} (쿼리: {user[:50]}...)")
@@ -191,7 +244,9 @@ async def _llm_answer(client: httpx.AsyncClient, system: str, user: str) -> Tupl
             {"role": "user", "content": user},
         ],
     }
-    r = await client.post(OPENAI_CHAT_COMPLETIONS, json=payload, timeout=RAG_LLM_TIMEOUT)
+    r = await client.post(
+        OPENAI_CHAT_COMPLETIONS, json=payload, timeout=RAG_LLM_TIMEOUT
+    )
     r.raise_for_status()
     data = r.json()
     content = data["choices"][0]["message"]["content"]
@@ -212,11 +267,15 @@ def _ensure_collection(collection: str, dim: int):
 
 @retry(
     stop=stop_after_attempt(QDRANT_MAX_RETRIES),
-    wait=wait_exponential(multiplier=1, min=QDRANT_RETRY_MIN_WAIT, max=QDRANT_RETRY_MAX_WAIT),
+    wait=wait_exponential(
+        multiplier=1, min=QDRANT_RETRY_MIN_WAIT, max=QDRANT_RETRY_MAX_WAIT
+    ),
     retry=retry_if_exception_type((ConnectionError, TimeoutError, Exception)),
-    reraise=True
+    reraise=True,
 )
-def _upsert_points(collection: str, embeddings: List[List[float]], payloads: List[Dict[str, Any]]):
+def _upsert_points(
+    collection: str, embeddings: List[List[float]], payloads: List[Dict[str, Any]]
+):
     """
     Qdrant upsert with automatic retry on connection/timeout errors
     """
@@ -229,9 +288,11 @@ def _upsert_points(collection: str, embeddings: List[List[float]], payloads: Lis
 
 @retry(
     stop=stop_after_attempt(QDRANT_MAX_RETRIES),
-    wait=wait_exponential(multiplier=1, min=QDRANT_RETRY_MIN_WAIT, max=QDRANT_RETRY_MAX_WAIT),
+    wait=wait_exponential(
+        multiplier=1, min=QDRANT_RETRY_MIN_WAIT, max=QDRANT_RETRY_MAX_WAIT
+    ),
     retry=retry_if_exception_type((ConnectionError, TimeoutError, Exception)),
-    reraise=True
+    reraise=True,
 )
 def _search(collection: str, query_vec: List[float], topk: int) -> List[Dict[str, Any]]:
     """
@@ -337,7 +398,9 @@ async def health(llm: bool = Query(False, description="LLM까지 점검하려면
     if llm:
         try:
             async with httpx.AsyncClient() as client:
-                ans, _ = await _llm_answer(client, "You are a health checker.", "Reply with 'ok'.")
+                ans, _ = await _llm_answer(
+                    client, "You are a health checker.", "Reply with 'ok'."
+                )
                 l_ok = ans.strip().lower().startswith("ok")
         except Exception as e:
             l_ok = False
@@ -355,9 +418,23 @@ async def health(llm: bool = Query(False, description="LLM까지 점검하려면
         "service": "rag",
         "dependencies": {
             "qdrant": {"status": "healthy" if q_ok else "unhealthy", "error": q_error},
-            "embedding": {"status": "healthy" if e_ok else "unhealthy", "dim": dim, "error": e_error},
-            "api_gateway": {"status": "healthy" if gw_ok else "unhealthy", "error": gw_error},
-            "llm": {"status": "healthy" if l_ok else ("unhealthy" if l_ok is False else "not_checked"), "error": l_error},
+            "embedding": {
+                "status": "healthy" if e_ok else "unhealthy",
+                "dim": dim,
+                "error": e_error,
+            },
+            "api_gateway": {
+                "status": "healthy" if gw_ok else "unhealthy",
+                "error": gw_error,
+            },
+            "llm": {
+                "status": (
+                    "healthy"
+                    if l_ok
+                    else ("unhealthy" if l_ok is False else "not_checked")
+                ),
+                "error": l_error,
+            },
         },
         "config": {
             "RAG_TOPK": RAG_TOPK,
@@ -373,7 +450,7 @@ async def health(llm: bool = Query(False, description="LLM까지 점검하려면
         return JSONResponse(
             status_code=503,
             content=response_body,
-            headers={"Retry-After": "30"}  # 30초 후 재시도 권장
+            headers={"Retry-After": "30"},  # 30초 후 재시도 권장
         )
 
     return response_body
@@ -382,7 +459,9 @@ async def health(llm: bool = Query(False, description="LLM까지 점검하려면
 @app.post("/index", response_model=IndexResponse)
 async def index(
     collection: Optional[str] = Query(None, description="컬렉션 이름"),
-    path: Optional[str] = Query(None, description="인덱싱할 경로 (절대경로 또는 상대경로)")
+    path: Optional[str] = Query(
+        None, description="인덱싱할 경로 (절대경로 또는 상대경로)"
+    ),
 ):
     """
     지정된 경로의 문서들을 인덱싱 - 전역 파일시스템 지원
@@ -393,7 +472,7 @@ async def index(
     if path:
         if os.path.isabs(path):
             # 절대경로면 HOST_ROOT를 통해 접근
-            target_dir = os.path.join(HOST_ROOT, path.lstrip('/'))
+            target_dir = os.path.join(HOST_ROOT, path.lstrip("/"))
         else:
             # 상대경로면 현재 작업 디렉토리 기준 (추후 working_dir 지원)
             target_dir = path
@@ -422,7 +501,7 @@ async def index(
         pid = 0
         for doc_id, text in docs:
             # Calculate document metadata
-            file_size = len(text.encode('utf-8'))
+            file_size = len(text.encode("utf-8"))
             checksum = hashlib.sha256(text.encode()).hexdigest()[:16]
 
             # 너무 큰 문서 방어적 컷(선택)
@@ -465,7 +544,7 @@ async def index(
         embedding_model = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
         doc_chunks = {}
         for pl in payloads:
-            doc_id = pl['doc_id']
+            doc_id = pl["doc_id"]
             if doc_id not in doc_chunks:
                 doc_chunks[doc_id] = 0
             doc_chunks[doc_id] += 1
@@ -473,7 +552,7 @@ async def index(
         # Find original docs to get metadata
         for doc_id, text in docs:
             if doc_id in doc_chunks:
-                file_size = len(text.encode('utf-8'))
+                file_size = len(text.encode("utf-8"))
                 checksum = hashlib.sha256(text.encode()).hexdigest()[:16]
                 db.update_document_metadata(
                     doc_id=doc_id,
@@ -481,7 +560,7 @@ async def index(
                     file_size=file_size,
                     chunk_count=doc_chunks[doc_id],
                     embedding_model=embedding_model,
-                    checksum=checksum
+                    checksum=checksum,
                 )
 
         return IndexResponse(collection=col, chunks=len(all_chunks))
@@ -505,11 +584,11 @@ async def query(body: QueryRequest):
     if cached_result:
         response_time_ms = int((time.time() - start_time) * 1000)
         return QueryResponse(
-            answer=cached_result['response'],
-            context=cached_result['context_data'],
-            usage={"cached": True, "cached_at": cached_result['cached_at']},
+            answer=cached_result["response"],
+            context=cached_result["context_data"],
+            usage={"cached": True, "cached_at": cached_result["cached_at"]},
             cached=True,
-            response_time_ms=response_time_ms
+            response_time_ms=response_time_ms,
         )
 
     async with httpx.AsyncClient() as client:
@@ -571,7 +650,14 @@ async def query(body: QueryRequest):
         total_time_ms = int((time.time() - start_time) * 1000)
 
         # 응답에 참고 문맥 정보 반환
-        ctx_out = [{"score": h.get("score", 0.0), "doc_id": h.get("doc_id"), "chunk_id": h.get("chunk_id")} for h in hits]
+        ctx_out = [
+            {
+                "score": h.get("score", 0.0),
+                "doc_id": h.get("doc_id"),
+                "chunk_id": h.get("chunk_id"),
+            }
+            for h in hits
+        ]
 
         # Cache the result for future queries
         db.cache_query(q, col, answer, ctx_out, ttl_hours=6)  # Cache for 6 hours
@@ -582,20 +668,25 @@ async def query(body: QueryRequest):
             query=q,
             results_count=len(hits),
             response_time_ms=total_time_ms,
-            llm_tokens_used=usage.get('total_tokens', 0),
+            llm_tokens_used=usage.get("total_tokens", 0),
             embedding_time_ms=int(embed_time_ms),
             vector_search_time_ms=int(search_time_ms),
             llm_response_time_ms=llm_time_ms,
-            context_length=len('\n'.join(ctx_texts))
+            context_length=len("\n".join(ctx_texts)),
         )
 
         # Track document access for analytics
         for h in hits:
-            if h.get('doc_id'):
-                db.track_document_access(h['doc_id'])
+            if h.get("doc_id"):
+                db.track_document_access(h["doc_id"])
 
-        return QueryResponse(answer=answer, context=ctx_out, usage=usage,
-                           cached=False, response_time_ms=total_time_ms)
+        return QueryResponse(
+            answer=answer,
+            context=ctx_out,
+            usage=usage,
+            cached=False,
+            response_time_ms=total_time_ms,
+        )
 
 
 @app.post("/prewarm")
@@ -631,14 +722,16 @@ async def optimize_database():
 async def cache_stats():
     """Get cache statistics"""
     with db.transaction() as conn:
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT
                 COUNT(*) as total_entries,
                 AVG(accessed_count) as avg_access_count,
                 COUNT(CASE WHEN expires_at > CURRENT_TIMESTAMP THEN 1 END) as active_entries,
                 COUNT(CASE WHEN expires_at <= CURRENT_TIMESTAMP THEN 1 END) as expired_entries
             FROM query_cache
-        """)
+        """
+        )
         stats = dict(cursor.fetchone())
 
     return stats
@@ -656,4 +749,5 @@ async def clear_cache():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8002)

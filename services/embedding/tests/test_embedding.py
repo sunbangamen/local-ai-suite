@@ -8,6 +8,7 @@ NOTE: Embedding service truncates large inputs instead of rejecting them:
 - MAX_CHARS exceeded: truncates each text to MAX_CHARS (returns 200)
 - Empty texts: returns empty embeddings array (returns 200)
 """
+
 import pytest
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import MagicMock, patch
@@ -67,10 +68,7 @@ async def test_embed_single_text(app_with_mocks):
     """Test embedding a single text (success path)"""
     transport = ASGITransport(app=app_with_mocks)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/embed",
-            json={"texts": ["Hello world"]}
-        )
+        response = await client.post("/embed", json={"texts": ["Hello world"]})
 
         assert response.status_code == 200
         data = response.json()
@@ -87,10 +85,7 @@ async def test_embed_batch_texts(app_with_mocks):
     transport = ASGITransport(app=app_with_mocks)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         texts = [f"Document {i}" for i in range(10)]
-        response = await client.post(
-            "/embed",
-            json={"texts": texts}
-        )
+        response = await client.post("/embed", json={"texts": texts})
 
         assert response.status_code == 200
         data = response.json()
@@ -123,10 +118,7 @@ async def test_exceed_max_texts_truncates(app_with_mocks):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Create batch exceeding MAX_TEXTS (default 1024)
         large_batch = [f"Text {i}" for i in range(2000)]
-        response = await client.post(
-            "/embed",
-            json={"texts": large_batch}
-        )
+        response = await client.post("/embed", json={"texts": large_batch})
 
         # Service TRUNCATES to MAX_TEXTS and returns 200
         assert response.status_code == 200
@@ -147,10 +139,7 @@ async def test_exceed_max_chars_truncates(app_with_mocks):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Create text exceeding MAX_CHARS (default 8000)
         very_long_text = "a" * 10000
-        response = await client.post(
-            "/embed",
-            json={"texts": [very_long_text]}
-        )
+        response = await client.post("/embed", json={"texts": [very_long_text]})
 
         # Service TRUNCATES text to MAX_CHARS and returns 200
         assert response.status_code == 200
@@ -168,10 +157,7 @@ async def test_empty_texts_list_returns_empty(app_with_mocks):
     """
     transport = ASGITransport(app=app_with_mocks)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/embed",
-            json={"texts": []}
-        )
+        response = await client.post("/embed", json={"texts": []})
 
         # Service returns empty array with 200
         assert response.status_code == 200
@@ -186,14 +172,13 @@ async def test_reload_model_successfully(app_with_mocks):
     transport = ASGITransport(app=app_with_mocks)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Patch _load_model to avoid actual model loading
-        with patch('app._load_model') as mock_load:
+        with patch("app._load_model") as mock_load:
             mock_model = MagicMock()
             mock_model.embed = lambda texts, **kwargs: [[0.1] * 384 for _ in texts]
             mock_load.return_value = mock_model
 
             response = await client.post(
-                "/reload",
-                json={"model": "BAAI/bge-small-en-v1.5"}
+                "/reload", json={"model": "BAAI/bge-small-en-v1.5"}
             )
 
             assert response.status_code == 200

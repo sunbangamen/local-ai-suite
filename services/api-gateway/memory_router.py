@@ -18,19 +18,40 @@ from pydantic import BaseModel
 import asyncio
 
 # 기본 로거 먼저 초기화 (다른 임포트보다 우선)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger("memory-api")
 
 # Prometheus 메트릭 라이브러리 (logger 초기화 후)
 try:
-    from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+    from prometheus_client import (
+        Counter,
+        Histogram,
+        Gauge,
+        generate_latest,
+        CONTENT_TYPE_LATEST,
+    )
+
     PROMETHEUS_AVAILABLE = True
 
     # 메트릭 정의
-    REQUEST_COUNT = Counter('memory_api_requests_total', 'Total requests', ['method', 'endpoint', 'status'])
-    REQUEST_DURATION = Histogram('memory_api_request_duration_seconds', 'Request duration', ['method', 'endpoint'])
-    ACTIVE_CONVERSATIONS = Gauge('memory_api_active_conversations', 'Number of active conversations', ['project_id'])
-    VECTOR_SEARCH_ENABLED = Gauge('memory_api_vector_search_enabled', 'Vector search availability')
+    REQUEST_COUNT = Counter(
+        "memory_api_requests_total", "Total requests", ["method", "endpoint", "status"]
+    )
+    REQUEST_DURATION = Histogram(
+        "memory_api_request_duration_seconds",
+        "Request duration",
+        ["method", "endpoint"],
+    )
+    ACTIVE_CONVERSATIONS = Gauge(
+        "memory_api_active_conversations",
+        "Number of active conversations",
+        ["project_id"],
+    )
+    VECTOR_SEARCH_ENABLED = Gauge(
+        "memory_api_vector_search_enabled", "Vector search availability"
+    )
 
 except ImportError:
     PROMETHEUS_AVAILABLE = False
@@ -40,6 +61,7 @@ except ImportError:
 try:
     sys.path.append("/app")
     from shared.logging_config import create_service_logger
+
     logger = create_service_logger("memory-api")
     logger.info("Using enhanced logging system")
 except ImportError:
@@ -52,13 +74,24 @@ try:
     from memory_system import MemorySystem, get_memory_system
 except ImportError:
     print("⚠️ Warning: memory_system module not found")
+
     # Mock 클래스 (fallback)
     class MemorySystem:
-        def __init__(self): pass
-        def get_project_id(self, path=None): return "mock-project"
-        def save_conversation(self, *args, **kwargs): return 1
-        def search_conversations(self, *args, **kwargs): return []
-        def get_conversation_stats(self, *args, **kwargs): return {}
+        def __init__(self):
+            pass
+
+        def get_project_id(self, path=None):
+            return "mock-project"
+
+        def save_conversation(self, *args, **kwargs):
+            return 1
+
+        def search_conversations(self, *args, **kwargs):
+            return []
+
+        def get_conversation_stats(self, *args, **kwargs):
+            return {}
+
 
 # Pydantic 모델들
 class ConversationSave(BaseModel):
@@ -72,6 +105,7 @@ class ConversationSave(BaseModel):
     context: Optional[Dict[str, Any]] = None
     project_path: Optional[str] = None
 
+
 class ConversationSearch(BaseModel):
     query: Optional[str] = None
     importance_min: Optional[int] = None
@@ -80,12 +114,15 @@ class ConversationSearch(BaseModel):
     use_vector_search: bool = False
     project_id: Optional[str] = None
 
+
 class MemoryBackup(BaseModel):
     backup_type: str = "json"  # "json" or "sql"
+
 
 class MemorySync(BaseModel):
     sync_type: str = "qdrant"  # "qdrant" only for now
     batch_size: int = 64
+
 
 # FastAPI 앱 생성
 memory_app = FastAPI(
@@ -93,7 +130,7 @@ memory_app = FastAPI(
     description="프로젝트별 장기 기억 시스템 API",
     version="1.0.0",
     docs_url="/v1/memory/docs",
-    redoc_url="/v1/memory/redoc"
+    redoc_url="/v1/memory/redoc",
 )
 
 # CORS 미들웨어
@@ -104,6 +141,7 @@ memory_app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # 로깅 미들웨어
 @memory_app.middleware("http")
@@ -133,12 +171,13 @@ async def logging_middleware(request: Request, call_next):
             REQUEST_COUNT.labels(
                 method=request.method,
                 endpoint=str(request.url.path),
-                status=response.status_code
+                status=response.status_code,
             ).inc()
             REQUEST_DURATION.labels(
-                method=request.method,
-                endpoint=str(request.url.path)
-            ).observe(duration_ms / 1000)  # seconds
+                method=request.method, endpoint=str(request.url.path)
+            ).observe(
+                duration_ms / 1000
+            )  # seconds
 
         return response
 
@@ -151,9 +190,11 @@ async def logging_middleware(request: Request, call_next):
         )
         raise
 
+
 # 메모리 시스템 인스턴스
 memory_system = get_memory_system()
 logger.info("메모리 시스템 초기화 완료")
+
 
 @memory_app.get("/v1/memory/health")
 async def health_check():
@@ -177,24 +218,23 @@ async def health_check():
             "vector_enabled": memory_system._vector_enabled,
             "vector_recovery": recovery_status,
             "test_project_id": test_project_id,
-            "test_stats": stats
+            "test_stats": stats,
         }
     except Exception as e:
         return JSONResponse(
             status_code=503,
-            content={
-                "status": "unhealthy",
-                "error": str(e),
-                "memory_system": "error"
-            }
+            content={"status": "unhealthy", "error": str(e), "memory_system": "error"},
         )
+
 
 @memory_app.post("/v1/memory/conversations")
 async def save_conversation(conversation: ConversationSave):
     """대화 저장"""
     try:
         # 프로젝트 ID 결정 (Docker 환경에서는 환경변수 우선)
-        project_id = os.getenv('DEFAULT_PROJECT_ID') or memory_system.get_project_id(conversation.project_path)
+        project_id = os.getenv("DEFAULT_PROJECT_ID") or memory_system.get_project_id(
+            conversation.project_path
+        )
 
         # 대화 저장
         conversation_id = memory_system.save_conversation(
@@ -206,7 +246,7 @@ async def save_conversation(conversation: ConversationSave):
             token_count=conversation.token_count,
             response_time_ms=conversation.response_time_ms,
             context=conversation.context,
-            tags=conversation.tags
+            tags=conversation.tags,
         )
 
         if conversation_id is None:
@@ -216,11 +256,12 @@ async def save_conversation(conversation: ConversationSave):
             "success": True,
             "conversation_id": conversation_id,
             "project_id": project_id,
-            "message": "Conversation saved successfully"
+            "message": "Conversation saved successfully",
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving conversation: {e}")
+
 
 @memory_app.post("/v1/memory/conversations/search")
 async def search_conversations(search: ConversationSearch):
@@ -232,9 +273,7 @@ async def search_conversations(search: ConversationSearch):
         if search.use_vector_search and search.query:
             # 벡터 검색 (비동기)
             results = await memory_system.vector_search_conversations(
-                project_id=project_id,
-                query=search.query,
-                limit=search.limit
+                project_id=project_id, query=search.query, limit=search.limit
             )
         else:
             # FTS5 검색
@@ -243,7 +282,7 @@ async def search_conversations(search: ConversationSearch):
                 query=search.query,
                 importance_min=search.importance_min,
                 limit=search.limit,
-                offset=search.offset
+                offset=search.offset,
             )
 
         return {
@@ -251,11 +290,14 @@ async def search_conversations(search: ConversationSearch):
             "project_id": project_id,
             "results": results,
             "total_results": len(results),
-            "search_type": "vector" if search.use_vector_search else "fts5"
+            "search_type": "vector" if search.use_vector_search else "fts5",
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error searching conversations: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error searching conversations: {e}"
+        )
+
 
 @memory_app.get("/v1/memory/projects/{project_id}/stats")
 async def get_project_stats(project_id: str):
@@ -263,14 +305,11 @@ async def get_project_stats(project_id: str):
     try:
         stats = memory_system.get_conversation_stats(project_id)
 
-        return {
-            "success": True,
-            "project_id": project_id,
-            "stats": stats
-        }
+        return {"success": True, "project_id": project_id, "stats": stats}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting stats: {e}")
+
 
 @memory_app.post("/v1/memory/projects/{project_id}/cleanup")
 async def cleanup_project_memory(project_id: str):
@@ -282,11 +321,12 @@ async def cleanup_project_memory(project_id: str):
             "success": True,
             "project_id": project_id,
             "deleted_conversations": deleted_count,
-            "message": f"Cleaned up {deleted_count} expired conversations"
+            "message": f"Cleaned up {deleted_count} expired conversations",
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error cleaning up memory: {e}")
+
 
 @memory_app.post("/v1/memory/projects/{project_id}/backup")
 async def create_memory_backup(project_id: str, backup: MemoryBackup):
@@ -300,13 +340,14 @@ async def create_memory_backup(project_id: str, backup: MemoryBackup):
                 "project_id": project_id,
                 "backup_path": str(backup_path),
                 "backup_type": backup.backup_type,
-                "message": "Backup created successfully"
+                "message": "Backup created successfully",
             }
         else:
             raise HTTPException(status_code=500, detail="Failed to create backup")
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating backup: {e}")
+
 
 @memory_app.post("/v1/memory/projects/{project_id}/sync")
 async def sync_project_vectors(project_id: str, sync_config: MemorySync):
@@ -315,21 +356,21 @@ async def sync_project_vectors(project_id: str, sync_config: MemorySync):
         if sync_config.sync_type == "qdrant":
             # Qdrant 동기화
             sync_stats = memory_system.batch_sync_to_qdrant(
-                project_id=project_id,
-                batch_size=sync_config.batch_size
+                project_id=project_id, batch_size=sync_config.batch_size
             )
 
             return {
                 "success": True,
                 "project_id": project_id,
                 "sync_stats": sync_stats,
-                "message": f"Synchronized {sync_stats['synced']} conversations to Qdrant"
+                "message": f"Synchronized {sync_stats['synced']} conversations to Qdrant",
             }
         else:
             raise HTTPException(status_code=400, detail="Unsupported sync type")
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error syncing vectors: {e}")
+
 
 @memory_app.post("/v1/memory/projects/{project_id}/sync/retry")
 async def retry_failed_syncs(project_id: str):
@@ -341,31 +382,31 @@ async def retry_failed_syncs(project_id: str):
             "success": True,
             "project_id": project_id,
             "retry_stats": retry_stats,
-            "message": f"Retried {retry_stats['retried']} failed syncs, {retry_stats['succeeded']} succeeded"
+            "message": f"Retried {retry_stats['retried']} failed syncs, {retry_stats['succeeded']} succeeded",
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrying syncs: {e}")
+
 
 @memory_app.get("/v1/memory/projects/{project_id}/sync/queue")
 async def get_sync_queue(project_id: str, include_failed: bool = Query(False)):
     """동기화 대기열 조회"""
     try:
         queue = memory_system.get_qdrant_sync_queue(
-            project_id=project_id,
-            limit=100,
-            include_failed=include_failed
+            project_id=project_id, limit=100, include_failed=include_failed
         )
 
         return {
             "success": True,
             "project_id": project_id,
             "queue_size": len(queue),
-            "queue": queue
+            "queue": queue,
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting sync queue: {e}")
+
 
 @memory_app.post("/v1/memory/projects/{project_id}/optimize")
 async def optimize_project_database(project_id: str):
@@ -377,13 +418,14 @@ async def optimize_project_database(project_id: str):
             return {
                 "success": True,
                 "project_id": project_id,
-                "message": "Database optimized successfully"
+                "message": "Database optimized successfully",
             }
         else:
             raise HTTPException(status_code=500, detail="Database optimization failed")
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error optimizing database: {e}")
+
 
 @memory_app.post("/v1/memory/projects/{project_id}/fts/rebuild")
 async def rebuild_fts_index(project_id: str):
@@ -395,13 +437,14 @@ async def rebuild_fts_index(project_id: str):
             return {
                 "success": True,
                 "project_id": project_id,
-                "message": "FTS5 index rebuilt successfully"
+                "message": "FTS5 index rebuilt successfully",
             }
         else:
             raise HTTPException(status_code=500, detail="FTS5 index rebuild failed")
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error rebuilding FTS index: {e}")
+
 
 @memory_app.post("/v1/memory/vector/recovery")
 async def recover_vector_functionality():
@@ -415,17 +458,20 @@ async def recover_vector_functionality():
             return {
                 "success": True,
                 "vector_enabled": memory_system._vector_enabled,
-                "message": "Vector functionality recovered successfully"
+                "message": "Vector functionality recovered successfully",
             }
         else:
             return {
                 "success": False,
                 "vector_enabled": memory_system._vector_enabled,
-                "message": "Vector recovery failed - Qdrant may still be unavailable"
+                "message": "Vector recovery failed - Qdrant may still be unavailable",
             }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error recovering vector functionality: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error recovering vector functionality: {e}"
+        )
+
 
 # Prometheus 메트릭 엔드포인트
 @memory_app.get("/metrics")
@@ -436,27 +482,29 @@ async def metrics():
 
     try:
         # 실시간 메트릭 업데이트
-        if hasattr(memory_system, '_vector_enabled'):
+        if hasattr(memory_system, "_vector_enabled"):
             VECTOR_SEARCH_ENABLED.set(1 if memory_system._vector_enabled else 0)
 
         # 프로젝트별 대화 수 업데이트 (기본 프로젝트만)
         try:
             project_id = memory_system.get_project_id()
             stats = memory_system.get_conversation_stats(project_id)
-            if stats and 'total_conversations' in stats:
-                ACTIVE_CONVERSATIONS.labels(project_id=project_id).set(stats['total_conversations'])
+            if stats and "total_conversations" in stats:
+                ACTIVE_CONVERSATIONS.labels(project_id=project_id).set(
+                    stats["total_conversations"]
+                )
         except Exception:
             pass  # 메트릭 업데이트 실패는 무시
 
         # Prometheus 형식으로 메트릭 반환
         return JSONResponse(
-            content=generate_latest().decode('utf-8'),
-            media_type=CONTENT_TYPE_LATEST
+            content=generate_latest().decode("utf-8"), media_type=CONTENT_TYPE_LATEST
         )
 
     except Exception as e:
         logger.error(f"메트릭 생성 실패: {e}")
         raise HTTPException(status_code=500, detail=f"Error generating metrics: {e}")
+
 
 # 애플리케이션 시작 시 초기 메트릭 설정
 def initialize_metrics():
@@ -465,13 +513,15 @@ def initialize_metrics():
         logger.info("Prometheus 메트릭 초기화됨")
         # 벡터 검색 상태 초기화
         try:
-            if hasattr(memory_system, '_vector_enabled'):
+            if hasattr(memory_system, "_vector_enabled"):
                 VECTOR_SEARCH_ENABLED.set(1 if memory_system._vector_enabled else 0)
         except Exception:
             VECTOR_SEARCH_ENABLED.set(0)
 
+
 # 초기화 실행
 initialize_metrics()
+
 
 @memory_app.get("/v1/memory/projects")
 async def list_projects():
@@ -489,22 +539,23 @@ async def list_projects():
 
                     if memory_db.exists():
                         stats = memory_system.get_conversation_stats(project_id)
-                        projects.append({
-                            "project_id": project_id,
-                            "database_path": str(memory_db),
-                            "total_conversations": stats.get("total_conversations", 0),
-                            "avg_importance": stats.get("avg_importance", 0),
-                            "latest_conversation": stats.get("latest_conversation")
-                        })
+                        projects.append(
+                            {
+                                "project_id": project_id,
+                                "database_path": str(memory_db),
+                                "total_conversations": stats.get(
+                                    "total_conversations", 0
+                                ),
+                                "avg_importance": stats.get("avg_importance", 0),
+                                "latest_conversation": stats.get("latest_conversation"),
+                            }
+                        )
 
-        return {
-            "success": True,
-            "total_projects": len(projects),
-            "projects": projects
-        }
+        return {"success": True, "total_projects": len(projects), "projects": projects}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing projects: {e}")
+
 
 # 예외 처리
 @memory_app.exception_handler(404)
@@ -524,11 +575,13 @@ async def not_found_handler(request, exc):
                 "/v1/memory/projects/{project_id}/backup",
                 "/v1/memory/projects/{project_id}/sync",
                 "/v1/memory/projects/{project_id}/optimize",
-                "/v1/memory/vector/recovery"
-            ]
-        }
+                "/v1/memory/vector/recovery",
+            ],
+        },
     )
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(memory_app, host="0.0.0.0", port=8005)

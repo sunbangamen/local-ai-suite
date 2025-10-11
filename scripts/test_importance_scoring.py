@@ -6,6 +6,7 @@
 
 from memory_system import memory_system
 
+
 def test_importance_scenarios():
     """다양한 시나리오로 중요도 점수 테스트"""
 
@@ -15,23 +16,21 @@ def test_importance_scenarios():
             "user_query": "안녕하세요!",
             "ai_response": "안녕하세요! 무엇을 도와드릴까요?",
             "expected_range": (1, 3),
-            "description": "간단한 인사"
+            "description": "간단한 인사",
         },
         {
             "user_query": "감사합니다",
             "ai_response": "천만에요. 다른 질문이 있으시면 언제든 말씀해주세요.",
             "expected_range": (1, 3),
-            "description": "감사 인사"
+            "description": "감사 인사",
         },
-
         # 일반적인 질문 (중간 중요도)
         {
             "user_query": "Python에서 리스트와 튜플의 차이점은 무엇인가요?",
             "ai_response": "Python에서 리스트와 튜플의 주요 차이점은 다음과 같습니다:\n\n1. 가변성(Mutability):\n- 리스트는 가변(mutable) 객체로, 생성 후에도 요소를 추가, 삭제, 변경할 수 있습니다.\n- 튜플은 불변(immutable) 객체로, 생성 후에는 요소를 변경할 수 없습니다.\n\n2. 표기법:\n- 리스트: [1, 2, 3]\n- 튜플: (1, 2, 3)\n\n3. 성능:\n- 튜플이 리스트보다 메모리 효율적이고 접근 속도가 빠릅니다.\n\n4. 사용 용도:\n- 리스트: 데이터가 변경될 가능성이 있는 경우\n- 튜플: 고정된 데이터나 함수의 반환값으로 여러 값을 묶을 때",
             "expected_range": (4, 7),
-            "description": "Python 기본 개념 질문"
+            "description": "Python 기본 개념 질문",
         },
-
         # 코딩 관련 질문 (높은 중요도)
         {
             "user_query": "FastAPI에서 데이터베이스 연결을 위한 의존성 주입을 어떻게 구현하나요?",
@@ -68,9 +67,8 @@ def read_users(db: Session = Depends(get_db)):
 2. 예외 발생시 안전한 정리
 3. 테스트 용이성""",
             "expected_range": (6, 9),
-            "description": "고급 코딩 질문 + 코드 포함"
+            "description": "고급 코딩 질문 + 코드 포함",
         },
-
         # 설정 및 구성 관련 (높은 중요도)
         {
             "user_query": "Docker compose에서 환경변수를 안전하게 관리하는 방법을 알려주세요",
@@ -111,17 +109,16 @@ secrets:
 - 프로덕션에서는 Docker Secrets 또는 외부 비밀 관리 시스템 사용
 - 환경별로 파일 분리""",
             "expected_range": (7, 9),
-            "description": "설정 관리 + 보안 고려사항"
+            "description": "설정 관리 + 보안 고려사항",
         },
-
         # 사용자가 중요표시한 경우 (최고 중요도)
         {
             "user_query": "이 프로젝트의 핵심 아키텍처를 설명해주세요",
             "ai_response": "이 프로젝트는 로컬 AI 서비스를 위한 마이크로서비스 아키텍처를 사용합니다...",
             "context": {"user_important": True},
             "expected_range": (8, 10),
-            "description": "사용자 중요 표시"
-        }
+            "description": "사용자 중요 표시",
+        },
     ]
 
     print("🧪 중요도 자동 판정 시스템 테스트")
@@ -159,7 +156,9 @@ secrets:
         level_info = memory_system.IMPORTANCE_LEVELS[score]
         print(f"Level: {level_info['name']} (TTL: {level_info['ttl_days']} days)")
 
-    print(f"\n📊 테스트 결과: {passed_tests}/{total_tests} 통과 ({passed_tests/total_tests*100:.1f}%)")
+    print(
+        f"\n📊 테스트 결과: {passed_tests}/{total_tests} 통과 ({passed_tests/total_tests*100:.1f}%)"
+    )
 
     if passed_tests >= total_tests * 0.8:  # 80% 이상 통과
         print("🎉 중요도 판정 시스템이 정상적으로 작동합니다!")
@@ -167,6 +166,7 @@ secrets:
     else:
         print("⚠️ 중요도 판정 시스템 개선이 필요합니다.")
         return False
+
 
 def test_memory_integration():
     """메모리 시스템 통합 테스트"""
@@ -179,8 +179,12 @@ def test_memory_integration():
     # 다양한 중요도의 대화 저장
     test_conversations = [
         ("안녕하세요", "안녕하세요!", "chat-7b"),
-        ("Python 함수 만드는 방법 알려주세요", "Python에서 함수는 def 키워드로 정의합니다...", "code-7b"),
-        ("이 프로젝트의 아키텍처 설명해주세요", "상세한 아키텍처 설명...", "chat-7b")
+        (
+            "Python 함수 만드는 방법 알려주세요",
+            "Python에서 함수는 def 키워드로 정의합니다...",
+            "code-7b",
+        ),
+        ("이 프로젝트의 아키텍처 설명해주세요", "상세한 아키텍처 설명...", "chat-7b"),
     ]
 
     conversation_ids = []
@@ -190,7 +194,7 @@ def test_memory_integration():
             user_query=query,
             ai_response=response,
             model_used=model,
-            session_id="test_session"
+            session_id="test_session",
         )
         conversation_ids.append(conv_id)
         print(f"✅ 대화 저장 완료: ID {conv_id}")
@@ -198,9 +202,7 @@ def test_memory_integration():
     # 검색 테스트
     print("\n🔍 검색 테스트:")
     results = memory_system.search_conversations(
-        project_id=project_id,
-        query="Python",
-        limit=5
+        project_id=project_id, query="Python", limit=5
     )
     print(f"'Python' 검색 결과: {len(results)}개")
 
@@ -211,6 +213,7 @@ def test_memory_integration():
     print(f"평균 중요도: {stats['avg_importance']:.1f}/10")
 
     return True
+
 
 if __name__ == "__main__":
     # 중요도 판정 테스트

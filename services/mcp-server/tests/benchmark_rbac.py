@@ -24,7 +24,11 @@ DEFAULT_RPS = 100
 # Test scenarios: cycle through different users and tools
 TEST_SCENARIOS = [
     {"user_id": "dev_user", "tool_name": "list_files", "args": {}},
-    {"user_id": "dev_user", "tool_name": "read_file", "args": {"file_path": "/tmp/test.txt"}},
+    {
+        "user_id": "dev_user",
+        "tool_name": "read_file",
+        "args": {"file_path": "/tmp/test.txt"},
+    },
     {"user_id": "guest_user", "tool_name": "git_status", "args": {}},
     {"user_id": "guest_user", "tool_name": "git_log", "args": {"max_count": 5}},
     {"user_id": "admin_user", "tool_name": "get_current_model", "args": {}},
@@ -45,32 +49,23 @@ async def benchmark_tool_call(client: httpx.AsyncClient, scenario: Dict) -> Dict
             f"{BASE_URL}/tools/{scenario['tool_name']}/call",
             headers={"X-User-ID": scenario["user_id"]},
             json={"arguments": scenario["args"]},
-            timeout=5.0
+            timeout=5.0,
         )
         latency = (time.perf_counter() - start) * 1000  # convert to ms
 
         return {
-            "success": response.status_code < 500,  # 4xx are expected (permission denied)
+            "success": response.status_code
+            < 500,  # 4xx are expected (permission denied)
             "latency": latency,
             "status": response.status_code,
-            "error": None
+            "error": None,
         }
     except httpx.TimeoutException as e:
         latency = (time.perf_counter() - start) * 1000
-        return {
-            "success": False,
-            "latency": latency,
-            "status": 0,
-            "error": "Timeout"
-        }
+        return {"success": False, "latency": latency, "status": 0, "error": "Timeout"}
     except Exception as e:
         latency = (time.perf_counter() - start) * 1000
-        return {
-            "success": False,
-            "latency": latency,
-            "status": 0,
-            "error": str(e)
-        }
+        return {"success": False, "latency": latency, "status": 0, "error": str(e)}
 
 
 async def run_benchmark(duration: int, target_rps: int) -> List[Dict]:
@@ -90,7 +85,7 @@ async def run_benchmark(duration: int, target_rps: int) -> List[Dict]:
 
     print(f"Starting benchmark: {target_rps} RPS for {duration}s")
     print(f"Test scenarios: {len(TEST_SCENARIOS)} scenarios")
-    print("="*60)
+    print("=" * 60)
 
     async with httpx.AsyncClient() as client:
         # Warmup: single request to each scenario
@@ -118,19 +113,29 @@ async def run_benchmark(duration: int, target_rps: int) -> List[Dict]:
                 if isinstance(result, dict):
                     results.append(result)
                 else:
-                    results.append({
-                        "success": False,
-                        "latency": 0,
-                        "status": 0,
-                        "error": str(result)
-                    })
+                    results.append(
+                        {
+                            "success": False,
+                            "latency": 0,
+                            "status": 0,
+                            "error": str(result),
+                        }
+                    )
 
             # Progress indicator
             elapsed = time.time() - start_time
             if int(elapsed) % 10 == 0 and len(results) > 0:
-                recent = results[-target_rps*10:] if len(results) >= target_rps*10 else results
-                avg_latency = statistics.mean([r["latency"] for r in recent if r["latency"] > 0])
-                print(f"  {int(elapsed)}s: {len(results)} requests, avg latency: {avg_latency:.2f}ms")
+                recent = (
+                    results[-target_rps * 10 :]
+                    if len(results) >= target_rps * 10
+                    else results
+                )
+                avg_latency = statistics.mean(
+                    [r["latency"] for r in recent if r["latency"] > 0]
+                )
+                print(
+                    f"  {int(elapsed)}s: {len(results)} requests, avg latency: {avg_latency:.2f}ms"
+                )
 
             # Wait for next second (maintain RPS)
             elapsed = time.time() - start_time
@@ -178,13 +183,33 @@ def analyze_results(results: List[Dict], duration: int, output_csv: Path) -> Dic
         "median_latency_ms": statistics.median(latencies),
         "min_latency_ms": min(latencies),
         "max_latency_ms": max(latencies),
-        "p95_latency_ms": statistics.quantiles(latencies, n=20)[18] if len(latencies) >= 20 else statistics.quantiles(latencies, n=len(latencies))[int(len(latencies)*0.95)] if len(latencies) > 1 else latencies[0],
-        "p99_latency_ms": statistics.quantiles(latencies, n=100)[98] if len(latencies) >= 100 else statistics.quantiles(latencies, n=len(latencies))[int(len(latencies)*0.99)] if len(latencies) > 1 else latencies[0],
+        "p95_latency_ms": (
+            statistics.quantiles(latencies, n=20)[18]
+            if len(latencies) >= 20
+            else (
+                statistics.quantiles(latencies, n=len(latencies))[
+                    int(len(latencies) * 0.95)
+                ]
+                if len(latencies) > 1
+                else latencies[0]
+            )
+        ),
+        "p99_latency_ms": (
+            statistics.quantiles(latencies, n=100)[98]
+            if len(latencies) >= 100
+            else (
+                statistics.quantiles(latencies, n=len(latencies))[
+                    int(len(latencies) * 0.99)
+                ]
+                if len(latencies) > 1
+                else latencies[0]
+            )
+        ),
     }
 
     # Save to CSV
     output_csv.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_csv, 'w', newline='') as f:
+    with open(output_csv, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=stats.keys())
         writer.writeheader()
         writer.writerow(stats)
@@ -212,7 +237,7 @@ def analyze_results(results: List[Dict], duration: int, output_csv: Path) -> Dic
     goals = {
         "RPS >= 100": stats["rps"] >= 100,
         "95p latency < 100ms": stats["p95_latency_ms"] < 100,
-        "Error rate < 1%": stats["error_rate_pct"] < 1.0
+        "Error rate < 1%": stats["error_rate_pct"] < 1.0,
     }
 
     goals_met = all(goals.values())
@@ -233,8 +258,15 @@ def analyze_results(results: List[Dict], duration: int, output_csv: Path) -> Dic
 
 async def main():
     parser = argparse.ArgumentParser(description="RBAC Performance Benchmark")
-    parser.add_argument("--duration", type=int, default=DEFAULT_DURATION, help="Test duration in seconds")
-    parser.add_argument("--rps", type=int, default=DEFAULT_RPS, help="Target requests per second")
+    parser.add_argument(
+        "--duration",
+        type=int,
+        default=DEFAULT_DURATION,
+        help="Test duration in seconds",
+    )
+    parser.add_argument(
+        "--rps", type=int, default=DEFAULT_RPS, help="Target requests per second"
+    )
     parser.add_argument("--output", type=str, help="Output CSV file path")
 
     args = parser.parse_args()
@@ -278,9 +310,9 @@ async def main():
 
     # Return exit code based on goals
     goals_met = (
-        stats.get("rps", 0) >= 100 and
-        stats.get("p95_latency_ms", float('inf')) < 100 and
-        stats.get("error_rate_pct", 100) < 1.0
+        stats.get("rps", 0) >= 100
+        and stats.get("p95_latency_ms", float("inf")) < 100
+        and stats.get("error_rate_pct", 100) < 1.0
     )
 
     return 0 if goals_met else 1

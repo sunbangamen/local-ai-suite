@@ -8,6 +8,7 @@ NOTE: RAG service behavior:
 - No explicit 404 handling in current implementation
 - Tests validate actual service responses, not idealized error codes
 """
+
 import pytest
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -36,12 +37,14 @@ def mock_qdrant_client():
 @pytest.fixture
 def mock_httpx_response():
     """Create mock httpx response"""
+
     def create_response(data, status_code=200):
         response = AsyncMock()
         response.raise_for_status = MagicMock()
         response.json.return_value = data
         response.status_code = status_code
         return response
+
     return create_response
 
 
@@ -68,17 +71,27 @@ async def app_with_mocks(mock_qdrant_client, mock_httpx_response):
         # Mock embedding responses
         if "/embed" in url:
             texts = kwargs.get("json", {}).get("texts", [])
-            return mock_httpx_response({
-                "embeddings": [[0.1] * 384 for _ in texts],
-                "model": "BAAI/bge-small-en-v1.5",
-                "dimension": 384
-            })
+            return mock_httpx_response(
+                {
+                    "embeddings": [[0.1] * 384 for _ in texts],
+                    "model": "BAAI/bge-small-en-v1.5",
+                    "dimension": 384,
+                }
+            )
         # Mock LLM responses
         elif "/chat/completions" in url:
-            return mock_httpx_response({
-                "choices": [{"message": {"content": "Mock answer based on context"}}],
-                "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
-            })
+            return mock_httpx_response(
+                {
+                    "choices": [
+                        {"message": {"content": "Mock answer based on context"}}
+                    ],
+                    "usage": {
+                        "prompt_tokens": 100,
+                        "completion_tokens": 50,
+                        "total_tokens": 150,
+                    },
+                }
+            )
         # Mock health check
         else:
             return mock_httpx_response({"status": "ok"})
@@ -90,7 +103,7 @@ async def app_with_mocks(mock_qdrant_client, mock_httpx_response):
     mock_client.get = mock_get
 
     # Patch httpx.AsyncClient
-    with patch('httpx.AsyncClient') as mock_client_class:
+    with patch("httpx.AsyncClient") as mock_client_class:
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_client
         mock_instance.__aexit__.return_value = None
@@ -144,16 +157,12 @@ async def test_query_with_existing_collection(app_with_mocks, mock_qdrant_client
         mock_qdrant_client.search.return_value = [
             MagicMock(
                 payload={"text": "Sample document text", "source": "test.txt"},
-                score=0.95
+                score=0.95,
             )
         ]
 
         response = await client.post(
-            "/query",
-            json={
-                "query": "test query",
-                "collection": "existing-collection"
-            }
+            "/query", json={"query": "test query", "collection": "existing-collection"}
         )
 
         # Should succeed or degrade gracefully
@@ -178,10 +187,7 @@ async def test_query_with_nonexistent_collection(app_with_mocks, mock_qdrant_cli
 
         response = await client.post(
             "/query",
-            json={
-                "query": "test query",
-                "collection": "nonexistent-collection"
-            }
+            json={"query": "test query", "collection": "nonexistent-collection"},
         )
 
         # Service may return various status codes (no explicit 404 handling)
@@ -199,10 +205,7 @@ async def test_query_with_empty_results(app_with_mocks, mock_qdrant_client):
 
         response = await client.post(
             "/query",
-            json={
-                "query": "no matching query",
-                "collection": "empty-collection"
-            }
+            json={"query": "no matching query", "collection": "empty-collection"},
         )
 
         # Should handle gracefully

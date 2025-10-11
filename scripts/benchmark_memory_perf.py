@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from memory_system import MemorySystem
 
+
 class MemoryBenchmark:
     def __init__(self, test_size: int = 1000):
         """
@@ -79,7 +80,7 @@ class MemoryBenchmark:
                 user_query=query,
                 ai_response=response,
                 model_used=model,
-                session_id=f"benchmark-session-{i // 100}"
+                session_id=f"benchmark-session-{i // 100}",
             )
 
             if conv_id:
@@ -89,7 +90,10 @@ class MemoryBenchmark:
             if (i + 1) % 100 == 0:
                 elapsed = time.time() - start_time
                 rate = (i + 1) / elapsed
-                print(f"  진행: {i + 1:,}/{self.test_size:,} ({rate:.1f} conversations/sec)", end='\r')
+                print(
+                    f"  진행: {i + 1:,}/{self.test_size:,} ({rate:.1f} conversations/sec)",
+                    end="\r",
+                )
 
         elapsed_time = time.time() - start_time
         avg_time_per_conv = (elapsed_time / self.test_size) * 1000  # ms
@@ -99,11 +103,11 @@ class MemoryBenchmark:
         print(f"   평균 저장 시간: {avg_time_per_conv:.2f}ms/conversation")
         print(f"   처리량: {self.test_size / elapsed_time:.1f} conversations/sec")
 
-        self.results['save'] = {
-            'total_conversations': len(conversation_ids),
-            'elapsed_time_sec': elapsed_time,
-            'avg_time_ms': avg_time_per_conv,
-            'throughput_per_sec': self.test_size / elapsed_time
+        self.results["save"] = {
+            "total_conversations": len(conversation_ids),
+            "elapsed_time_sec": elapsed_time,
+            "avg_time_ms": avg_time_per_conv,
+            "throughput_per_sec": self.test_size / elapsed_time,
         }
 
         return conversation_ids
@@ -129,9 +133,7 @@ class MemoryBenchmark:
 
             start_time = time.time()
             results = self.memory.search_conversations(
-                project_id=self.project_id,
-                query=query,
-                limit=10
+                project_id=self.project_id, query=query, limit=10
             )
             elapsed_ms = (time.time() - start_time) * 1000
 
@@ -139,7 +141,7 @@ class MemoryBenchmark:
             total_results += len(results)
 
             if (i + 1) % 20 == 0:
-                print(f"  진행: {i + 1}/{num_queries}", end='\r')
+                print(f"  진행: {i + 1}/{num_queries}", end="\r")
 
         avg_time = sum(search_times) / len(search_times)
         p95_time = sorted(search_times)[int(len(search_times) * 0.95)]
@@ -150,15 +152,17 @@ class MemoryBenchmark:
         print(f"   P95 검색 시간: {p95_time:.2f}ms")
         print(f"   P99 검색 시간: {p99_time:.2f}ms")
         print(f"   평균 결과 수: {total_results / num_queries:.1f}개")
-        print(f"   목표 달성 여부: {'✅ PASS' if p95_time < 1000 else '❌ FAIL'} (목표: < 1000ms)")
+        print(
+            f"   목표 달성 여부: {'✅ PASS' if p95_time < 1000 else '❌ FAIL'} (목표: < 1000ms)"
+        )
 
-        self.results['fts_search'] = {
-            'num_queries': num_queries,
-            'avg_time_ms': avg_time,
-            'p95_time_ms': p95_time,
-            'p99_time_ms': p99_time,
-            'avg_results': total_results / num_queries,
-            'target_met': p95_time < 1000
+        self.results["fts_search"] = {
+            "num_queries": num_queries,
+            "avg_time_ms": avg_time,
+            "p95_time_ms": p95_time,
+            "p99_time_ms": p99_time,
+            "avg_results": total_results / num_queries,
+            "target_met": p95_time < 1000,
         }
 
     async def benchmark_vector_search(self, num_queries: int = 50):
@@ -168,15 +172,14 @@ class MemoryBenchmark:
 
         if not self.memory._vector_enabled:
             print("⚠️ 벡터 검색이 비활성화되어 있습니다. 스킵합니다.")
-            self.results['vector_search'] = {'skipped': True}
+            self.results["vector_search"] = {"skipped": True}
             return
 
         # 먼저 임베딩 생성
         print("  임베딩 생성 중...")
         start_embed = time.time()
         processed = await self.memory.process_pending_embeddings(
-            self.project_id,
-            batch_size=64
+            self.project_id, batch_size=64
         )
         embed_time = time.time() - start_embed
         print(f"  ✅ {processed}개 임베딩 생성 완료 ({embed_time:.2f}초)")
@@ -198,10 +201,7 @@ class MemoryBenchmark:
 
             start_time = time.time()
             results = await self.memory.vector_search_conversations(
-                project_id=self.project_id,
-                query=query,
-                limit=10,
-                score_threshold=0.5
+                project_id=self.project_id, query=query, limit=10, score_threshold=0.5
             )
             elapsed_ms = (time.time() - start_time) * 1000
 
@@ -209,7 +209,7 @@ class MemoryBenchmark:
             total_results += len(results)
 
             if (i + 1) % 10 == 0:
-                print(f"  진행: {i + 1}/{num_queries}", end='\r')
+                print(f"  진행: {i + 1}/{num_queries}", end="\r")
 
         avg_time = sum(search_times) / len(search_times)
         p95_time = sorted(search_times)[int(len(search_times) * 0.95)]
@@ -220,13 +220,13 @@ class MemoryBenchmark:
         print(f"   P95 검색 시간: {p95_time:.2f}ms")
         print(f"   평균 결과 수: {total_results / num_queries:.1f}개")
 
-        self.results['vector_search'] = {
-            'num_queries': num_queries,
-            'embeddings_generated': processed,
-            'embedding_time_sec': embed_time,
-            'avg_search_time_ms': avg_time,
-            'p95_search_time_ms': p95_time,
-            'avg_results': total_results / num_queries
+        self.results["vector_search"] = {
+            "num_queries": num_queries,
+            "embeddings_generated": processed,
+            "embedding_time_sec": embed_time,
+            "avg_search_time_ms": avg_time,
+            "p95_search_time_ms": p95_time,
+            "avg_results": total_results / num_queries,
         }
 
     async def benchmark_hybrid_search(self, num_queries: int = 50):
@@ -236,7 +236,7 @@ class MemoryBenchmark:
 
         if not self.memory._vector_enabled:
             print("⚠️ 벡터 검색이 비활성화되어 있습니다. 스킵합니다.")
-            self.results['hybrid_search'] = {'skipped': True}
+            self.results["hybrid_search"] = {"skipped": True}
             return
 
         test_queries = [
@@ -255,9 +255,7 @@ class MemoryBenchmark:
 
             start_time = time.time()
             results = await self.memory.hybrid_search_conversations(
-                project_id=self.project_id,
-                query=query,
-                limit=10
+                project_id=self.project_id, query=query, limit=10
             )
             elapsed_ms = (time.time() - start_time) * 1000
 
@@ -265,7 +263,7 @@ class MemoryBenchmark:
             total_results += len(results)
 
             if (i + 1) % 10 == 0:
-                print(f"  진행: {i + 1}/{num_queries}", end='\r')
+                print(f"  진행: {i + 1}/{num_queries}", end="\r")
 
         avg_time = sum(search_times) / len(search_times)
         p95_time = sorted(search_times)[int(len(search_times) * 0.95)]
@@ -275,11 +273,11 @@ class MemoryBenchmark:
         print(f"   P95 검색 시간: {p95_time:.2f}ms")
         print(f"   평균 결과 수: {total_results / num_queries:.1f}개")
 
-        self.results['hybrid_search'] = {
-            'num_queries': num_queries,
-            'avg_time_ms': avg_time,
-            'p95_time_ms': p95_time,
-            'avg_results': total_results / num_queries
+        self.results["hybrid_search"] = {
+            "num_queries": num_queries,
+            "avg_time_ms": avg_time,
+            "p95_time_ms": p95_time,
+            "avg_results": total_results / num_queries,
         }
 
     def benchmark_stats(self):
@@ -295,16 +293,19 @@ class MemoryBenchmark:
         print(f"   총 대화: {stats['total_conversations']:,}개")
         print(f"   평균 중요도: {stats['avg_importance']:.2f}/10")
 
-        self.results['stats'] = {
-            'query_time_ms': elapsed_ms,
-            'total_conversations': stats['total_conversations']
+        self.results["stats"] = {
+            "query_time_ms": elapsed_ms,
+            "total_conversations": stats["total_conversations"],
         }
 
     def save_results(self):
         """벤치마크 결과 저장"""
-        output_file = Path("/tmp") / f"memory_benchmark_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        output_file = (
+            Path("/tmp")
+            / f"memory_benchmark_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        )
 
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             json.dump(self.results, f, indent=2, ensure_ascii=False)
 
         print(f"\n💾 벤치마크 결과 저장: {output_file}")
@@ -316,44 +317,62 @@ class MemoryBenchmark:
         print("=" * 80)
 
         # 저장 성능
-        if 'save' in self.results:
-            save = self.results['save']
+        if "save" in self.results:
+            save = self.results["save"]
             print(f"\n📝 저장 성능:")
             print(f"   처리량: {save['throughput_per_sec']:.1f} conversations/sec")
             print(f"   평균 시간: {save['avg_time_ms']:.2f}ms")
-            print(f"   목표 달성: {'✅ PASS' if save['avg_time_ms'] < 100 else '⚠️  SLOW'} (목표: < 100ms)")
+            print(
+                f"   목표 달성: {'✅ PASS' if save['avg_time_ms'] < 100 else '⚠️  SLOW'} (목표: < 100ms)"
+            )
 
         # FTS5 검색
-        if 'fts_search' in self.results:
-            fts = self.results['fts_search']
+        if "fts_search" in self.results:
+            fts = self.results["fts_search"]
             print(f"\n🔍 FTS5 검색 성능:")
             print(f"   평균: {fts['avg_time_ms']:.2f}ms")
             print(f"   P95: {fts['p95_time_ms']:.2f}ms")
-            print(f"   목표 달성: {'✅ PASS' if fts['target_met'] else '❌ FAIL'} (목표: < 1000ms)")
+            print(
+                f"   목표 달성: {'✅ PASS' if fts['target_met'] else '❌ FAIL'} (목표: < 1000ms)"
+            )
 
         # 벡터 검색
-        if 'vector_search' in self.results and not self.results['vector_search'].get('skipped'):
-            vec = self.results['vector_search']
+        if "vector_search" in self.results and not self.results["vector_search"].get(
+            "skipped"
+        ):
+            vec = self.results["vector_search"]
             print(f"\n🧠 벡터 검색 성능:")
             print(f"   평균: {vec['avg_search_time_ms']:.2f}ms")
             print(f"   P95: {vec['p95_search_time_ms']:.2f}ms")
 
         # 하이브리드 검색
-        if 'hybrid_search' in self.results and not self.results['hybrid_search'].get('skipped'):
-            hyb = self.results['hybrid_search']
+        if "hybrid_search" in self.results and not self.results["hybrid_search"].get(
+            "skipped"
+        ):
+            hyb = self.results["hybrid_search"]
             print(f"\n🔀 하이브리드 검색 성능:")
             print(f"   평균: {hyb['avg_time_ms']:.2f}ms")
             print(f"   P95: {hyb['p95_time_ms']:.2f}ms")
 
         print("\n" + "=" * 80)
 
+
 async def main():
     """메인 벤치마크 실행"""
     import argparse
 
     parser = argparse.ArgumentParser(description="Memory System Performance Benchmark")
-    parser.add_argument("--size", type=int, default=1000, help="Number of conversations to test (default: 1000)")
-    parser.add_argument("--full", action="store_true", help="Run full 1M conversation test (takes ~1 hour)")
+    parser.add_argument(
+        "--size",
+        type=int,
+        default=1000,
+        help="Number of conversations to test (default: 1000)",
+    )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Run full 1M conversation test (takes ~1 hour)",
+    )
     args = parser.parse_args()
 
     test_size = 1_000_000 if args.full else args.size
@@ -361,7 +380,7 @@ async def main():
     if args.full:
         print("⚠️  Full 1M conversation test will take approximately 1 hour")
         response = input("Continue? (yes/no): ")
-        if response.lower() != 'yes':
+        if response.lower() != "yes":
             print("Cancelled.")
             return 1
 
@@ -388,8 +407,10 @@ async def main():
     except Exception as e:
         print(f"\n❌ 벤치마크 실패: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))

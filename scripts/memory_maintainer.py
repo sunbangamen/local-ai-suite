@@ -21,22 +21,22 @@ from concurrent.futures import ThreadPoolExecutor
 from memory_utils import (
     ensure_qdrant_collection as ensure_collection_util,
     upsert_to_qdrant,
-    build_qdrant_payload
+    build_qdrant_payload,
 )
 
 # 환경변수
-AI_MEMORY_DIR = os.getenv('AI_MEMORY_DIR', '/mnt/e/ai-data/memory')
-QDRANT_URL = os.getenv('QDRANT_URL', 'http://qdrant:6333')
-EMBEDDING_URL = os.getenv('EMBEDDING_URL', 'http://embedding:8003')
-MEMORY_BACKUP_CRON = os.getenv('MEMORY_BACKUP_CRON', '03:00')  # 새벽 3시
-MEMORY_SYNC_INTERVAL = int(os.getenv('MEMORY_SYNC_INTERVAL', '300'))  # 5분
-TTL_CHECK_INTERVAL = int(os.getenv('TTL_CHECK_INTERVAL', '3600'))  # 1시간
+AI_MEMORY_DIR = os.getenv("AI_MEMORY_DIR", "/mnt/e/ai-data/memory")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant:6333")
+EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://embedding:8003")
+MEMORY_BACKUP_CRON = os.getenv("MEMORY_BACKUP_CRON", "03:00")  # 새벽 3시
+MEMORY_SYNC_INTERVAL = int(os.getenv("MEMORY_SYNC_INTERVAL", "300"))  # 5분
+TTL_CHECK_INTERVAL = int(os.getenv("TTL_CHECK_INTERVAL", "3600"))  # 1시간
 
 # 로깅 설정
-log_dir = Path(AI_MEMORY_DIR) / 'logs'
+log_dir = Path(AI_MEMORY_DIR) / "logs"
 
 # 테스트 모드 감지 (환경변수 또는 임시 디렉토리 확인)
-TEST_MODE = os.getenv('TEST_MODE', 'false').lower() == 'true' or '/tmp' in AI_MEMORY_DIR
+TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true" or "/tmp" in AI_MEMORY_DIR
 
 try:
     # 로그 디렉토리 생성 시도
@@ -50,21 +50,22 @@ except (OSError, PermissionError) as e:
 # 핸들러 구성
 handlers = [logging.StreamHandler()]
 if use_file_logging and not TEST_MODE:
-    handlers.insert(0, logging.FileHandler(log_dir / 'memory_maintainer.log'))
+    handlers.insert(0, logging.FileHandler(log_dir / "memory_maintainer.log"))
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=handlers
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=handlers,
 )
 logger = logging.getLogger(__name__)
+
 
 class MemoryMaintainer:
     """메모리 시스템 유지보수 관리자"""
 
     def __init__(self):
         self.memory_dir = Path(AI_MEMORY_DIR)
-        self.backup_dir = self.memory_dir / 'backups'
+        self.backup_dir = self.memory_dir / "backups"
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"Memory Maintainer 시작 - 메모리 디렉토리: {self.memory_dir}")
@@ -74,13 +75,13 @@ class MemoryMaintainer:
         memory_dbs = []
 
         # projects 디렉토리 확인 및 생성
-        projects_dir = self.memory_dir / 'projects'
+        projects_dir = self.memory_dir / "projects"
         projects_dir.mkdir(parents=True, exist_ok=True)
 
         # 프로젝트별 메모리 DB 검색 (projects 디렉토리 하위에서)
-        for project_dir in projects_dir.glob('*/'):
+        for project_dir in projects_dir.glob("*/"):
             if project_dir.is_dir():
-                memory_db = project_dir / 'memory.db'
+                memory_db = project_dir / "memory.db"
                 if memory_db.exists():
                     memory_dbs.append(memory_db)
 
@@ -94,27 +95,34 @@ class MemoryMaintainer:
             cursor = conn.cursor()
 
             # TTL 기반 삭제
-            cursor.execute("""
+            cursor.execute(
+                """
                 DELETE FROM conversations
                 WHERE expires_at IS NOT NULL
                 AND expires_at < ?
-            """, (datetime.now().isoformat(),))
+            """,
+                (datetime.now().isoformat(),),
+            )
 
             deleted_count = cursor.rowcount
 
             # 고아 임베딩 정리
-            cursor.execute("""
+            cursor.execute(
+                """
                 DELETE FROM conversation_embeddings
                 WHERE conversation_id NOT IN (
                     SELECT id FROM conversations
                 )
-            """)
+            """
+            )
 
             conn.commit()
             conn.close()
 
             if deleted_count > 0:
-                logger.info(f"TTL 정리 완료 - {db_path.parent.name}: {deleted_count}개 대화 삭제")
+                logger.info(
+                    f"TTL 정리 완료 - {db_path.parent.name}: {deleted_count}개 대화 삭제"
+                )
 
             return deleted_count
 
@@ -126,13 +134,13 @@ class MemoryMaintainer:
         """메모리 DB 백업 생성"""
         try:
             project_name = db_path.parent.name
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
             # SQL 덤프 백업
             backup_sql = self.backup_dir / f"{project_name}_{timestamp}.sql"
 
             conn = sqlite3.connect(db_path)
-            with open(backup_sql, 'w', encoding='utf-8') as f:
+            with open(backup_sql, "w", encoding="utf-8") as f:
                 for line in conn.iterdump():
                     f.write(f"{line}\n")
             conn.close()
@@ -141,7 +149,9 @@ class MemoryMaintainer:
             backup_json = self.backup_dir / f"{project_name}_{timestamp}.json"
             self.export_memory_to_json(db_path, backup_json)
 
-            logger.info(f"백업 완료 - {project_name}: {backup_sql.name}, {backup_json.name}")
+            logger.info(
+                f"백업 완료 - {project_name}: {backup_sql.name}, {backup_json.name}"
+            )
             return backup_sql
 
         except Exception as e:
@@ -158,7 +168,7 @@ class MemoryMaintainer:
             "export_time": datetime.now().isoformat(),
             "project": db_path.parent.name,
             "conversations": [],
-            "embeddings": []
+            "embeddings": [],
         }
 
         # 대화 데이터
@@ -173,7 +183,7 @@ class MemoryMaintainer:
 
         conn.close()
 
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             json.dump(export_data, f, ensure_ascii=False, indent=2)
 
     def sync_to_qdrant(self, db_path: Path) -> int:
@@ -187,7 +197,8 @@ class MemoryMaintainer:
             project_id = db_path.parent.name
 
             # 동기화 필요한 임베딩 조회 (정확한 컬럼명 사용)
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT
                     ce.id as embedding_id,
                     ce.conversation_id,
@@ -203,7 +214,8 @@ class MemoryMaintainer:
                 WHERE ce.sync_status != 'synced'
                 OR ce.sync_status IS NULL
                 LIMIT 100
-            """)
+            """
+            )
 
             pending_items = cursor.fetchall()
             synced_count = 0
@@ -224,47 +236,59 @@ class MemoryMaintainer:
             for item in pending_items:
                 try:
                     # 임베딩이 JSON 문자열인 경우 파싱
-                    embedding_vector = item['embedding_vector']
+                    embedding_vector = item["embedding_vector"]
                     if isinstance(embedding_vector, str):
                         embedding_vector = json.loads(embedding_vector)
 
                     # 공통 함수로 페이로드 생성
                     payload = build_qdrant_payload(
-                        conversation_id=item['conversation_id'],
-                        user_query=item['user_query'],
-                        ai_response=item['ai_response'],
-                        model_used=item['model_used'],
-                        importance_score=item['importance_score'] or 5,
-                        created_at=item['created_at']
+                        conversation_id=item["conversation_id"],
+                        user_query=item["user_query"],
+                        ai_response=item["ai_response"],
+                        model_used=item["model_used"],
+                        importance_score=item["importance_score"] or 5,
+                        created_at=item["created_at"],
                     )
 
                     point_data = {
-                        "id": item['conversation_id'],  # conversation_id를 Qdrant ID로 사용
+                        "id": item[
+                            "conversation_id"
+                        ],  # conversation_id를 Qdrant ID로 사용
                         "vector": embedding_vector,
-                        "payload": payload
+                        "payload": payload,
                     }
 
                     points.append(point_data)
-                    synced_conversations.append(item['conversation_id'])  # 성공 리스트에 추가
+                    synced_conversations.append(
+                        item["conversation_id"]
+                    )  # 성공 리스트에 추가
 
                 except Exception as e:
-                    logger.error(f"임베딩 파싱 실패 - conversation_id {item['conversation_id']}: {e}")
+                    logger.error(
+                        f"임베딩 파싱 실패 - conversation_id {item['conversation_id']}: {e}"
+                    )
                     # 실패한 항목은 failed로 마킹
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE conversation_embeddings
                         SET sync_status = 'failed'
                         WHERE conversation_id = ?
-                    """, (item['conversation_id'],))
+                    """,
+                        (item["conversation_id"],),
+                    )
 
             # 배치 업로드 (공통 함수 사용)
             if points and upsert_to_qdrant(project_id, points, QDRANT_URL):
                 # 성공한 항목들만 상태 업데이트
                 for conv_id in synced_conversations:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE conversation_embeddings
                         SET sync_status = 'synced', synced_at = ?
                         WHERE conversation_id = ?
-                    """, (datetime.now().isoformat(), conv_id))
+                    """,
+                        (datetime.now().isoformat(), conv_id),
+                    )
                 synced_count = len(synced_conversations)
 
             conn.commit()
@@ -272,7 +296,9 @@ class MemoryMaintainer:
 
             if synced_count > 0:
                 failed_count = len(pending_items) - synced_count
-                logger.info(f"Qdrant 동기화 완료 - 프로젝트 {project_id}: 성공 {synced_count}개, 실패 {failed_count}개")
+                logger.info(
+                    f"Qdrant 동기화 완료 - 프로젝트 {project_id}: 성공 {synced_count}개, 실패 {failed_count}개"
+                )
 
             return synced_count
 
@@ -288,7 +314,7 @@ class MemoryMaintainer:
             cutoff_date = datetime.now() - timedelta(days=days)
             deleted_count = 0
 
-            for backup_file in self.backup_dir.glob('*'):
+            for backup_file in self.backup_dir.glob("*"):
                 if backup_file.is_file():
                     file_time = datetime.fromtimestamp(backup_file.stat().st_mtime)
                     if file_time < cutoff_date:
@@ -309,7 +335,10 @@ class MemoryMaintainer:
         total_deleted = 0
 
         with ThreadPoolExecutor(max_workers=3) as executor:
-            futures = [executor.submit(self.cleanup_expired_conversations, db) for db in memory_dbs]
+            futures = [
+                executor.submit(self.cleanup_expired_conversations, db)
+                for db in memory_dbs
+            ]
             for future in futures:
                 total_deleted += future.result()
 
@@ -329,7 +358,9 @@ class MemoryMaintainer:
 
                 # 공통 헬퍼 함수로 컬렉션 확인
                 if not ensure_collection_util(project_id, QDRANT_URL):
-                    logger.warning(f"프로젝트 {project_id} Qdrant 컬렉션 생성 실패, 스킵")
+                    logger.warning(
+                        f"프로젝트 {project_id} Qdrant 컬렉션 생성 실패, 스킵"
+                    )
                     sync_stats["skipped"] += 1
                     continue
 
@@ -341,7 +372,9 @@ class MemoryMaintainer:
                 logger.error(f"프로젝트 {db_path.parent.name} 동기화 실패: {e}")
                 sync_stats["failed"] += 1
 
-        logger.info(f"Qdrant 동기화 작업 완료 - 동기화: {sync_stats['synced']}, 실패: {sync_stats['failed']}, 스킵: {sync_stats['skipped']}")
+        logger.info(
+            f"Qdrant 동기화 작업 완료 - 동기화: {sync_stats['synced']}, 실패: {sync_stats['failed']}, 스킵: {sync_stats['skipped']}"
+        )
 
         # 실패한 동기화가 있으면 15분 후 재시도 스케줄링
         if sync_stats["failed"] > 0:
@@ -354,6 +387,7 @@ class MemoryMaintainer:
         def retry_sync():
             logger.info("실패한 동기화 재시도 시작")
             from memory_system import get_memory_system
+
             memory_system = get_memory_system()
 
             # 모든 프로젝트의 실패한 동기화 재시도
@@ -369,7 +403,9 @@ class MemoryMaintainer:
                 except Exception as e:
                     logger.error(f"재시도 실패 {project_id}: {e}")
 
-            logger.info(f"재시도 완료 - 시도: {retry_stats['retried']}, 성공: {retry_stats['succeeded']}")
+            logger.info(
+                f"재시도 완료 - 시도: {retry_stats['retried']}, 성공: {retry_stats['succeeded']}"
+            )
 
         # 15분 후 한 번만 실행
         schedule.every(15).minutes.do(retry_sync).tag("retry_sync")
@@ -382,7 +418,9 @@ class MemoryMaintainer:
         memory_dbs = self.find_memory_databases()
 
         with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [executor.submit(self.backup_memory_database, db) for db in memory_dbs]
+            futures = [
+                executor.submit(self.backup_memory_database, db) for db in memory_dbs
+            ]
             for future in futures:
                 future.result()
 
@@ -401,8 +439,8 @@ class MemoryMaintainer:
             "memory_databases": len(memory_dbs),
             "services": {
                 "qdrant": self.check_qdrant_health(),
-                "embedding": self.check_embedding_health()
-            }
+                "embedding": self.check_embedding_health(),
+            },
         }
 
         return health_info
@@ -422,6 +460,7 @@ class MemoryMaintainer:
             return response.status_code == 200
         except:
             return False
+
 
 def main():
     """메인 실행 함수"""
@@ -452,6 +491,7 @@ def main():
     except Exception as e:
         logger.error(f"Memory Maintainer 오류: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

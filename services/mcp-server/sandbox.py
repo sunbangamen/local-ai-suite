@@ -29,10 +29,14 @@ class ResourceLimits:
         # 기본 제한값들 (환경변수로 오버라이드 가능)
         self.max_memory_mb = int(os.getenv("SANDBOX_MAX_MEMORY_MB", "512"))  # 512MB
         self.max_cpu_time_sec = int(os.getenv("SANDBOX_MAX_CPU_TIME", "30"))  # 30초
-        self.max_output_size = int(os.getenv("SANDBOX_MAX_OUTPUT_SIZE", "1048576"))  # 1MB
+        self.max_output_size = int(
+            os.getenv("SANDBOX_MAX_OUTPUT_SIZE", "1048576")
+        )  # 1MB
         self.max_file_size = int(os.getenv("SANDBOX_MAX_FILE_SIZE", "10485760"))  # 10MB
         self.max_processes = int(os.getenv("SANDBOX_MAX_PROCESSES", "10"))
-        self.network_access = os.getenv("SANDBOX_NETWORK_ACCESS", "false").lower() == "true"
+        self.network_access = (
+            os.getenv("SANDBOX_NETWORK_ACCESS", "false").lower() == "true"
+        )
 
 
 class SandboxLogger:
@@ -43,7 +47,9 @@ class SandboxLogger:
         self.log_dir.mkdir(exist_ok=True)
         self.audit_log = self.log_dir / "security_audit.log"
 
-    def log_security_event(self, event_type: str, details: Dict[str, Any], severity: str = "INFO"):
+    def log_security_event(
+        self, event_type: str, details: Dict[str, Any], severity: str = "INFO"
+    ):
         """보안 이벤트 로깅"""
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         session_id = details.get("session_id", "unknown")
@@ -53,7 +59,7 @@ class SandboxLogger:
             "event_type": event_type,
             "severity": severity,
             "session_id": session_id,
-            "details": details
+            "details": details,
         }
 
         try:
@@ -69,25 +75,24 @@ class SandboxLogger:
             "CODE_EXECUTION",
             {
                 "session_id": session_id,
-                "code_hash": hash(code) % 100000,  # 코드 내용 직접 저장 안함 (프라이버시)
+                "code_hash": hash(code)
+                % 100000,  # 코드 내용 직접 저장 안함 (프라이버시)
                 "code_length": len(code),
                 "success": result.get("success", False),
                 "execution_time": result.get("execution_time", 0),
                 "memory_used": result.get("memory_used", 0),
-                "returncode": result.get("returncode", -1)
-            }
+                "returncode": result.get("returncode", -1),
+            },
         )
 
-    def log_security_violation(self, violation_type: str, details: Dict[str, Any], session_id: str):
+    def log_security_violation(
+        self, violation_type: str, details: Dict[str, Any], session_id: str
+    ):
         """보안 위반 로깅"""
         self.log_security_event(
             "SECURITY_VIOLATION",
-            {
-                "session_id": session_id,
-                "violation_type": violation_type,
-                **details
-            },
-            "WARNING"
+            {"session_id": session_id, "violation_type": violation_type, **details},
+            "WARNING",
         )
 
 
@@ -101,10 +106,7 @@ class ContainerSandbox:
         self.path_validator = SecurePathValidator()
 
     async def execute_python_code(
-        self,
-        code: str,
-        session_id: str = "default",
-        working_dir: Optional[str] = None
+        self, code: str, session_id: str = "default", working_dir: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         샌드박스에서 Python 코드 실행
@@ -144,47 +146,40 @@ class ContainerSandbox:
             self.logger.log_security_violation(
                 "CODE_VALIDATION_FAILED",
                 {"error": str(e), "code_length": len(code)},
-                session_id
+                session_id,
             )
             return {
                 "stdout": "",
                 "stderr": f"Security validation failed: {str(e)}",
                 "returncode": 1,
                 "success": False,
-                "execution_time": time.time() - start_time
+                "execution_time": time.time() - start_time,
             }
         except Exception as e:
             # 일반 오류 로깅
             self.logger.log_security_event(
-                "EXECUTION_ERROR",
-                {"error": str(e), "session_id": session_id},
-                "ERROR"
+                "EXECUTION_ERROR", {"error": str(e), "session_id": session_id}, "ERROR"
             )
             return {
                 "stdout": "",
                 "stderr": f"Execution error: {str(e)}",
                 "returncode": 1,
                 "success": False,
-                "execution_time": time.time() - start_time
+                "execution_time": time.time() - start_time,
             }
 
     def _is_docker_available(self) -> bool:
         """Docker 사용 가능 여부 확인"""
         try:
             result = subprocess.run(
-                ["docker", "--version"],
-                capture_output=True,
-                timeout=5
+                ["docker", "--version"], capture_output=True, timeout=5
             )
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
     async def _execute_in_docker(
-        self,
-        code: str,
-        session_id: str,
-        working_dir: Optional[str] = None
+        self, code: str, session_id: str, working_dir: Optional[str] = None
     ) -> Dict[str, Any]:
         """Docker 컨테이너에서 코드 실행"""
 
@@ -198,21 +193,31 @@ class ContainerSandbox:
 
             # Docker 실행 명령어 구성
             docker_cmd = [
-                "docker", "run",
+                "docker",
+                "run",
                 "--rm",  # 실행 후 컨테이너 자동 삭제
                 "--read-only",  # 읽기 전용 파일시스템
-                "--tmpfs", "/tmp:noexec,nosuid,size=100m",  # 임시 디렉토리 제한
+                "--tmpfs",
+                "/tmp:noexec,nosuid,size=100m",  # 임시 디렉토리 제한
                 f"--memory={self.limits.max_memory_mb}m",  # 메모리 제한
                 f"--cpus={self.limits.max_cpu_time_sec / 60:.2f}",  # CPU 제한
-                "--pids-limit", str(self.limits.max_processes),  # 프로세스 수 제한
-                "--ulimit", f"fsize={self.limits.max_file_size}",  # 파일 크기 제한
-                "--security-opt", "no-new-privileges",  # 권한 상승 차단
-                "--cap-drop", "ALL",  # 모든 capability 제거
-                "-v", f"{code_file}:/code.py:ro",  # 코드 파일 마운트 (읽기 전용)
-                "--user", "1000:1000",  # 비특권 사용자로 실행
-                "--workdir", "/tmp",
+                "--pids-limit",
+                str(self.limits.max_processes),  # 프로세스 수 제한
+                "--ulimit",
+                f"fsize={self.limits.max_file_size}",  # 파일 크기 제한
+                "--security-opt",
+                "no-new-privileges",  # 권한 상승 차단
+                "--cap-drop",
+                "ALL",  # 모든 capability 제거
+                "-v",
+                f"{code_file}:/code.py:ro",  # 코드 파일 마운트 (읽기 전용)
+                "--user",
+                "1000:1000",  # 비특권 사용자로 실행
+                "--workdir",
+                "/tmp",
                 "python:3.11-alpine",  # 최소한의 Python 이미지
-                "python", "/code.py"
+                "python",
+                "/code.py",
             ]
 
             # 네트워크 접근 제한
@@ -223,13 +228,12 @@ class ContainerSandbox:
                 proc = await asyncio.create_subprocess_exec(
                     *docker_cmd,
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    stderr=asyncio.subprocess.PIPE,
                 )
 
                 # 타임아웃 적용
                 stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=self.limits.max_cpu_time_sec
+                    proc.communicate(), timeout=self.limits.max_cpu_time_sec
                 )
 
                 # 출력 크기 제한
@@ -241,7 +245,7 @@ class ContainerSandbox:
                     "stderr": stderr_str,
                     "returncode": proc.returncode or 0,
                     "success": proc.returncode == 0,
-                    "sandbox_type": "docker"
+                    "sandbox_type": "docker",
                 }
 
             except asyncio.TimeoutError:
@@ -257,14 +261,11 @@ class ContainerSandbox:
                     "stderr": f"Execution timed out ({self.limits.max_cpu_time_sec}s)",
                     "returncode": 124,
                     "success": False,
-                    "sandbox_type": "docker"
+                    "sandbox_type": "docker",
                 }
 
     async def _execute_in_process(
-        self,
-        code: str,
-        session_id: str,
-        working_dir: Optional[str] = None
+        self, code: str, session_id: str, working_dir: Optional[str] = None
     ) -> Dict[str, Any]:
         """프로세스 격리에서 코드 실행 (Docker 폴백)"""
 
@@ -272,7 +273,9 @@ class ContainerSandbox:
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
                 proc = await asyncio.create_subprocess_exec(
-                    "python", "-c", code,
+                    "python",
+                    "-c",
+                    code,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=temp_dir,
@@ -281,14 +284,13 @@ class ContainerSandbox:
                         "PATH": "/usr/bin:/bin",
                         "PYTHONPATH": "",
                         "HOME": temp_dir,
-                        "USER": "sandbox"
-                    }
+                        "USER": "sandbox",
+                    },
                 )
 
                 # 타임아웃 적용
                 stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=self.limits.max_cpu_time_sec
+                    proc.communicate(), timeout=self.limits.max_cpu_time_sec
                 )
 
                 # 출력 크기 제한
@@ -300,7 +302,7 @@ class ContainerSandbox:
                     "stderr": stderr_str,
                     "returncode": proc.returncode or 0,
                     "success": proc.returncode == 0,
-                    "sandbox_type": "process"
+                    "sandbox_type": "process",
                 }
 
             except asyncio.TimeoutError:
@@ -316,14 +318,16 @@ class ContainerSandbox:
                     "stderr": f"Execution timed out ({self.limits.max_cpu_time_sec}s)",
                     "returncode": 124,
                     "success": False,
-                    "sandbox_type": "process"
+                    "sandbox_type": "process",
                 }
 
     def _limit_output_size(self, output: str) -> str:
         """출력 크기 제한"""
         if len(output) > self.limits.max_output_size:
-            truncated = output[:self.limits.max_output_size]
-            truncated += f"\n... (output truncated, max {self.limits.max_output_size} bytes)"
+            truncated = output[: self.limits.max_output_size]
+            truncated += (
+                f"\n... (output truncated, max {self.limits.max_output_size} bytes)"
+            )
             return truncated
         return output
 
@@ -343,7 +347,7 @@ class SessionManager:
             self.logger.log_security_event(
                 "SESSION_LIMIT_EXCEEDED",
                 {"session_id": session_id, "max_sessions": self.max_sessions},
-                "WARNING"
+                "WARNING",
             )
             return False
 
@@ -352,12 +356,11 @@ class SessionManager:
             "last_activity": time.time(),
             "client_info": client_info,
             "execution_count": 0,
-            "security_violations": 0
+            "security_violations": 0,
         }
 
         self.logger.log_security_event(
-            "SESSION_CREATED",
-            {"session_id": session_id, "client_info": client_info}
+            "SESSION_CREATED", {"session_id": session_id, "client_info": client_info}
         )
         return True
 
@@ -393,7 +396,7 @@ class SessionManager:
                 self.logger.log_security_event(
                     "SESSION_BLOCKED",
                     {"session_id": session_id, "violations": 5},
-                    "ERROR"
+                    "ERROR",
                 )
                 self.cleanup_session(session_id)
                 return False
@@ -403,8 +406,7 @@ class SessionManager:
         """세션 정리"""
         if session_id in self.sessions:
             self.logger.log_security_event(
-                "SESSION_CLEANUP",
-                {"session_id": session_id}
+                "SESSION_CLEANUP", {"session_id": session_id}
             )
             del self.sessions[session_id]
 
@@ -435,7 +437,7 @@ class EnhancedSandbox:
         code: str,
         session_id: str = "default",
         client_info: Optional[Dict[str, Any]] = None,
-        working_dir: Optional[str] = None
+        working_dir: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         코드 실행 (세션 관리 포함)
@@ -458,14 +460,14 @@ class EnhancedSandbox:
                         "stdout": "",
                         "stderr": "Session limit exceeded",
                         "returncode": 1,
-                        "success": False
+                        "success": False,
                     }
             else:
                 return {
                     "stdout": "",
                     "stderr": "Invalid session",
                     "returncode": 1,
-                    "success": False
+                    "success": False,
                 }
 
         # 실행 횟수 기록
@@ -492,7 +494,7 @@ class EnhancedSandbox:
                 "last_activity": session["last_activity"],
                 "execution_count": session["execution_count"],
                 "security_violations": session["security_violations"],
-                "is_active": True
+                "is_active": True,
             }
         return None
 

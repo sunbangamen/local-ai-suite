@@ -15,24 +15,31 @@ from contextlib import contextmanager
 import threading
 import re
 import os
+
 # Vector search dependencies (optional)
 try:
     import httpx
     from qdrant_client import QdrantClient
     from qdrant_client.http import models as qmodels
+
     VECTOR_DEPS_AVAILABLE = True
 except ImportError:
     VECTOR_DEPS_AVAILABLE = False
+
     # Mock classes for type hints when dependencies are not available
     class QdrantClient:
         pass
+
     class qmodels:
         class VectorParams:
             pass
+
         class Distance:
             COSINE = None
+
         class PointStruct:
             pass
+
 
 class MemorySystem:
     def __init__(self, data_dir: str = None):
@@ -74,7 +81,7 @@ class MemorySystem:
             7: {"name": "3개월", "ttl_days": 90, "description": "프로젝트 설정"},
             8: {"name": "6개월", "ttl_days": 180, "description": "중요 결정사항"},
             9: {"name": "1년보관", "ttl_days": 365, "description": "핵심 문서화"},
-            10: {"name": "영구보관", "ttl_days": -1, "description": "사용자 중요표시"}
+            10: {"name": "영구보관", "ttl_days": -1, "description": "사용자 중요표시"},
         }
 
     def _get_data_directory(self, data_dir: str = None) -> Path:
@@ -89,7 +96,7 @@ class MemorySystem:
                 return path
 
         # 2. 환경변수 AI_MEMORY_DIR
-        env_dir = os.environ.get('AI_MEMORY_DIR')
+        env_dir = os.environ.get("AI_MEMORY_DIR")
         if env_dir:
             path = Path(env_dir)
             if self._test_directory_access(path):
@@ -143,7 +150,7 @@ class MemorySystem:
         Docker 환경에서는 중앙집중식 메모리 디렉토리 사용
         """
         # Docker 환경에서는 환경변수 우선
-        default_project_id = os.getenv('DEFAULT_PROJECT_ID')
+        default_project_id = os.getenv("DEFAULT_PROJECT_ID")
         if default_project_id:
             return default_project_id
 
@@ -166,9 +173,9 @@ class MemorySystem:
         # 기존 프로젝트 파일 확인
         if project_file.exists():
             try:
-                with open(project_file, 'r', encoding='utf-8') as f:
+                with open(project_file, "r", encoding="utf-8") as f:
                     project_data = json.load(f)
-                    return project_data['project_id']
+                    return project_data["project_id"]
             except (json.JSONDecodeError, KeyError):
                 pass
 
@@ -181,10 +188,10 @@ class MemorySystem:
             "project_name": project_path.name,
             "project_path": str(project_path),
             "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
+            "updated_at": datetime.now().isoformat(),
         }
 
-        with open(project_file, 'w', encoding='utf-8') as f:
+        with open(project_file, "w", encoding="utf-8") as f:
             json.dump(project_data, f, indent=2, ensure_ascii=False)
 
         return project_id
@@ -197,16 +204,12 @@ class MemorySystem:
 
     def _get_connection(self, project_id: str):
         """Thread-safe 프로젝트별 데이터베이스 연결"""
-        if not hasattr(self._local, 'connections'):
+        if not hasattr(self._local, "connections"):
             self._local.connections = {}
 
         if project_id not in self._local.connections:
             db_path = self.get_project_db_path(project_id)
-            conn = sqlite3.connect(
-                str(db_path),
-                check_same_thread=False,
-                timeout=30.0
-            )
+            conn = sqlite3.connect(str(db_path), check_same_thread=False, timeout=30.0)
             conn.row_factory = sqlite3.Row
 
             # SQLite 성능 최적화
@@ -237,7 +240,8 @@ class MemorySystem:
         """메모리 시스템 데이터베이스 스키마 초기화"""
 
         # 대화 기록 테이블
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS conversations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -254,10 +258,12 @@ class MemorySystem:
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 expires_at DATETIME  -- TTL 기반 자동 삭제용
             )
-        """)
+        """
+        )
 
         # 대화 요약 테이블
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS conversation_summaries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 date_range TEXT,  -- "2024-09-01 to 2024-09-07"
@@ -266,10 +272,12 @@ class MemorySystem:
                 importance_level INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
 
         # 중요 사실 테이블
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS important_facts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 fact TEXT NOT NULL,
@@ -280,19 +288,23 @@ class MemorySystem:
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (source_conversation_id) REFERENCES conversations(id)
             )
-        """)
+        """
+        )
 
         # 사용자 선호도 테이블
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS user_preferences (
                 key VARCHAR(100) PRIMARY KEY,
                 value TEXT,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
 
         # 벡터 임베딩 테이블 (Qdrant 동기화용)
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS conversation_embeddings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 conversation_id INTEGER NOT NULL,
@@ -304,17 +316,20 @@ class MemorySystem:
                 FOREIGN KEY (conversation_id) REFERENCES conversations(id),
                 UNIQUE(conversation_id)  -- 한 대화당 하나의 임베딩
             )
-        """)
+        """
+        )
 
         # FTS5 전문 검색 테이블
-        conn.execute("""
+        conn.execute(
+            """
             CREATE VIRTUAL TABLE IF NOT EXISTS conversations_fts USING fts5(
                 user_query,
                 ai_response,
                 content='conversations',
                 content_rowid='id'
             )
-        """)
+        """
+        )
 
         # 인덱스 생성
         indexes = [
@@ -324,22 +339,25 @@ class MemorySystem:
             "CREATE INDEX IF NOT EXISTS idx_conversations_session_id ON conversations(session_id)",
             "CREATE INDEX IF NOT EXISTS idx_conversations_model_used ON conversations(model_used)",
             "CREATE INDEX IF NOT EXISTS idx_important_facts_category ON important_facts(category)",
-            "CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_sync_status ON conversation_embeddings(sync_status)"
+            "CREATE INDEX IF NOT EXISTS idx_conversation_embeddings_sync_status ON conversation_embeddings(sync_status)",
         ]
 
         for index_sql in indexes:
             conn.execute(index_sql)
 
         # FTS5 트리거 (자동 동기화)
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TRIGGER IF NOT EXISTS conversations_ai_insert AFTER INSERT ON conversations
             BEGIN
                 INSERT INTO conversations_fts(rowid, user_query, ai_response)
                 VALUES (NEW.id, NEW.user_query, NEW.ai_response);
             END
-        """)
+        """
+        )
 
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TRIGGER IF NOT EXISTS conversations_ai_update AFTER UPDATE ON conversations
             BEGIN
                 UPDATE conversations_fts SET
@@ -347,17 +365,25 @@ class MemorySystem:
                     ai_response = NEW.ai_response
                 WHERE rowid = NEW.id;
             END
-        """)
+        """
+        )
 
-        conn.execute("""
+        conn.execute(
+            """
             CREATE TRIGGER IF NOT EXISTS conversations_ai_delete AFTER DELETE ON conversations
             BEGIN
                 DELETE FROM conversations_fts WHERE rowid = OLD.id;
             END
-        """)
+        """
+        )
 
-    def calculate_importance_score(self, user_query: str, ai_response: str,
-                                 model_used: str = None, context: Dict = None) -> int:
+    def calculate_importance_score(
+        self,
+        user_query: str,
+        ai_response: str,
+        model_used: str = None,
+        context: Dict = None,
+    ) -> int:
         """
         대화의 중요도 점수 자동 계산 (1-10)
         """
@@ -371,34 +397,80 @@ class MemorySystem:
         # 높은 중요도 키워드
         high_importance_keywords = [
             # 기술 설정
-            "설정", "config", "configuration", "환경변수", "environment",
-            "architecture", "design pattern", "아키텍처", "설계",
-
+            "설정",
+            "config",
+            "configuration",
+            "환경변수",
+            "environment",
+            "architecture",
+            "design pattern",
+            "아키텍처",
+            "설계",
             # 문제 해결
-            "버그", "에러", "오류", "문제", "해결", "fix", "bug", "error",
-            "issue", "problem", "solution", "trouble",
-
+            "버그",
+            "에러",
+            "오류",
+            "문제",
+            "해결",
+            "fix",
+            "bug",
+            "error",
+            "issue",
+            "problem",
+            "solution",
+            "trouble",
             # 중요 개발
-            "구현", "implementation", "알고리즘", "algorithm", "최적화",
-            "optimization", "performance", "성능", "보안", "security",
-
+            "구현",
+            "implementation",
+            "알고리즘",
+            "algorithm",
+            "최적화",
+            "optimization",
+            "performance",
+            "성능",
+            "보안",
+            "security",
             # 결정사항
-            "결정", "decision", "정책", "policy", "방향", "direction",
-            "전략", "strategy", "계획", "plan"
+            "결정",
+            "decision",
+            "정책",
+            "policy",
+            "방향",
+            "direction",
+            "전략",
+            "strategy",
+            "계획",
+            "plan",
         ]
 
         # 낮은 중요도 키워드
         low_importance_keywords = [
-            "안녕", "hello", "hi", "테스트", "test", "확인", "check",
-            "감사", "thank", "좋아", "좋다", "괜찮", "ok", "okay"
+            "안녕",
+            "hello",
+            "hi",
+            "테스트",
+            "test",
+            "확인",
+            "check",
+            "감사",
+            "thank",
+            "좋아",
+            "좋다",
+            "괜찮",
+            "ok",
+            "okay",
         ]
 
         # 키워드 기반 점수 조정
-        high_count = sum(1 for keyword in high_importance_keywords if keyword in combined_text)
-        low_count = sum(1 for keyword in low_importance_keywords if keyword in combined_text)
+        high_count = sum(
+            1 for keyword in high_importance_keywords if keyword in combined_text
+        )
+        low_count = sum(
+            1 for keyword in low_importance_keywords if keyword in combined_text
+        )
 
         score += min(high_count, 3)  # 최대 +3
-        score -= min(low_count, 2)   # 최대 -2
+        score -= min(low_count, 2)  # 최대 -2
 
         # 응답 길이 고려 (긴 응답 = 더 상세한 정보)
         response_length = len(ai_response)
@@ -411,13 +483,13 @@ class MemorySystem:
 
         # 코드 포함 여부
         code_patterns = [
-            r'```[\s\S]*?```',  # 코드 블록
-            r'`[^`]+`',         # 인라인 코드
-            r'def\s+\w+',       # Python 함수
-            r'function\s+\w+',  # JavaScript 함수
-            r'class\s+\w+',     # 클래스 정의
-            r'import\s+\w+',    # Import 문
-            r'SELECT\s+.*FROM', # SQL 쿼리
+            r"```[\s\S]*?```",  # 코드 블록
+            r"`[^`]+`",  # 인라인 코드
+            r"def\s+\w+",  # Python 함수
+            r"function\s+\w+",  # JavaScript 함수
+            r"class\s+\w+",  # 클래스 정의
+            r"import\s+\w+",  # Import 문
+            r"SELECT\s+.*FROM",  # SQL 쿼리
         ]
 
         for pattern in code_patterns:
@@ -441,10 +513,18 @@ class MemorySystem:
 
         return max(1, min(10, score))
 
-    def save_conversation(self, project_id: str, user_query: str, ai_response: str,
-                         model_used: str = None, session_id: str = None,
-                         token_count: int = None, response_time_ms: int = None,
-                         context: Dict = None, tags: List[str] = None) -> Optional[int]:
+    def save_conversation(
+        self,
+        project_id: str,
+        user_query: str,
+        ai_response: str,
+        model_used: str = None,
+        session_id: str = None,
+        token_count: int = None,
+        response_time_ms: int = None,
+        context: Dict = None,
+        tags: List[str] = None,
+    ) -> Optional[int]:
         """
         대화를 데이터베이스에 저장
         권한 오류 시 None 반환
@@ -465,26 +545,38 @@ class MemorySystem:
                 expires_at = datetime.now() + timedelta(days=ttl_days)
 
             with self.transaction(project_id) as conn:
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     INSERT INTO conversations (
                         user_query, ai_response, model_used, importance_score,
                         tags, session_id, token_count, response_time_ms,
                         project_context, expires_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    user_query, ai_response, model_used, importance_score,
-                    json.dumps(tags or [], ensure_ascii=False), session_id,
-                    token_count, response_time_ms, json.dumps(context, ensure_ascii=False),
-                    expires_at
-                ))
+                """,
+                    (
+                        user_query,
+                        ai_response,
+                        model_used,
+                        importance_score,
+                        json.dumps(tags or [], ensure_ascii=False),
+                        session_id,
+                        token_count,
+                        response_time_ms,
+                        json.dumps(context, ensure_ascii=False),
+                        expires_at,
+                    ),
+                )
 
                 conversation_id = cursor.lastrowid
 
                 # 임베딩 큐에 추가 (나중에 비동기 처리)
-                conn.execute("""
+                conn.execute(
+                    """
                     INSERT INTO conversation_embeddings (conversation_id, sync_status)
                     VALUES (?, 'pending')
-                """, (conversation_id,))
+                """,
+                    (conversation_id,),
+                )
 
                 return conversation_id
 
@@ -495,9 +587,15 @@ class MemorySystem:
             print(f"⚠️ Memory save error: {e}")
             return None
 
-    def search_conversations(self, project_id: str, query: str = None,
-                           importance_min: int = None, limit: int = 10,
-                           offset: int = 0, use_advanced_ranking: bool = True) -> List[Dict[str, Any]]:
+    def search_conversations(
+        self,
+        project_id: str,
+        query: str = None,
+        importance_min: int = None,
+        limit: int = 10,
+        offset: int = 0,
+        use_advanced_ranking: bool = True,
+    ) -> List[Dict[str, Any]]:
         """
         대화 검색 (키워드 + 중요도 필터 + 고급 랭킹)
         """
@@ -509,7 +607,8 @@ class MemorySystem:
                 if query:
                     if use_advanced_ranking:
                         # 고급 FTS5 검색 (BM25 + 중요도 가중치)
-                        cursor = conn.execute("""
+                        cursor = conn.execute(
+                            """
                             SELECT c.*,
                                    bm25(conversations_fts) as relevance_score,
                                    (bm25(conversations_fts) + (c.importance_score * 0.1)) as combined_score
@@ -519,37 +618,47 @@ class MemorySystem:
                             AND (? IS NULL OR c.importance_score >= ?)
                             ORDER BY combined_score DESC, c.timestamp DESC
                             LIMIT ? OFFSET ?
-                        """, (query, importance_min, importance_min, limit, offset))
+                        """,
+                            (query, importance_min, importance_min, limit, offset),
+                        )
                     else:
                         # 기본 FTS5 검색
-                        cursor = conn.execute("""
+                        cursor = conn.execute(
+                            """
                             SELECT c.* FROM conversations c
                             JOIN conversations_fts fts ON c.id = fts.rowid
                             WHERE conversations_fts MATCH ?
                             AND (? IS NULL OR c.importance_score >= ?)
                             ORDER BY c.timestamp DESC
                             LIMIT ? OFFSET ?
-                        """, (query, importance_min, importance_min, limit, offset))
+                        """,
+                            (query, importance_min, importance_min, limit, offset),
+                        )
                 else:
                     # 일반 검색 (중요도 기반)
-                    cursor = conn.execute("""
+                    cursor = conn.execute(
+                        """
                         SELECT * FROM conversations
                         WHERE (? IS NULL OR importance_score >= ?)
                         ORDER BY importance_score DESC, timestamp DESC
                         LIMIT ? OFFSET ?
-                    """, (importance_min, importance_min, limit, offset))
+                    """,
+                        (importance_min, importance_min, limit, offset),
+                    )
 
                 results = []
                 for row in cursor.fetchall():
                     result = dict(row)
-                    result['tags'] = json.loads(result['tags'] or '[]')
-                    result['project_context'] = json.loads(result['project_context'] or '{}')
+                    result["tags"] = json.loads(result["tags"] or "[]")
+                    result["project_context"] = json.loads(
+                        result["project_context"] or "{}"
+                    )
                     # 검색 점수 정보 포함
-                    if 'relevance_score' in result:
-                        result['search_metadata'] = {
-                            'relevance_score': result.get('relevance_score', 0),
-                            'combined_score': result.get('combined_score', 0),
-                            'search_type': 'fts5_advanced'
+                    if "relevance_score" in result:
+                        result["search_metadata"] = {
+                            "relevance_score": result.get("relevance_score", 0),
+                            "combined_score": result.get("combined_score", 0),
+                            "search_type": "fts5_advanced",
                         }
                     results.append(result)
 
@@ -566,49 +675,53 @@ class MemorySystem:
         """프로젝트 메모리 통계"""
         if not self._storage_available:
             return {
-                'total_conversations': 0,
-                'avg_importance': 0,
-                'oldest_conversation': None,
-                'latest_conversation': None,
-                'importance_distribution': {},
-                'model_usage': {}
+                "total_conversations": 0,
+                "avg_importance": 0,
+                "oldest_conversation": None,
+                "latest_conversation": None,
+                "importance_distribution": {},
+                "model_usage": {},
             }
 
         try:
             with self.transaction(project_id) as conn:
                 # 기본 통계
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT
                         COUNT(*) as total_conversations,
                         AVG(importance_score) as avg_importance,
                         MIN(timestamp) as oldest_conversation,
                         MAX(timestamp) as latest_conversation
                     FROM conversations
-                """)
+                """
+                )
                 stats = dict(cursor.fetchone())
 
                 # 중요도별 분포
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT importance_score, COUNT(*) as count
                     FROM conversations
                     GROUP BY importance_score
                     ORDER BY importance_score
-                """)
-                stats['importance_distribution'] = {
-                    row['importance_score']: row['count']
-                    for row in cursor.fetchall()
+                """
+                )
+                stats["importance_distribution"] = {
+                    row["importance_score"]: row["count"] for row in cursor.fetchall()
                 }
 
                 # 모델별 사용량
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT model_used, COUNT(*) as count
                     FROM conversations
                     WHERE model_used IS NOT NULL
                     GROUP BY model_used
-                """)
-                stats['model_usage'] = {
-                    row['model_used']: row['count']
-                    for row in cursor.fetchall()
+                """
+                )
+                stats["model_usage"] = {
+                    row["model_used"]: row["count"] for row in cursor.fetchall()
                 }
 
                 return stats
@@ -616,22 +729,22 @@ class MemorySystem:
         except (OSError, PermissionError) as e:
             print(f"⚠️ Cannot get conversation stats: {e}")
             return {
-                'total_conversations': 0,
-                'avg_importance': 0,
-                'oldest_conversation': None,
-                'latest_conversation': None,
-                'importance_distribution': {},
-                'model_usage': {}
+                "total_conversations": 0,
+                "avg_importance": 0,
+                "oldest_conversation": None,
+                "latest_conversation": None,
+                "importance_distribution": {},
+                "model_usage": {},
             }
         except Exception as e:
             print(f"⚠️ Stats error: {e}")
             return {
-                'total_conversations': 0,
-                'avg_importance': 0,
-                'oldest_conversation': None,
-                'latest_conversation': None,
-                'importance_distribution': {},
-                'model_usage': {}
+                "total_conversations": 0,
+                "avg_importance": 0,
+                "oldest_conversation": None,
+                "latest_conversation": None,
+                "importance_distribution": {},
+                "model_usage": {},
             }
 
     # ============ 벡터 임베딩 및 검색 메서드 ============
@@ -662,25 +775,24 @@ class MemorySystem:
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
-                    f"{self.embedding_url}/embed",
-                    json={"texts": texts}
+                    f"{self.embedding_url}/embed", json={"texts": texts}
                 )
                 response.raise_for_status()
                 data = response.json()
 
                 # 차원 정보 저장
                 if self._embedding_dim is None:
-                    self._embedding_dim = data.get('dim', 384)
+                    self._embedding_dim = data.get("dim", 384)
 
-                return data['embeddings']
+                return data["embeddings"]
 
         except Exception as e:
             print(f"⚠️ Embedding generation failed: {e}")
             return None
 
-
-    async def _store_conversation_vectors(self, project_id: str, conversation_id: int,
-                                        user_query: str, ai_response: str):
+    async def _store_conversation_vectors(
+        self, project_id: str, conversation_id: int, user_query: str, ai_response: str
+    ):
         """대화 벡터를 Qdrant에 저장"""
         if not self._vector_enabled:
             return
@@ -713,35 +825,42 @@ class MemorySystem:
                     "user_query": user_query[:500],  # 페이로드 크기 제한
                     "ai_response": ai_response[:1000],
                     "timestamp": datetime.now().isoformat(),
-                    "combined_text": combined_text[:1500]
-                }
+                    "combined_text": combined_text[:1500],
+                },
             )
 
             qdrant.upsert(collection_name=collection_name, points=[point])
 
             # SQLite에 동기화 상태 업데이트
             with self.transaction(project_id) as conn:
-                conn.execute("""
+                conn.execute(
+                    """
                     UPDATE conversation_embeddings
                     SET sync_status = 'synced', synced_at = CURRENT_TIMESTAMP
                     WHERE conversation_id = ?
-                """, (conversation_id,))
+                """,
+                    (conversation_id,),
+                )
 
         except Exception as e:
             print(f"⚠️ Vector storage failed: {e}")
             # 실패 시 상태 업데이트
             try:
                 with self.transaction(project_id) as conn:
-                    conn.execute("""
+                    conn.execute(
+                        """
                         UPDATE conversation_embeddings
                         SET sync_status = 'failed'
                         WHERE conversation_id = ?
-                    """, (conversation_id,))
+                    """,
+                        (conversation_id,),
+                    )
             except:
                 pass  # 메타데이터 업데이트 실패해도 원본 오류가 중요
 
-    async def vector_search_conversations(self, project_id: str, query: str,
-                                        limit: int = 5, score_threshold: float = 0.7) -> List[Dict]:
+    async def vector_search_conversations(
+        self, project_id: str, query: str, limit: int = 5, score_threshold: float = 0.7
+    ) -> List[Dict]:
         """벡터 유사도 기반 대화 검색"""
         if not self._vector_enabled:
             return []
@@ -768,19 +887,21 @@ class MemorySystem:
                 query_vector=embeddings[0],
                 limit=limit,
                 score_threshold=score_threshold,
-                with_payload=True
+                with_payload=True,
             )
 
             # 결과 변환
             results = []
             for hit in search_result:
-                results.append({
-                    'conversation_id': hit.payload['conversation_id'],
-                    'user_query': hit.payload['user_query'],
-                    'ai_response': hit.payload['ai_response'],
-                    'similarity_score': hit.score,
-                    'timestamp': hit.payload['timestamp']
-                })
+                results.append(
+                    {
+                        "conversation_id": hit.payload["conversation_id"],
+                        "user_query": hit.payload["user_query"],
+                        "ai_response": hit.payload["ai_response"],
+                        "similarity_score": hit.score,
+                        "timestamp": hit.payload["timestamp"],
+                    }
+                )
 
             return results
 
@@ -796,14 +917,17 @@ class MemorySystem:
         try:
             with self.transaction(project_id) as conn:
                 # 대기 중인 대화들 조회
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT ce.conversation_id, c.user_query, c.ai_response
                     FROM conversation_embeddings ce
                     JOIN conversations c ON ce.conversation_id = c.id
                     WHERE ce.sync_status = 'pending'
                     ORDER BY c.timestamp
                     LIMIT ?
-                """, (batch_size,))
+                """,
+                    (batch_size,),
+                )
 
                 pending_conversations = cursor.fetchall()
 
@@ -816,21 +940,26 @@ class MemorySystem:
                 try:
                     await self._store_conversation_vectors(
                         project_id=project_id,
-                        conversation_id=conv['conversation_id'],
-                        user_query=conv['user_query'],
-                        ai_response=conv['ai_response']
+                        conversation_id=conv["conversation_id"],
+                        user_query=conv["user_query"],
+                        ai_response=conv["ai_response"],
                     )
                     processed += 1
                 except Exception as e:
-                    print(f"⚠️ Failed to process conversation {conv['conversation_id']}: {e}")
+                    print(
+                        f"⚠️ Failed to process conversation {conv['conversation_id']}: {e}"
+                    )
                     # 개별 실패 시 해당 대화만 failed 상태로 마킹
                     try:
                         with self.transaction(project_id) as conn:
-                            conn.execute("""
+                            conn.execute(
+                                """
                                 UPDATE conversation_embeddings
                                 SET sync_status = 'failed'
                                 WHERE conversation_id = ?
-                            """, (conv['conversation_id'],))
+                            """,
+                                (conv["conversation_id"],),
+                            )
                     except:
                         pass  # 상태 업데이트 실패해도 다음 대화 계속 처리
 
@@ -840,8 +969,9 @@ class MemorySystem:
             print(f"⚠️ Embedding batch processing failed: {e}")
             return 0
 
-    async def hybrid_search_conversations(self, project_id: str, query: str,
-                                        limit: int = 10, combine_results: bool = True) -> List[Dict]:
+    async def hybrid_search_conversations(
+        self, project_id: str, query: str, limit: int = 10, combine_results: bool = True
+    ) -> List[Dict]:
         """하이브리드 검색 (FTS5 + 벡터 유사도)"""
         # FTS5 검색 결과
         fts_results = self.search_conversations(project_id, query, limit=limit)
@@ -852,51 +982,48 @@ class MemorySystem:
         )
 
         if not combine_results:
-            return {
-                'fts_results': fts_results,
-                'vector_results': vector_results
-            }
+            return {"fts_results": fts_results, "vector_results": vector_results}
 
         # 결과 결합 및 중복 제거
         combined_results = {}
 
         # FTS5 결과 추가 (높은 가중치)
         for result in fts_results:
-            conv_id = result['id']
+            conv_id = result["id"]
             combined_results[conv_id] = {
                 **result,
-                'search_score': 1.0,  # FTS5는 기본 점수 1.0
-                'search_method': 'fts5'
+                "search_score": 1.0,  # FTS5는 기본 점수 1.0
+                "search_method": "fts5",
             }
 
         # 벡터 결과 추가 또는 점수 보강
         for result in vector_results:
-            conv_id = result['conversation_id']
+            conv_id = result["conversation_id"]
             if conv_id in combined_results:
                 # 이미 있는 경우 점수 보강
-                combined_results[conv_id]['search_score'] = max(
-                    combined_results[conv_id]['search_score'],
-                    result['similarity_score']
+                combined_results[conv_id]["search_score"] = max(
+                    combined_results[conv_id]["search_score"],
+                    result["similarity_score"],
                 )
-                combined_results[conv_id]['search_method'] = 'hybrid'
-                combined_results[conv_id]['similarity_score'] = result['similarity_score']
+                combined_results[conv_id]["search_method"] = "hybrid"
+                combined_results[conv_id]["similarity_score"] = result[
+                    "similarity_score"
+                ]
             else:
                 # 새로 추가
                 combined_results[conv_id] = {
-                    'id': conv_id,
-                    'user_query': result['user_query'],
-                    'ai_response': result['ai_response'],
-                    'timestamp': result['timestamp'],
-                    'search_score': result['similarity_score'],
-                    'similarity_score': result['similarity_score'],
-                    'search_method': 'vector'
+                    "id": conv_id,
+                    "user_query": result["user_query"],
+                    "ai_response": result["ai_response"],
+                    "timestamp": result["timestamp"],
+                    "search_score": result["similarity_score"],
+                    "similarity_score": result["similarity_score"],
+                    "search_method": "vector",
                 }
 
         # 점수순 정렬 후 제한
         final_results = sorted(
-            combined_results.values(),
-            key=lambda x: x['search_score'],
-            reverse=True
+            combined_results.values(), key=lambda x: x["search_score"], reverse=True
         )[:limit]
 
         return final_results
@@ -909,10 +1036,12 @@ class MemorySystem:
             with self.transaction(project_id) as conn:
                 # FTS5 테이블 데이터 정리 및 재구축
                 conn.execute("DELETE FROM conversations_fts")
-                conn.execute("""
+                conn.execute(
+                    """
                     INSERT INTO conversations_fts(rowid, user_query, ai_response)
                     SELECT id, user_query, ai_response FROM conversations
-                """)
+                """
+                )
                 return True
         except Exception as e:
             print(f"⚠️ FTS index rebuild failed: {e}")
@@ -935,6 +1064,7 @@ class MemorySystem:
 
         except Exception as e:
             import logging
+
             logger = logging.getLogger(__name__)
             logger.warning(f"Qdrant 컬렉션 처리 실패, 벡터 기능 비활성화: {e}")
             self._vector_enabled = False
@@ -952,7 +1082,7 @@ class MemorySystem:
         try:
             # 기본 프로젝트 ID 사용
             if not project_id:
-                project_id = os.getenv('DEFAULT_PROJECT_ID', 'default-project')
+                project_id = os.getenv("DEFAULT_PROJECT_ID", "default-project")
 
             # Qdrant 연결 테스트
             result = self.ensure_memory_collection(project_id)
@@ -966,15 +1096,19 @@ class MemorySystem:
             print(f"⚠️ 벡터 기능 복구 실패: {e}")
             return False
 
-    def export_memory_backup(self, project_id: str, output_path: Path = None) -> Optional[Path]:
+    def export_memory_backup(
+        self, project_id: str, output_path: Path = None
+    ) -> Optional[Path]:
         """메모리 DB를 JSON으로 백업"""
         if not self._storage_available:
             return None
 
         try:
             if output_path is None:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                output_path = self.data_dir / "backups" / f"memory_{project_id}_{timestamp}.json"
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path = (
+                    self.data_dir / "backups" / f"memory_{project_id}_{timestamp}.json"
+                )
                 output_path.parent.mkdir(parents=True, exist_ok=True)
 
             with self.transaction(project_id) as conn:
@@ -987,7 +1121,7 @@ class MemorySystem:
                     "embeddings": [],
                     "summaries": [],
                     "important_facts": [],
-                    "user_preferences": []
+                    "user_preferences": [],
                 }
 
                 # 모든 테이블 데이터 내보내기
@@ -996,7 +1130,7 @@ class MemorySystem:
                     ("conversation_embeddings", "embeddings"),
                     ("conversation_summaries", "summaries"),
                     ("important_facts", "important_facts"),
-                    ("user_preferences", "user_preferences")
+                    ("user_preferences", "user_preferences"),
                 ]
 
                 for table_name, export_key in tables:
@@ -1004,7 +1138,7 @@ class MemorySystem:
                     for row in cursor.fetchall():
                         export_data[export_key].append(dict(row))
 
-            with open(output_path, 'w', encoding='utf-8') as f:
+            with open(output_path, "w", encoding="utf-8") as f:
                 json.dump(export_data, f, ensure_ascii=False, indent=2)
 
             return output_path
@@ -1016,13 +1150,13 @@ class MemorySystem:
     def import_memory_backup(self, project_id: str, backup_path: Path) -> bool:
         """JSON 백업에서 메모리 복원"""
         try:
-            with open(backup_path, 'r', encoding='utf-8') as f:
+            with open(backup_path, "r", encoding="utf-8") as f:
                 backup_data = json.load(f)
 
             with self.transaction(project_id) as conn:
                 # 기존 데이터 정리 (선택적)
                 confirmation = input("기존 데이터를 삭제하고 복원하시겠습니까? (y/N): ")
-                if confirmation.lower() == 'y':
+                if confirmation.lower() == "y":
                     conn.execute("DELETE FROM conversation_embeddings")
                     conn.execute("DELETE FROM conversations")
                     conn.execute("DELETE FROM conversation_summaries")
@@ -1031,22 +1165,32 @@ class MemorySystem:
 
                 # 데이터 복원
                 for conversation in backup_data.get("conversations", []):
-                    conn.execute("""
+                    conn.execute(
+                        """
                         INSERT OR REPLACE INTO conversations (
                             id, timestamp, user_query, ai_response, model_used,
                             importance_score, tags, session_id, token_count,
                             response_time_ms, project_context, created_at,
                             updated_at, expires_at
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        conversation.get('id'), conversation.get('timestamp'),
-                        conversation.get('user_query'), conversation.get('ai_response'),
-                        conversation.get('model_used'), conversation.get('importance_score'),
-                        conversation.get('tags'), conversation.get('session_id'),
-                        conversation.get('token_count'), conversation.get('response_time_ms'),
-                        conversation.get('project_context'), conversation.get('created_at'),
-                        conversation.get('updated_at'), conversation.get('expires_at')
-                    ))
+                    """,
+                        (
+                            conversation.get("id"),
+                            conversation.get("timestamp"),
+                            conversation.get("user_query"),
+                            conversation.get("ai_response"),
+                            conversation.get("model_used"),
+                            conversation.get("importance_score"),
+                            conversation.get("tags"),
+                            conversation.get("session_id"),
+                            conversation.get("token_count"),
+                            conversation.get("response_time_ms"),
+                            conversation.get("project_context"),
+                            conversation.get("created_at"),
+                            conversation.get("updated_at"),
+                            conversation.get("expires_at"),
+                        ),
+                    )
 
                 # 다른 테이블들도 복원...
                 # (간단하게 하기 위해 conversations만 예시)
@@ -1065,21 +1209,26 @@ class MemorySystem:
         """TTL 만료된 대화 정리"""
         try:
             with self.transaction(project_id) as conn:
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     DELETE FROM conversations
                     WHERE expires_at IS NOT NULL
                     AND expires_at < ?
-                """, (datetime.now().isoformat(),))
+                """,
+                    (datetime.now().isoformat(),),
+                )
 
                 deleted_count = cursor.rowcount
 
                 # 고아 임베딩 정리
-                conn.execute("""
+                conn.execute(
+                    """
                     DELETE FROM conversation_embeddings
                     WHERE conversation_id NOT IN (
                         SELECT id FROM conversations
                     )
-                """)
+                """
+                )
 
                 if deleted_count > 0:
                     print(f"✅ TTL 정리 완료: {deleted_count}개 대화 삭제")
@@ -1102,14 +1251,16 @@ class MemorySystem:
             print(f"⚠️ 데이터베이스 최적화 실패: {e}")
             return False
 
-    def get_qdrant_sync_queue(self, project_id: str, limit: int = 100,
-                            include_failed: bool = False) -> List[Dict]:
+    def get_qdrant_sync_queue(
+        self, project_id: str, limit: int = 100, include_failed: bool = False
+    ) -> List[Dict]:
         """Qdrant 동기화 대기열 조회"""
         try:
             with self.transaction(project_id) as conn:
                 if include_failed:
                     # 실패한 것도 포함 (재시도용)
-                    cursor = conn.execute("""
+                    cursor = conn.execute(
+                        """
                         SELECT ce.*, c.user_query, c.ai_response, c.model_used, c.importance_score
                         FROM conversation_embeddings ce
                         JOIN conversations c ON ce.conversation_id = c.id
@@ -1119,16 +1270,21 @@ class MemorySystem:
                             c.importance_score DESC,
                             c.created_at
                         LIMIT ?
-                    """, (limit,))
+                    """,
+                        (limit,),
+                    )
                 else:
-                    cursor = conn.execute("""
+                    cursor = conn.execute(
+                        """
                         SELECT ce.*, c.user_query, c.ai_response, c.model_used, c.importance_score
                         FROM conversation_embeddings ce
                         JOIN conversations c ON ce.conversation_id = c.id
                         WHERE ce.sync_status = 'pending'
                         ORDER BY c.importance_score DESC, c.created_at
                         LIMIT ?
-                    """, (limit,))
+                    """,
+                        (limit,),
+                    )
 
                 return [dict(row) for row in cursor.fetchall()]
 
@@ -1136,7 +1292,9 @@ class MemorySystem:
             print(f"⚠️ 동기화 큐 조회 실패: {e}")
             return []
 
-    def batch_sync_to_qdrant(self, project_id: str, batch_size: int = 64) -> Dict[str, int]:
+    def batch_sync_to_qdrant(
+        self, project_id: str, batch_size: int = 64
+    ) -> Dict[str, int]:
         """Qdrant 배치 동기화 (개선된 처리)"""
         sync_stats = {"synced": 0, "failed": 0, "skipped": 0}
 
@@ -1150,7 +1308,9 @@ class MemorySystem:
                 return sync_stats
 
             # 대기열 조회
-            sync_queue = self.get_qdrant_sync_queue(project_id, batch_size, include_failed=True)
+            sync_queue = self.get_qdrant_sync_queue(
+                project_id, batch_size, include_failed=True
+            )
             if not sync_queue:
                 return sync_stats
 
@@ -1159,26 +1319,29 @@ class MemorySystem:
             items_map = {}
 
             for item in sync_queue:
-                conv_id = item['conversation_id']
+                conv_id = item["conversation_id"]
                 combined_text = f"Q: {item['user_query']}\nA: {item['ai_response']}"
                 texts_to_embed.append(combined_text)
                 items_map[len(texts_to_embed) - 1] = item
 
             # 배치 임베딩 생성
             import requests
+
             try:
                 response = requests.post(
                     f"{self.embedding_url}/embed",
                     json={"texts": texts_to_embed},
-                    timeout=60
+                    timeout=60,
                 )
                 response.raise_for_status()
                 embeddings_data = response.json()
-                embeddings = embeddings_data['embeddings']
+                embeddings = embeddings_data["embeddings"]
             except Exception as e:
                 print(f"⚠️ 배치 임베딩 생성 실패: {e}")
                 # 모든 항목을 failed로 마킹
-                self._mark_embeddings_failed(project_id, [item['conversation_id'] for item in sync_queue])
+                self._mark_embeddings_failed(
+                    project_id, [item["conversation_id"] for item in sync_queue]
+                )
                 sync_stats["failed"] = len(sync_queue)
                 return sync_stats
 
@@ -1190,17 +1353,17 @@ class MemorySystem:
                 item = items_map[idx]  # items_map은 배치 인덱스 → 대화 정보 구조
 
                 point = {
-                    "id": item['conversation_id'],
+                    "id": item["conversation_id"],
                     "vector": embedding,
                     "payload": {
-                        "conversation_id": item['conversation_id'],
+                        "conversation_id": item["conversation_id"],
                         "project_id": project_id,
-                        "user_query": item['user_query'][:500],
-                        "ai_response": item['ai_response'][:1000],
-                        "model_used": item.get('model_used', ''),
-                        "importance_score": item.get('importance_score', 5),
-                        "created_at": item['created_at']
-                    }
+                        "user_query": item["user_query"][:500],
+                        "ai_response": item["ai_response"][:1000],
+                        "model_used": item.get("model_used", ""),
+                        "importance_score": item.get("importance_score", 5),
+                        "created_at": item["created_at"],
+                    },
                 }
                 points_data.append(point)
 
@@ -1209,30 +1372,35 @@ class MemorySystem:
                 response = requests.put(
                     f"{self.qdrant_url}/collections/{collection_name}/points",
                     json={"points": points_data},
-                    timeout=60
+                    timeout=60,
                 )
                 response.raise_for_status()
 
                 # 성공한 항목들 상태 업데이트
                 with self.transaction(project_id) as conn:
                     for idx, item in enumerate(sync_queue):
-                        conn.execute("""
+                        conn.execute(
+                            """
                             UPDATE conversation_embeddings
                             SET sync_status = 'synced',
                                 synced_at = ?,
                                 embedding_vector = ?
                             WHERE conversation_id = ?
-                        """, (
-                            datetime.now().isoformat(),
-                            json.dumps(embeddings[idx]),  # 배치 인덱스 사용
-                            item['conversation_id']
-                        ))
+                        """,
+                            (
+                                datetime.now().isoformat(),
+                                json.dumps(embeddings[idx]),  # 배치 인덱스 사용
+                                item["conversation_id"],
+                            ),
+                        )
 
                 sync_stats["synced"] = len(sync_queue)
 
             except Exception as e:
                 print(f"⚠️ Qdrant 배치 업로드 실패: {e}")
-                self._mark_embeddings_failed(project_id, [item['conversation_id'] for item in sync_queue])
+                self._mark_embeddings_failed(
+                    project_id, [item["conversation_id"] for item in sync_queue]
+                )
                 sync_stats["failed"] = len(sync_queue)
 
             return sync_stats
@@ -1245,29 +1413,36 @@ class MemorySystem:
         """임베딩 동기화 실패 상태로 마킹"""
         try:
             with self.transaction(project_id) as conn:
-                placeholders = ','.join(['?' for _ in conversation_ids])
-                conn.execute(f"""
+                placeholders = ",".join(["?" for _ in conversation_ids])
+                conn.execute(
+                    f"""
                     UPDATE conversation_embeddings
                     SET sync_status = 'failed'
                     WHERE conversation_id IN ({placeholders})
-                """, conversation_ids)
+                """,
+                    conversation_ids,
+                )
         except Exception as e:
             print(f"⚠️ 실패 상태 마킹 실패: {e}")
 
-    def retry_failed_syncs(self, project_id: str, max_retries: int = 3) -> Dict[str, int]:
+    def retry_failed_syncs(
+        self, project_id: str, max_retries: int = 3
+    ) -> Dict[str, int]:
         """실패한 동기화 재시도"""
         stats = {"retried": 0, "succeeded": 0, "still_failed": 0}
 
         try:
             # 실패한 항목들 중 재시도 횟수가 적은 것들 조회
             with self.transaction(project_id) as conn:
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     SELECT ce.conversation_id, c.user_query, c.ai_response
                     FROM conversation_embeddings ce
                     JOIN conversations c ON ce.conversation_id = c.id
                     WHERE ce.sync_status = 'failed'
                     LIMIT 50
-                """)
+                """
+                )
 
                 failed_items = cursor.fetchall()
 
@@ -1284,47 +1459,52 @@ class MemorySystem:
                     response = requests.post(
                         f"{self.embedding_url}/embed",
                         json={"texts": [combined_text]},
-                        timeout=30
+                        timeout=30,
                     )
                     response.raise_for_status()
-                    embedding = response.json()['embeddings'][0]
+                    embedding = response.json()["embeddings"][0]
 
                     # Qdrant 업로드
                     collection_name = f"memory_{project_id[:8]}"
                     point_data = {
-                        "points": [{
-                            "id": item['conversation_id'],
-                            "vector": embedding,
-                            "payload": {
-                                "conversation_id": item['conversation_id'],
-                                "project_id": project_id,
-                                "user_query": item['user_query'][:500],
-                                "ai_response": item['ai_response'][:1000],
-                                "retry_attempt": True
+                        "points": [
+                            {
+                                "id": item["conversation_id"],
+                                "vector": embedding,
+                                "payload": {
+                                    "conversation_id": item["conversation_id"],
+                                    "project_id": project_id,
+                                    "user_query": item["user_query"][:500],
+                                    "ai_response": item["ai_response"][:1000],
+                                    "retry_attempt": True,
+                                },
                             }
-                        }]
+                        ]
                     }
 
                     response = requests.put(
                         f"{self.qdrant_url}/collections/{collection_name}/points",
                         json=point_data,
-                        timeout=30
+                        timeout=30,
                     )
                     response.raise_for_status()
 
                     # 성공 시 상태 업데이트
                     with self.transaction(project_id) as conn:
-                        conn.execute("""
+                        conn.execute(
+                            """
                             UPDATE conversation_embeddings
                             SET sync_status = 'synced',
                                 synced_at = ?,
                                 embedding_vector = ?
                             WHERE conversation_id = ?
-                        """, (
-                            datetime.now().isoformat(),
-                            json.dumps(embedding),
-                            item['conversation_id']
-                        ))
+                        """,
+                            (
+                                datetime.now().isoformat(),
+                                json.dumps(embedding),
+                                item["conversation_id"],
+                            ),
+                        )
 
                     stats["succeeded"] += 1
 
@@ -1340,8 +1520,10 @@ class MemorySystem:
             print(f"⚠️ 재시도 처리 실패: {e}")
             return stats
 
+
 # 글로벌 메모리 시스템 인스턴스
 _current_instance = None
+
 
 def get_memory_system() -> MemorySystem:
     """현재 활성화된 메모리 시스템 인스턴스 반환"""
@@ -1350,10 +1532,12 @@ def get_memory_system() -> MemorySystem:
         _current_instance = MemorySystem()
     return _current_instance
 
+
 def set_memory_system(instance: MemorySystem):
     """메모리 시스템 인스턴스 변경"""
     global _current_instance
     _current_instance = instance
+
 
 # 기본 인스턴스 생성 (하위 호환성)
 memory_system = get_memory_system()

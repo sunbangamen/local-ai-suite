@@ -10,12 +10,14 @@ from pathlib import Path
 from typing import Dict, Optional, List
 from datetime import datetime
 
+
 def init_project_memory(project_path: str = None) -> str:
     """
     현재 디렉토리 또는 지정된 경로에 프로젝트 메모리 초기화
     .ai-memory/project.json 파일 생성
     """
     from memory_system import get_memory_system
+
     ms = get_memory_system()
 
     if project_path is None:
@@ -28,12 +30,12 @@ def init_project_memory(project_path: str = None) -> str:
     # 이미 존재하는 경우 기존 ID 반환
     if project_file.exists():
         try:
-            with open(project_file, 'r', encoding='utf-8') as f:
+            with open(project_file, "r", encoding="utf-8") as f:
                 project_data = json.load(f)
                 print(f"✅ 기존 프로젝트 메모리 발견: {project_data['project_id']}")
                 print(f"📁 프로젝트: {project_data['project_name']}")
                 print(f"📅 생성일: {project_data['created_at']}")
-                return project_data['project_id']
+                return project_data["project_id"]
         except (json.JSONDecodeError, KeyError):
             print("⚠️ 손상된 project.json 파일을 다시 생성합니다.")
 
@@ -47,6 +49,7 @@ def init_project_memory(project_path: str = None) -> str:
 
     return project_id
 
+
 def get_current_project_info() -> Dict:
     """현재 디렉토리의 프로젝트 정보 반환"""
     project_path = Path(os.getcwd()).resolve()
@@ -57,31 +60,35 @@ def get_current_project_info() -> Dict:
         return {
             "has_memory": False,
             "project_path": str(project_path),
-            "project_name": project_path.name
+            "project_name": project_path.name,
         }
 
     try:
-        with open(project_file, 'r', encoding='utf-8') as f:
+        with open(project_file, "r", encoding="utf-8") as f:
             project_data = json.load(f)
             return {
                 "has_memory": True,
-                "project_id": project_data['project_id'],
-                "project_name": project_data['project_name'],
-                "project_path": project_data['project_path'],
-                "created_at": project_data['created_at'],
-                "updated_at": project_data.get('updated_at', project_data['created_at'])
+                "project_id": project_data["project_id"],
+                "project_name": project_data["project_name"],
+                "project_path": project_data["project_path"],
+                "created_at": project_data["created_at"],
+                "updated_at": project_data.get(
+                    "updated_at", project_data["created_at"]
+                ),
             }
     except (json.JSONDecodeError, KeyError):
         return {
             "has_memory": False,
             "project_path": str(project_path),
             "project_name": project_path.name,
-            "error": "손상된 프로젝트 메모리 파일"
+            "error": "손상된 프로젝트 메모리 파일",
         }
+
 
 def show_memory_status(project_path: str = None):
     """메모리 시스템 상태 출력"""
     from memory_system import get_memory_system
+
     ms = get_memory_system()
 
     if project_path is None:
@@ -93,20 +100,20 @@ def show_memory_status(project_path: str = None):
         project_file = memory_dir / "project.json"
 
         if project_file.exists():
-            with open(project_file, 'r', encoding='utf-8') as f:
+            with open(project_file, "r", encoding="utf-8") as f:
                 project_data = json.load(f)
                 project_info = {
                     "has_memory": True,
-                    "project_id": project_data['project_id'],
-                    "project_name": project_data['project_name'],
-                    "project_path": project_data['project_path'],
-                    "created_at": project_data['created_at']
+                    "project_id": project_data["project_id"],
+                    "project_name": project_data["project_name"],
+                    "project_path": project_data["project_path"],
+                    "created_at": project_data["created_at"],
                 }
         else:
             project_info = {
                 "has_memory": False,
                 "project_path": str(project_path),
-                "project_name": project_path.name
+                "project_name": project_path.name,
             }
 
     print("🧠 AI Memory System Status")
@@ -125,22 +132,22 @@ def show_memory_status(project_path: str = None):
             stats = ms.get_conversation_stats(project_id)
             print(f"\n📊 메모리 통계:")
             print(f"  💬 총 대화: {stats['total_conversations']:,}개")
-            if stats['total_conversations'] > 0:
+            if stats["total_conversations"] > 0:
                 print(f"  ⭐ 평균 중요도: {stats['avg_importance']:.1f}/10")
                 print(f"  📅 최초 대화: {stats['oldest_conversation']}")
                 print(f"  📅 최근 대화: {stats['latest_conversation']}")
 
                 # 중요도 분포
-                if stats['importance_distribution']:
+                if stats["importance_distribution"]:
                     print(f"\n📈 중요도 분포:")
-                    for importance, count in stats['importance_distribution'].items():
+                    for importance, count in stats["importance_distribution"].items():
                         level_info = ms.IMPORTANCE_LEVELS[importance]
                         print(f"  {importance}/10 ({level_info['name']}): {count}개")
 
                 # 모델 사용량
-                if stats['model_usage']:
+                if stats["model_usage"]:
                     print(f"\n🤖 모델 사용량:")
-                    for model, count in stats['model_usage'].items():
+                    for model, count in stats["model_usage"].items():
                         print(f"  {model}: {count}개")
 
         except Exception as e:
@@ -152,11 +159,13 @@ def show_memory_status(project_path: str = None):
         print("❌ 메모리 시스템이 초기화되지 않았습니다.")
         print("💡 'ai --memory --init' 명령으로 초기화하세요.")
 
+
 def cleanup_expired_conversations(project_id: str = None, dry_run: bool = True) -> Dict:
     """
     만료된 대화 정리 (TTL 기반)
     """
     from memory_system import get_memory_system
+
     ms = get_memory_system()
 
     if project_id is None:
@@ -167,47 +176,59 @@ def cleanup_expired_conversations(project_id: str = None, dry_run: bool = True) 
 
     with ms.transaction(project_id) as conn:
         # 만료된 대화 조회
-        cursor = conn.execute("""
+        cursor = conn.execute(
+            """
             SELECT id, user_query, importance_score, expires_at
             FROM conversations
             WHERE expires_at IS NOT NULL AND expires_at < ?
-        """, (datetime.now(),))
+        """,
+            (datetime.now(),),
+        )
 
         expired_conversations = cursor.fetchall()
 
         if dry_run:
             print(f"🧹 정리 예정 대화: {len(expired_conversations)}개")
             for conv in expired_conversations[:5]:  # 처음 5개만 미리보기
-                print(f"  - [{conv['importance_score']}/10] {conv['user_query'][:50]}...")
+                print(
+                    f"  - [{conv['importance_score']}/10] {conv['user_query'][:50]}..."
+                )
             if len(expired_conversations) > 5:
                 print(f"  ... 외 {len(expired_conversations) - 5}개")
 
             return {
                 "total_expired": len(expired_conversations),
                 "cleaned": 0,
-                "dry_run": True
+                "dry_run": True,
             }
 
         # 실제 삭제
-        deleted_ids = [conv['id'] for conv in expired_conversations]
+        deleted_ids = [conv["id"] for conv in expired_conversations]
         if deleted_ids:
-            placeholders = ','.join('?' * len(deleted_ids))
-            conn.execute(f"DELETE FROM conversations WHERE id IN ({placeholders})", deleted_ids)
+            placeholders = ",".join("?" * len(deleted_ids))
+            conn.execute(
+                f"DELETE FROM conversations WHERE id IN ({placeholders})", deleted_ids
+            )
 
             # 관련 임베딩도 삭제
-            conn.execute(f"DELETE FROM conversation_embeddings WHERE conversation_id IN ({placeholders})", deleted_ids)
+            conn.execute(
+                f"DELETE FROM conversation_embeddings WHERE conversation_id IN ({placeholders})",
+                deleted_ids,
+            )
 
             print(f"🗑️ {len(deleted_ids)}개 대화가 정리되었습니다.")
 
         return {
             "total_expired": len(expired_conversations),
             "cleaned": len(deleted_ids),
-            "dry_run": False
+            "dry_run": False,
         }
+
 
 def export_memory_backup(project_id: str = None, output_path: str = None) -> str:
     """메모리 데이터를 JSON으로 백업"""
     from memory_system import get_memory_system
+
     ms = get_memory_system()
 
     if project_id is None:
@@ -230,7 +251,9 @@ def export_memory_backup(project_id: str = None, output_path: str = None) -> str
         facts = [dict(row) for row in cursor.fetchall()]
 
         # 요약 조회
-        cursor = conn.execute("SELECT * FROM conversation_summaries ORDER BY created_at")
+        cursor = conn.execute(
+            "SELECT * FROM conversation_summaries ORDER BY created_at"
+        )
         summaries = [dict(row) for row in cursor.fetchall()]
 
     backup_data = {
@@ -242,19 +265,23 @@ def export_memory_backup(project_id: str = None, output_path: str = None) -> str
         "metadata": {
             "total_conversations": len(conversations),
             "total_facts": len(facts),
-            "total_summaries": len(summaries)
-        }
+            "total_summaries": len(summaries),
+        },
     }
 
-    with open(output_path, 'w', encoding='utf-8') as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         json.dump(backup_data, f, indent=2, ensure_ascii=False, default=str)
 
     print(f"💾 메모리 백업 완료: {output_path}")
-    print(f"📊 대화 {len(conversations)}개, 사실 {len(facts)}개, 요약 {len(summaries)}개")
+    print(
+        f"📊 대화 {len(conversations)}개, 사실 {len(facts)}개, 요약 {len(summaries)}개"
+    )
 
     return output_path
 
+
 # ============ Qdrant 헬퍼 함수 (공통) ============
+
 
 def get_collection_name(project_id: str) -> str:
     """
@@ -266,8 +293,13 @@ def get_collection_name(project_id: str) -> str:
     """
     return f"memory_{project_id[:8]}"
 
-def ensure_qdrant_collection(project_id: str, qdrant_url: str = None,
-                             vector_size: int = 384, distance: str = "Cosine") -> bool:
+
+def ensure_qdrant_collection(
+    project_id: str,
+    qdrant_url: str = None,
+    vector_size: int = 384,
+    distance: str = "Cosine",
+) -> bool:
     """
     Qdrant 컬렉션 존재 확인 및 생성 (memory_system과 maintainer 공통 사용)
 
@@ -288,23 +320,17 @@ def ensure_qdrant_collection(project_id: str, qdrant_url: str = None,
     try:
         # 컬렉션 존재 확인
         response = requests.get(
-            f"{qdrant_url}/collections/{collection_name}",
-            timeout=10
+            f"{qdrant_url}/collections/{collection_name}", timeout=10
         )
 
         if response.status_code == 404:
             # 컬렉션 생성
-            create_data = {
-                "vectors": {
-                    "size": vector_size,
-                    "distance": distance
-                }
-            }
+            create_data = {"vectors": {"size": vector_size, "distance": distance}}
 
             response = requests.put(
                 f"{qdrant_url}/collections/{collection_name}",
                 json=create_data,
-                timeout=30
+                timeout=30,
             )
 
             if response.status_code == 200:
@@ -326,7 +352,10 @@ def ensure_qdrant_collection(project_id: str, qdrant_url: str = None,
         print(f"❌ Qdrant 접근 실패: {e}")
         return False
 
-def upsert_to_qdrant(project_id: str, points: List[Dict], qdrant_url: str = None) -> bool:
+
+def upsert_to_qdrant(
+    project_id: str, points: List[Dict], qdrant_url: str = None
+) -> bool:
     """
     Qdrant에 포인트 업로드 (배치)
 
@@ -347,7 +376,7 @@ def upsert_to_qdrant(project_id: str, points: List[Dict], qdrant_url: str = None
         response = requests.put(
             f"{qdrant_url}/collections/{collection_name}/points",
             json={"points": points},
-            timeout=60
+            timeout=60,
         )
 
         if response.status_code == 200:
@@ -360,9 +389,15 @@ def upsert_to_qdrant(project_id: str, points: List[Dict], qdrant_url: str = None
         print(f"❌ Qdrant 업로드 에러: {e}")
         return False
 
-def build_qdrant_payload(conversation_id: int, user_query: str, ai_response: str,
-                        model_used: str = None, importance_score: int = 5,
-                        created_at: str = None) -> Dict:
+
+def build_qdrant_payload(
+    conversation_id: int,
+    user_query: str,
+    ai_response: str,
+    model_used: str = None,
+    importance_score: int = 5,
+    created_at: str = None,
+) -> Dict:
     """
     Qdrant 페이로드 생성 (통일된 구조)
 
@@ -383,8 +418,9 @@ def build_qdrant_payload(conversation_id: int, user_query: str, ai_response: str
         "ai_response": ai_response[:1000],  # 최대 1000자
         "model_used": model_used or "unknown",
         "importance_score": importance_score,
-        "created_at": created_at or datetime.now().isoformat()
+        "created_at": created_at or datetime.now().isoformat(),
     }
+
 
 if __name__ == "__main__":
     # 테스트 코드
@@ -398,6 +434,7 @@ if __name__ == "__main__":
 
     # 동적으로 메모리 시스템 가져오기
     from memory_system import get_memory_system
+
     ms = get_memory_system()
 
     # 테스트 대화 저장
@@ -406,7 +443,7 @@ if __name__ == "__main__":
         user_query="안녕하세요! 메모리 시스템 테스트입니다.",
         ai_response="안녕하세요! 메모리 시스템이 정상적으로 작동하고 있습니다. 이 대화는 자동으로 저장되고 중요도가 계산됩니다.",
         model_used="chat-7b",
-        session_id="test_session"
+        session_id="test_session",
     )
     print(f"✅ 테스트 대화 저장 완료: ID {conv_id}")
 
