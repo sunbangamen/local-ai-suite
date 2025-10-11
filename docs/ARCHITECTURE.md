@@ -76,7 +76,8 @@ curl http://localhost:8000/v1/models
 ### 2) Phase 2: RAG + Qdrant + reranker 추가
 
 ```bash
-make up-p2
+make up-p2        # CPU 기본 (Mock LLM)
+# GPU 환경이 필요하면 make up-p2-gpu 사용
 # 문서 인덱싱
 curl -X POST "http://localhost:8002/index?collection=myproj"
 # 질의
@@ -612,7 +613,8 @@ def fs_write(body: WriteBody):
 
 1. **리포 생성** 후 본 문서대로 파일/폴더 생성 → `.env.example` 복사해 `.env` 준비
 2. **Phase 1**: `make up-p1` → VS Code에서 `http://localhost:8000/v1` 설정
-3. **Phase 2**: `make up-p2` → `data/rag_docs`에 문서 넣고 인덱싱/질의
+3. **Phase 2**: `make up-p2` (CPU 기본) → `data/rag_docs`에 문서 넣고 인덱싱/질의  
+   *GPU 모델이 필요하면 `make up-p2-gpu` 사용*
 4. **Phase 3**: `make up-p3` → MCP 엔드포인트로 파일 읽기/쓰기 자동화 연결
 5. 모델 전환은 `.env`의 `CHAT_MODEL`/`CODE_MODEL` 교체(파일만 바꾸면 즉시 반영)
 

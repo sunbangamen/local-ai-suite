@@ -5,6 +5,9 @@ up-p1:
 	docker compose -f docker/compose.p1.yml --env-file .env up -d --build
 
 up-p2:
+	docker compose -f docker/compose.p2.cpu.yml --env-file .env up -d --build
+
+up-p2-gpu:
 	docker compose -f docker/compose.p2.yml --env-file .env up -d --build
 
 up-p3:
@@ -12,6 +15,7 @@ up-p3:
 
 # 전체 종료 (역순)
 down:
+	docker compose -f docker/compose.p2.cpu.yml down || true
 	docker compose -f docker/compose.p3.yml down || true
 	docker compose -f docker/compose.p2.yml down || true
 	docker compose -f docker/compose.p1.yml down || true
@@ -21,6 +25,9 @@ down-p1:
 	docker compose -f docker/compose.p1.yml down
 
 down-p2:
+	docker compose -f docker/compose.p2.cpu.yml down
+
+down-p2-gpu:
 	docker compose -f docker/compose.p2.yml down
 
 down-p3:
@@ -37,6 +44,9 @@ logs-p1:
 	docker compose -f docker/compose.p1.yml logs -f
 
 logs-p2:
+	docker compose -f docker/compose.p2.cpu.yml logs -f
+
+logs-p2-gpu:
 	docker compose -f docker/compose.p2.yml logs -f
 
 logs-p3:

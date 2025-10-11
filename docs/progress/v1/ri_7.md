@@ -91,7 +91,7 @@
 | 포트 매핑 정리 | inference-chat:8001, inference-code:8004 확정 | 포트 충돌 없음 확인 | Low |
 | 채팅 모델 기본값 3B로 조정 | compose.p2.yml 기본 `CHAT_MODEL`을 Qwen2.5-3B로 변경하고 `.env.example`/문서 반영 | `docker-compose config` 출력 및 문서 리뷰 | Low |
 | LiteLLM 페일오버 구성 | `config.p2.yaml` 라우터에 재시도/백업 엔드포인트 설정 추가 | 라우터 재시도 시뮬레이션 로그 확인 | Medium |
-| Phase 2 기동 테스트 | `make up-p2` 실행 및 양쪽 모델 호출 테스트 | 양쪽 API 정상 응답 | High |
+| Phase 2 기동 테스트 | `make up-p2` (CPU 프로필) 실행 및 양쪽 모델 호출 테스트<br>`make up-p2-gpu`로 실제 모델 확인 가능 | 양쪽 API 정상 응답 | High |
 
 #### LiteLLM 페일오버 구성 세부 사항
 - `model_list`에 `model_name: chat-7b`를 두 개 정의하고 `api_base`를 각각 `inference-chat`(priority 1)과 `inference-code`(priority 2)로 설정해 순차 백업 경로 확보

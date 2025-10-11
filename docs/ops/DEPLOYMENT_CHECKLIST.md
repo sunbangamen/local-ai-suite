@@ -98,11 +98,18 @@ docker compose -f docker/compose.p1.yml down
 
 **목적**: Dual-LLM + RAG + Embedding + Qdrant + PostgreSQL 통합 검증
 
-**배포**:
+**배포 (Mock LLM / CPU 기본)**:
 ```bash
 # 서비스 시작 (의존성 순서대로 자동 시작)
 make up-p2
 
+# 또는
+docker compose -f docker/compose.p2.yml up -d
+```
+
+**GPU 환경에서 실제 모델 사용 시**:
+```bash
+make up-p2-gpu
 # 또는
 docker compose -f docker/compose.p2.yml up -d
 ```

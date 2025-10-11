@@ -135,6 +135,9 @@ pytest tests/ --cov=. --cov-report=term-missing
 **로컬 CPU 프로필 테스트** (CI와 동일한 환경):
 ```bash
 # CPU 프로필로 서비스 시작 (Mock LLM 서버)
+make up-p2
+
+# 또는
 docker compose -f docker/compose.p2.cpu.yml up -d
 
 # 서비스 상태 확인
@@ -154,7 +157,7 @@ docker compose -f docker/compose.p2.cpu.yml down -v
 **로컬 GPU 통합 테스트** (실제 모델 추론):
 ```bash
 # Phase 2 서비스 시작 (실제 GPU 모델)
-make up-p2
+make up-p2-gpu
 
 # 서비스 상태 확인
 docker compose -f docker/compose.p2.yml ps
