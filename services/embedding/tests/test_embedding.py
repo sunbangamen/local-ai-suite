@@ -102,7 +102,7 @@ async def test_health_shows_model_info(app_with_mocks):
 
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "ok"
+        assert data["ok"] == True  # Actual key is "ok", not "status"
         assert "model" in data
         assert "dim" in data
         assert data["dim"] == 384
