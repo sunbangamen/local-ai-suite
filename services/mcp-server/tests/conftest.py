@@ -15,6 +15,10 @@ from typing import AsyncGenerator, Generator
 import pytest
 import aiosqlite
 
+# Tell pytest to ignore __init__.py in service root (prevents relative import errors)
+collect_ignore = ["../__init__.py"]
+collect_ignore_glob = ["../__init__.py"]
+
 # Add parent directory to Python path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
