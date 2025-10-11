@@ -18,6 +18,9 @@ import os
 # Add parent directory to path to import app module
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+# Set environment variable for test database (in-memory)
+os.environ["RAG_DB_PATH"] = ":memory:"
+
 # Import the REAL app module (not a mock)
 import app as rag_app_module
 

@@ -7,6 +7,7 @@ RAG Database Layer with SQLite
 
 import sqlite3
 import json
+import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from pathlib import Path
@@ -16,9 +17,16 @@ from contextlib import contextmanager
 
 
 class RAGDatabase:
-    def __init__(self, db_path: str = "/mnt/e/ai-data/sqlite/rag_analytics.db"):
+    def __init__(self, db_path: str = None):
+        # Use environment variable or default to data directory
+        if db_path is None:
+            db_path = os.getenv("RAG_DB_PATH", "/mnt/e/ai-data/sqlite/rag_analytics.db")
+
         self.db_path = db_path
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+
+        # Only create directory if not using in-memory database
+        if db_path != ":memory:":
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()
         self._init_schema()
 
