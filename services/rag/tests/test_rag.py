@@ -136,8 +136,9 @@ async def test_health_endpoint_basic(app_with_mocks):
         assert response.status_code in [200, 503]
         data = response.json()
         assert "status" in data
-        assert "qdrant" in data
-        assert "embedding" in data
+        deps = data.get("dependencies", {}) or {}
+        assert "qdrant" in deps
+        assert "embedding" in deps
 
 
 @pytest.mark.asyncio
@@ -151,10 +152,12 @@ async def test_health_with_llm_check(app_with_mocks):
         data = response.json()
 
         # Verify dependency status structure
-        assert "qdrant" in data
-        assert "embedding" in data
-        if "api_gateway" in data:
-            assert isinstance(data["api_gateway"], dict)
+        deps = data.get("dependencies", {}) or {}
+        assert "qdrant" in deps
+        assert "embedding" in deps
+        api_gateway = deps.get("api_gateway")
+        if api_gateway is not None:
+            assert isinstance(api_gateway, dict)
 
 
 @pytest.mark.asyncio
