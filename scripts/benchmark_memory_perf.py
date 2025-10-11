@@ -98,7 +98,7 @@ class MemoryBenchmark:
         elapsed_time = time.time() - start_time
         avg_time_per_conv = (elapsed_time / self.test_size) * 1000  # ms
 
-        print(f"\n✅ 저장 완료:")
+        print("\n✅ 저장 완료:")
         print(f"   총 시간: {elapsed_time:.2f}초")
         print(f"   평균 저장 시간: {avg_time_per_conv:.2f}ms/conversation")
         print(f"   처리량: {self.test_size / elapsed_time:.1f} conversations/sec")
@@ -147,7 +147,7 @@ class MemoryBenchmark:
         p95_time = sorted(search_times)[int(len(search_times) * 0.95)]
         p99_time = sorted(search_times)[int(len(search_times) * 0.99)]
 
-        print(f"\n✅ 검색 완료:")
+        print("\n✅ 검색 완료:")
         print(f"   평균 검색 시간: {avg_time:.2f}ms")
         print(f"   P95 검색 시간: {p95_time:.2f}ms")
         print(f"   P99 검색 시간: {p99_time:.2f}ms")
@@ -214,7 +214,7 @@ class MemoryBenchmark:
         avg_time = sum(search_times) / len(search_times)
         p95_time = sorted(search_times)[int(len(search_times) * 0.95)]
 
-        print(f"\n✅ 벡터 검색 완료:")
+        print("\n✅ 벡터 검색 완료:")
         print(f"   임베딩 생성: {embed_time:.2f}초 ({processed}개)")
         print(f"   평균 검색 시간: {avg_time:.2f}ms")
         print(f"   P95 검색 시간: {p95_time:.2f}ms")
@@ -268,7 +268,7 @@ class MemoryBenchmark:
         avg_time = sum(search_times) / len(search_times)
         p95_time = sorted(search_times)[int(len(search_times) * 0.95)]
 
-        print(f"\n✅ 하이브리드 검색 완료:")
+        print("\n✅ 하이브리드 검색 완료:")
         print(f"   평균 검색 시간: {avg_time:.2f}ms")
         print(f"   P95 검색 시간: {p95_time:.2f}ms")
         print(f"   평균 결과 수: {total_results / num_queries:.1f}개")
@@ -282,7 +282,7 @@ class MemoryBenchmark:
 
     def benchmark_stats(self):
         """통계 조회 성능 벤치마크"""
-        print(f"\n[Benchmark 5] 통계 조회 성능")
+        print("\n[Benchmark 5] 통계 조회 성능")
         print("-" * 80)
 
         start_time = time.time()
@@ -319,7 +319,7 @@ class MemoryBenchmark:
         # 저장 성능
         if "save" in self.results:
             save = self.results["save"]
-            print(f"\n📝 저장 성능:")
+            print("\n📝 저장 성능:")
             print(f"   처리량: {save['throughput_per_sec']:.1f} conversations/sec")
             print(f"   평균 시간: {save['avg_time_ms']:.2f}ms")
             print(
@@ -329,7 +329,7 @@ class MemoryBenchmark:
         # FTS5 검색
         if "fts_search" in self.results:
             fts = self.results["fts_search"]
-            print(f"\n🔍 FTS5 검색 성능:")
+            print("\n🔍 FTS5 검색 성능:")
             print(f"   평균: {fts['avg_time_ms']:.2f}ms")
             print(f"   P95: {fts['p95_time_ms']:.2f}ms")
             print(
@@ -341,7 +341,7 @@ class MemoryBenchmark:
             "skipped"
         ):
             vec = self.results["vector_search"]
-            print(f"\n🧠 벡터 검색 성능:")
+            print("\n🧠 벡터 검색 성능:")
             print(f"   평균: {vec['avg_search_time_ms']:.2f}ms")
             print(f"   P95: {vec['p95_search_time_ms']:.2f}ms")
 
@@ -350,7 +350,7 @@ class MemoryBenchmark:
             "skipped"
         ):
             hyb = self.results["hybrid_search"]
-            print(f"\n🔀 하이브리드 검색 성능:")
+            print("\n🔀 하이브리드 검색 성능:")
             print(f"   평균: {hyb['avg_time_ms']:.2f}ms")
             print(f"   P95: {hyb['p95_time_ms']:.2f}ms")
 

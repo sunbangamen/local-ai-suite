@@ -5,13 +5,10 @@ Model Performance Optimizer
 - Memory management and model prewarming
 - Performance monitoring and caching
 """
-import os
 import json
-import time
 import sqlite3
 import requests
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 from pathlib import Path
 
 
@@ -118,7 +115,7 @@ class ModelOptimizer:
         Get smart model recommendation based on usage patterns
         Returns: (model_type, confidence_score)
         """
-        query_lower = query.lower()
+        query.lower()
 
         # Basic keyword detection (fallback)
         basic_type = self._detect_basic_type(query)

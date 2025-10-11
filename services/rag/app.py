@@ -1,7 +1,6 @@
 import os
 import glob
 import math
-import asyncio
 import re
 import time
 import hashlib

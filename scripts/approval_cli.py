@@ -14,7 +14,6 @@ import argparse
 import sys
 import json
 from pathlib import Path
-from datetime import datetime
 from rich.console import Console
 from rich.table import Table
 from rich.prompt import Prompt, Confirm

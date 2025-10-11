@@ -13,8 +13,6 @@ import re
 import os
 import time
 import uuid
-import signal
-import threading
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -385,7 +383,7 @@ def extract_tool_args_from_query(query: str, tool_name: str) -> Dict[str, Any]:
     Extract tool arguments from user query
     """
     args = {}
-    query_lower = query.lower()
+    query.lower()
 
     if tool_name == "web_screenshot":
         # Try to extract URL from query
@@ -429,7 +427,7 @@ def extract_tool_args_from_query(query: str, tool_name: str) -> Dict[str, Any]:
                 if code_end != -1:
                     args["code"] = query[code_start + 3 : code_end].strip()
             else:
-                args["code"] = f'print("Hello from auto-generated code!")'
+                args["code"] = 'print("Hello from auto-generated code!")'
         else:
             args["code"] = f'print("Query: {query}")'
 
@@ -552,7 +550,6 @@ def call_api(
     start_time = time.time()
 
     # Determine query type for temperature adjustment
-    original_model_type = model_type
     detected_type = None
     if model_type == "auto":
         detected_type = detect_query_type(query)
@@ -631,7 +628,7 @@ def call_api(
         tokens_used = 0
 
         if streaming:
-            print(f"\n🤖 AI: ", end="", flush=True)
+            print("\n🤖 AI: ", end="", flush=True)
 
             # Process streaming response
             for line in response.iter_lines():
@@ -1102,7 +1099,7 @@ def show_analytics_dashboard():
         # Get analytics summary
         summary = analytics.get_analytics_summary(hours=24)
 
-        print(f"\n📈 Usage Statistics (Last 24h)")
+        print("\n📈 Usage Statistics (Last 24h)")
         print("-" * 30)
         for stat in summary["usage_stats"]:
             print(f"  {stat['query_type'].upper()} ({stat['model_used']}):")
@@ -1113,7 +1110,7 @@ def show_analytics_dashboard():
                 print(f"    Avg Tokens: {stat['avg_tokens']:.0f}")
             print()
 
-        print(f"\n⏰ Peak Usage Times")
+        print("\n⏰ Peak Usage Times")
         print("-" * 30)
         days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         for peak in summary["peak_times"]:
@@ -1122,7 +1119,7 @@ def show_analytics_dashboard():
                 f"  {day_name} {peak['hour_of_day']:02d}:00 - {peak['total_usage']} queries"
             )
 
-        print(f"\n🏆 Model Performance Ranking")
+        print("\n🏆 Model Performance Ranking")
         print("-" * 30)
         for perf in summary["model_performance"]:
             print(f"  {perf['model_name']} ({perf['query_type']})")
@@ -1131,7 +1128,7 @@ def show_analytics_dashboard():
             print(f"    Usage: {perf['total_usage_count']} times")
             print()
 
-        print(f"\n💡 Smart Recommendations")
+        print("\n💡 Smart Recommendations")
         print("-" * 30)
         test_queries = [
             ("파이썬 함수 만들어줘", "code"),
@@ -1155,7 +1152,7 @@ def run_optimization():
     try:
         print("🔧 Running AI Analytics Optimization...")
         result = analytics.optimize_database()
-        print(f"✅ Optimization complete!")
+        print("✅ Optimization complete!")
         print(f"  Cleaned records: {result['cleaned_records']}")
         print(f"  Database size: {result['database_size_mb']:.1f}MB")
     except Exception as e:
@@ -1218,7 +1215,7 @@ def handle_mcp_call(tool_name: str, args_json: str = None):
         # Call the tool
         result = call_mcp_tool(tool_name, **kwargs)
         if result:
-            print(f"✅ MCP Tool Result:")
+            print("✅ MCP Tool Result:")
             if isinstance(result, dict):
                 for key, value in result.items():
                     if isinstance(value, str) and len(value) > 200:

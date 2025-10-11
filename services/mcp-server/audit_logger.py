@@ -7,7 +7,6 @@ Asynchronous audit logging with queue for non-blocking performance
 import asyncio
 import json
 import logging
-import time
 from typing import Dict, Optional
 from datetime import datetime
 

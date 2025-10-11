@@ -9,13 +9,11 @@ import sys
 import time
 import uuid
 import logging
-from pathlib import Path
-from fastapi import FastAPI, HTTPException, Query, Body, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
-import asyncio
 
 # 기본 로거 먼저 초기화 (다른 임포트보다 우선)
 logging.basicConfig(

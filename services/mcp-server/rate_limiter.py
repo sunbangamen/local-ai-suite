@@ -5,7 +5,7 @@ Rate Limiting and Access Control for MCP Tools
 
 import os
 import time
-from typing import Dict, List, Optional, Set
+from typing import Dict, Optional, Set
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from enum import Enum

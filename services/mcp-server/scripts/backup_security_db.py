@@ -18,7 +18,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from security_database import get_security_database
-from settings import SecuritySettings
 
 
 async def backup_database(output_dir: Path) -> Path:
@@ -39,7 +38,7 @@ async def backup_database(output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Checkpoint WAL (flush to main database)
-    print(f"Checkpointing WAL...")
+    print("Checkpointing WAL...")
     await db.checkpoint()
 
     # Create timestamped backup filename
@@ -53,7 +52,7 @@ async def backup_database(output_dir: Path) -> Path:
 
     # Get database info
     db_info = await db.get_db_info()
-    print(f"\nBackup completed:")
+    print("\nBackup completed:")
     print(f"  Backup file: {backup_path}")
     print(f"  Database size: {db_info['db_size_mb']} MB")
     print(f"  WAL size: {db_info['wal_size_mb']} MB")
@@ -65,7 +64,7 @@ async def backup_database(output_dir: Path) -> Path:
         async with conn.execute("PRAGMA integrity_check") as cursor:
             result = await cursor.fetchone()
             if result[0] == "ok":
-                print(f"  Integrity check: PASSED")
+                print("  Integrity check: PASSED")
             else:
                 print(f"  Integrity check: FAILED - {result[0]}")
                 raise RuntimeError("Backup integrity check failed")

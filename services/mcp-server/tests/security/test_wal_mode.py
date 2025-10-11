@@ -7,10 +7,8 @@ Issue #8 - P1-T3
 import asyncio
 import pytest
 import aiosqlite
-from pathlib import Path
-import tempfile
 
-from security_database import SecurityDatabase, init_database
+from security_database import SecurityDatabase
 
 
 @pytest.mark.integration
@@ -84,7 +82,7 @@ class TestWALModeConcurrency:
             """Background reader"""
             nonlocal read_count
             for _ in range(20):
-                logs = await db.get_audit_logs(limit=5)
+                await db.get_audit_logs(limit=5)
                 read_count += 1
                 await asyncio.sleep(0.005)  # Faster than writer
 
@@ -210,7 +208,7 @@ class TestDatabasePerformance:
         avg_latency = sum(latencies) / len(latencies)
         p95_latency = sorted(latencies)[94]  # 95th percentile
 
-        print(f"\nPermission Check Latency:")
+        print("\nPermission Check Latency:")
         print(f"  Average: {avg_latency:.2f}ms")
         print(f"  P95: {p95_latency:.2f}ms")
 
@@ -241,7 +239,7 @@ class TestDatabasePerformance:
         avg_latency = sum(latencies) / len(latencies)
         p95_latency = sorted(latencies)[94]
 
-        print(f"\nAudit Log Insert Latency:")
+        print("\nAudit Log Insert Latency:")
         print(f"  Average: {avg_latency:.2f}ms")
         print(f"  P95: {p95_latency:.2f}ms")
 

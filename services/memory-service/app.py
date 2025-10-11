@@ -10,14 +10,12 @@ from typing import Optional, List, Dict, Any
 import sys
 import os
 from pathlib import Path
-import asyncio
-import time
 from datetime import datetime
 
 # Add parent directories to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
-from memory_system import MemorySystem, get_memory_system
+from memory_system import MemorySystem
 
 # Initialize FastAPI
 app = FastAPI(

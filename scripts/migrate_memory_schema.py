@@ -21,7 +21,7 @@ import sqlite3
 import argparse
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Tuple
+from typing import List, Tuple
 
 # 메모리 디렉토리 경로
 AI_MEMORY_DIR = os.getenv("AI_MEMORY_DIR", "/mnt/e/ai-data/memory")

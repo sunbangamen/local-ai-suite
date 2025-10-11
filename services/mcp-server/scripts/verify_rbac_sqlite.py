@@ -8,7 +8,6 @@ import aiosqlite
 import argparse
 import time
 from datetime import datetime
-from typing import Optional
 
 
 async def verify_rbac_system(db_path: str, output_file: str, iterations: int = 100):
@@ -158,12 +157,12 @@ async def verify_rbac_system(db_path: str, output_file: str, iterations: int = 1
 
             f.write(f"✓ Total Time: {total_time_ms:.2f}ms\n")
             f.write(f"✓ Average Time per Check: {avg_time_ms:.3f}ms\n")
-            f.write(f"✓ Target: <10ms per check\n")
+            f.write("✓ Target: <10ms per check\n")
 
             if avg_time_ms < 10:
-                f.write(f"✓ Performance: PASSED (within target)\n")
+                f.write("✓ Performance: PASSED (within target)\n")
             else:
-                f.write(f"⚠ Performance: WARNING (exceeds target)\n")
+                f.write("⚠ Performance: WARNING (exceeds target)\n")
             f.write("\n")
 
             # Summary

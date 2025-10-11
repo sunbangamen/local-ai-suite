@@ -3,9 +3,8 @@
 import os
 import requests
 import time
-import json
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from datetime import datetime
+from typing import Dict, List
 from ai_analytics import analytics
 
 API_URL = "http://localhost:8000/v1/chat/completions"

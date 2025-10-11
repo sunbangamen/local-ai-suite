@@ -7,7 +7,7 @@ import os
 import json
 import requests
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, List
 from datetime import datetime
 
 
@@ -130,7 +130,7 @@ def show_memory_status(project_path: str = None):
         # 통계 정보
         try:
             stats = ms.get_conversation_stats(project_id)
-            print(f"\n📊 메모리 통계:")
+            print("\n📊 메모리 통계:")
             print(f"  💬 총 대화: {stats['total_conversations']:,}개")
             if stats["total_conversations"] > 0:
                 print(f"  ⭐ 평균 중요도: {stats['avg_importance']:.1f}/10")
@@ -139,14 +139,14 @@ def show_memory_status(project_path: str = None):
 
                 # 중요도 분포
                 if stats["importance_distribution"]:
-                    print(f"\n📈 중요도 분포:")
+                    print("\n📈 중요도 분포:")
                     for importance, count in stats["importance_distribution"].items():
                         level_info = ms.IMPORTANCE_LEVELS[importance]
                         print(f"  {importance}/10 ({level_info['name']}): {count}개")
 
                 # 모델 사용량
                 if stats["model_usage"]:
-                    print(f"\n🤖 모델 사용량:")
+                    print("\n🤖 모델 사용량:")
                     for model, count in stats["model_usage"].items():
                         print(f"  {model}: {count}개")
 

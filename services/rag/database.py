@@ -7,9 +7,8 @@ RAG Database Layer with SQLite
 
 import sqlite3
 import json
-import time
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from pathlib import Path
 import hashlib
 import threading

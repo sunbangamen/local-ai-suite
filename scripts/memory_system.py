@@ -5,12 +5,10 @@ SQLite 기반 대화 저장, 검색, 자동 정리 기능 제공
 
 import sqlite3
 import json
-import hashlib
 import uuid
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from contextlib import contextmanager
 import threading
 import re
@@ -67,7 +65,7 @@ class MemorySystem:
             self.global_dir.mkdir(exist_ok=True)
         except (OSError, PermissionError) as e:
             print(f"⚠️ Warning: Cannot create memory directories: {e}")
-            print(f"💡 Memory system will be disabled for this session.")
+            print("💡 Memory system will be disabled for this session.")
             self._storage_available = False
 
         # 중요도 레벨 정의
@@ -1058,7 +1056,7 @@ class MemorySystem:
                 # 컬렉션 준비 성공 시 벡터 기능 자동 활성화
                 if not self._vector_enabled:
                     self._vector_enabled = True
-                    print(f"🔄 벡터 검색 기능 자동 복구됨")
+                    print("🔄 벡터 검색 기능 자동 복구됨")
 
             return result
 
@@ -1087,7 +1085,7 @@ class MemorySystem:
             # Qdrant 연결 테스트
             result = self.ensure_memory_collection(project_id)
             if result:
-                print(f"✅ 벡터 기능 복구 성공")
+                print("✅ 벡터 기능 복구 성공")
                 return True
             else:
                 return False
@@ -1319,7 +1317,7 @@ class MemorySystem:
             items_map = {}
 
             for item in sync_queue:
-                conv_id = item["conversation_id"]
+                item["conversation_id"]
                 combined_text = f"Q: {item['user_query']}\nA: {item['ai_response']}"
                 texts_to_embed.append(combined_text)
                 items_map[len(texts_to_embed) - 1] = item

@@ -26,8 +26,6 @@ from pydantic import BaseModel
 from prometheus_fastapi_instrumentator import Instrumentator
 import base64
 import tempfile
-from io import BytesIO
-from PIL import Image
 
 # 새로운 보안 모듈 임포트
 try:
@@ -48,7 +46,7 @@ try:
     from .rbac_middleware import RBACMiddleware
 except ImportError:
     # 개발/테스트 환경에서의 절대 임포트
-    from security import get_security_validator, get_secure_executor, SecurityError
+    from security import get_secure_executor, SecurityError
     from safe_api import (
         get_safe_file_api,
         get_safe_command_executor,
@@ -1973,8 +1971,8 @@ async def get_current_model() -> Dict[str, Any]:
 
             return {
                 "phase": "Phase 2 (Dual LLM)",
-                "chat_model": chat_model if chat_success else f"unavailable",
-                "code_model": code_model if code_success else f"unavailable",
+                "chat_model": chat_model if chat_success else "unavailable",
+                "code_model": code_model if code_success else "unavailable",
                 "service_chat": "inference-chat:8001",
                 "service_code": "inference-code:8004",
                 "compose_file": compose_file,

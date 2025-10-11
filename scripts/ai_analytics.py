@@ -6,12 +6,10 @@ AI Analytics Database - Integrated Usage Tracking and Optimization
 """
 
 import sqlite3
-import json
-import time
 import hashlib
 import os
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, Any
 from pathlib import Path
 import threading
 from contextlib import contextmanager

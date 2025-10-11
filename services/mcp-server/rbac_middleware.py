@@ -7,7 +7,7 @@ FastAPI middleware for automatic permission checking
 import json
 import logging
 import time
-from fastapi import Request, Response
+from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp

@@ -4,7 +4,6 @@ Security Database Manager
 SQLite database operations with connection pooling and WAL mode
 """
 
-import asyncio
 import aiosqlite
 import logging
 from pathlib import Path

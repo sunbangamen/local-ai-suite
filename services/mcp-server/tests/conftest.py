@@ -244,7 +244,7 @@ def setup_integration_test_db():
         return
 
     # DB 경로 확인
-    db_path = SecuritySettings.get_db_path()
+    SecuritySettings.get_db_path()
 
     # 테스트용 임시 DB 사용 (선택적)
     # 환경 변수 TEST_MODE가 설정되어 있으면 실제 DB 건드리지 않음

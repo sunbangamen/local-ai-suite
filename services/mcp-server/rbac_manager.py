@@ -8,7 +8,6 @@ import asyncio
 import logging
 import time
 from typing import Dict, List, Optional, Tuple
-from collections import defaultdict
 
 from security_database import get_security_database
 from settings import SecuritySettings

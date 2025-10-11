@@ -25,8 +25,6 @@ import pytest_asyncio
 import json
 import uuid
 from pathlib import Path
-from datetime import datetime, timedelta
-from typing import Dict, List
 
 # Add parent directory to path for imports
 import sys
@@ -34,9 +32,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from security_database import SecurityDatabase
-from rbac_manager import RBACManager
 from audit_logger import AuditLogger
-from settings import SecuritySettings
 
 
 # ============================================================================
@@ -171,7 +167,7 @@ async def test_approval_granted_flow(test_db, rbac_manager):
         request_data=json.dumps({"arg1": "value1"}),
         timeout_seconds=300,
     )
-    assert success == True, "Approval request should be created"
+    assert success, "Approval request should be created"
 
     # Step 3: Verify request is pending
     request = await test_db.get_approval_request(request_id)
@@ -187,7 +183,7 @@ async def test_approval_granted_flow(test_db, rbac_manager):
         responder_id="test_admin",
         response_reason="Test approval",
     )
-    assert success == True, "Approval should succeed"
+    assert success, "Approval should succeed"
 
     # Step 5: Verify approval
     request = await test_db.get_approval_request(request_id)
@@ -224,7 +220,7 @@ async def test_approval_rejected_flow(test_db, rbac_manager):
         request_data=json.dumps({"dangerous": "operation"}),
         timeout_seconds=300,
     )
-    assert success == True
+    assert success
 
     # Step 2: Admin rejects
     success = await test_db.update_approval_status(
@@ -233,7 +229,7 @@ async def test_approval_rejected_flow(test_db, rbac_manager):
         responder_id="test_admin",
         response_reason="Security concern - unauthorized operation",
     )
-    assert success == True
+    assert success
 
     # Step 3: Verify rejection
     request = await test_db.get_approval_request(request_id)
@@ -270,7 +266,7 @@ async def test_approval_timeout_flow(test_db, rbac_manager):
         request_data=json.dumps({"arg": "value"}),
         timeout_seconds=2,  # Short timeout for testing
     )
-    assert success == True
+    assert success
 
     # Step 2: Wait for timeout
     await asyncio.sleep(3)  # Wait 3 seconds (> 2 second timeout)
@@ -545,8 +541,8 @@ async def test_performance_bulk_approvals(test_db):
     elapsed_time = time.time() - start_time
 
     # Log actual performance metrics
-    logger.info(f"Performance Test Results:")
-    logger.info(f"  - Total requests: 10")
+    logger.info("Performance Test Results:")
+    logger.info("  - Total requests: 10")
     logger.info(f"  - Elapsed time: {elapsed_time:.3f}s")
     logger.info(f"  - Average time per request: {elapsed_time/10:.3f}s")
     logger.info(f"  - Requests per second: {10/elapsed_time:.2f}")

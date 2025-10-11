@@ -9,10 +9,8 @@ import subprocess
 import asyncio
 import json
 import time
-import signal
 from pathlib import Path
-from typing import Dict, Any, Optional, List
-from contextlib import asynccontextmanager
+from typing import Dict, Any, Optional
 
 try:
     from .security import SecurityValidator, SecurityError

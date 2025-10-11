@@ -60,7 +60,7 @@ async def benchmark_tool_call(client: httpx.AsyncClient, scenario: Dict) -> Dict
             "status": response.status_code,
             "error": None,
         }
-    except httpx.TimeoutException as e:
+    except httpx.TimeoutException:
         latency = (time.perf_counter() - start) * 1000
         return {"success": False, "latency": latency, "status": 0, "error": "Timeout"}
     except Exception as e:
@@ -215,7 +215,7 @@ def analyze_results(results: List[Dict], duration: int, output_csv: Path) -> Dic
         writer.writerow(stats)
 
     print(f"\n{'='*60}")
-    print(f"Benchmark Results")
+    print("Benchmark Results")
     print(f"{'='*60}")
     print(f"Duration:             {stats['duration_sec']:8.2f} sec")
     print(f"Total Requests:       {stats['total_requests']:8}")
@@ -224,7 +224,7 @@ def analyze_results(results: List[Dict], duration: int, output_csv: Path) -> Dic
     print(f"Error Rate:           {stats['error_rate_pct']:8.2f} %")
     print(f"RPS:                  {stats['rps']:8.2f}")
     print(f"{'='*60}")
-    print(f"Latency (ms):")
+    print("Latency (ms):")
     print(f"  Min:                {stats['min_latency_ms']:8.2f}")
     print(f"  Average:            {stats['avg_latency_ms']:8.2f}")
     print(f"  Median:             {stats['median_latency_ms']:8.2f}")
@@ -242,7 +242,7 @@ def analyze_results(results: List[Dict], duration: int, output_csv: Path) -> Dic
 
     goals_met = all(goals.values())
 
-    print(f"Performance Goals:")
+    print("Performance Goals:")
     for goal, met in goals.items():
         status = "✓" if met else "✗"
         print(f"  {status} {goal}: {'PASS' if met else 'FAIL'}")
@@ -280,7 +280,7 @@ async def main():
         repo_root = script_path.parents[2]  # services/mcp-server/tests -> repo root
         output_csv = repo_root / "data" / "rbac_benchmark.csv"
 
-    print(f"\nRBAC Performance Benchmark")
+    print("\nRBAC Performance Benchmark")
     print(f"{'='*60}")
     print(f"Target URL:      {BASE_URL}")
     print(f"Duration:        {args.duration} seconds")

@@ -3,12 +3,10 @@
 Security Administration API - 보안 관리 및 모니터링 엔드포인트
 """
 
-import os
 import json
 import time
-from pathlib import Path
 from typing import Dict, Any, List, Optional
-from fastapi import FastAPI, HTTPException, Query, Body
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
