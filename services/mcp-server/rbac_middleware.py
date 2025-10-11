@@ -7,7 +7,7 @@ FastAPI middleware for automatic permission checking
 import json
 import logging
 import time
-from fastapi import Request, Response
+from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
@@ -80,9 +80,11 @@ class RBACMiddleware(BaseHTTPMiddleware):
                     body_bytes = await request.body()
                     if body_bytes:
                         request_data = json.loads(body_bytes.decode())
+
                         # Restore body for downstream handlers
                         async def receive():
                             return {"type": "http.request", "body": body_bytes}
+
                         request._receive = receive
             except Exception as e:
                 logger.warning(f"Failed to extract request body: {e}")
@@ -92,7 +94,7 @@ class RBACMiddleware(BaseHTTPMiddleware):
                 user_id=user_id,
                 tool_name=tool_name,
                 request_data=request_data,
-                timeout=SecuritySettings.get_approval_timeout()
+                timeout=SecuritySettings.get_approval_timeout(),
             )
 
             if not approval_granted:
@@ -102,9 +104,7 @@ class RBACMiddleware(BaseHTTPMiddleware):
                 # Audit logging
                 try:
                     await self.audit_logger.log_denied(
-                        user_id,
-                        tool_name,
-                        "Approval denied or timed out"
+                        user_id, tool_name, "Approval denied or timed out"
                     )
                 except Exception as e:
                     logger.error(f"Failed to log approval denial: {e}")
@@ -115,17 +115,15 @@ class RBACMiddleware(BaseHTTPMiddleware):
                         "error": "Approval required",
                         "detail": "Request requires administrator approval but was denied or timed out",
                         "user_id": user_id,
-                        "tool_name": tool_name
-                    }
+                        "tool_name": tool_name,
+                    },
                 )
 
             logger.info(f"Approval granted: user={user_id}, tool={tool_name}")
 
         if not allowed:
             # Permission denied - log and return 403
-            logger.warning(
-                f"Permission denied: user={user_id}, tool={tool_name}, reason={reason}"
-            )
+            logger.warning(f"Permission denied: user={user_id}, tool={tool_name}, reason={reason}")
 
             # Audit logging (non-blocking)
             try:
@@ -139,8 +137,8 @@ class RBACMiddleware(BaseHTTPMiddleware):
                     "error": "Permission denied",
                     "detail": reason,
                     "user_id": user_id,
-                    "tool_name": tool_name
-                }
+                    "tool_name": tool_name,
+                },
             )
 
         # Permission granted - continue to handler
@@ -153,7 +151,7 @@ class RBACMiddleware(BaseHTTPMiddleware):
             await self.audit_logger.log_success(
                 user_id=user_id,
                 tool_name=tool_name,
-                execution_time_ms=execution_time_ms
+                execution_time_ms=execution_time_ms,
             )
         except Exception as e:
             logger.error(f"Failed to log successful access: {e}")

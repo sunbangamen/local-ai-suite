@@ -5,11 +5,11 @@ MCP Server Security Module - AST 기반 코드 보안 검증기
 
 import ast
 import os
-from typing import List, Set, Optional
 
 
 class SecurityError(Exception):
     """보안 검증 실패 시 발생하는 예외"""
+
     pass
 
 
@@ -19,64 +19,132 @@ class SecurityValidator:
     # 기본 허용 모듈 (기본 파이썬 모듈들 포함)
     ALLOWED_MODULES = {
         # 기본 시스템 모듈 (안전한 것들)
-        'os', 'sys', 'pathlib', 'platform', 'tempfile', 'warnings',
-
+        "os",
+        "sys",
+        "pathlib",
+        "platform",
+        "tempfile",
+        "warnings",
         # 기본 내장 모듈
-        'json', 'datetime', 'math', 'random', 'string', 'collections',
-        'itertools', 'functools', 're', 'time', 'uuid', 'base64', 'hashlib',
-        'decimal', 'fractions', 'statistics', 'typing', 'enum', 'dataclasses',
-
+        "json",
+        "datetime",
+        "math",
+        "random",
+        "string",
+        "collections",
+        "itertools",
+        "functools",
+        "re",
+        "time",
+        "uuid",
+        "base64",
+        "hashlib",
+        "decimal",
+        "fractions",
+        "statistics",
+        "typing",
+        "enum",
+        "dataclasses",
         # 데이터 처리
-        'csv', 'xml', 'html', 'urllib.parse', 'urllib.request', 'http',
-        'email', 'mimetypes', 'encodings', 'codecs',
-
+        "csv",
+        "xml",
+        "html",
+        "urllib.parse",
+        "urllib.request",
+        "http",
+        "email",
+        "mimetypes",
+        "encodings",
+        "codecs",
         # 파일/경로 처리 (SafeFileAPI와 함께 사용)
-        'glob', 'fnmatch', 'linecache', 'filecmp',
-
+        "glob",
+        "fnmatch",
+        "linecache",
+        "filecmp",
         # 허용된 외부 모듈 (설치된 경우에만)
-        'requests', 'aiofiles', 'httpx', 'asyncio'
+        "requests",
+        "aiofiles",
+        "httpx",
+        "asyncio",
     }
 
     # 위험한 모듈 거부 목록 (deny-list)
     DENY_MODULES = {
         # 프로세스 실행
-        'subprocess', 'multiprocessing', 'threading', 'concurrent.futures',
-
+        "subprocess",
+        "multiprocessing",
+        "threading",
+        "concurrent.futures",
         # 시스템 접근
-        'ctypes', 'winreg', 'mmap', 'fcntl', 'termios', 'tty', 'pty',
-
+        "ctypes",
+        "winreg",
+        "mmap",
+        "fcntl",
+        "termios",
+        "tty",
+        "pty",
         # 네트워크 (제한적 허용 - requests는 OK)
-        'socket', 'ssl', 'ftplib', 'telnetlib', 'smtplib', 'poplib', 'imaplib',
-
+        "socket",
+        "ssl",
+        "ftplib",
+        "telnetlib",
+        "smtplib",
+        "poplib",
+        "imaplib",
         # 파일 시스템 조작
-        'shutil', 'zipfile', 'tarfile', 'gzip', 'bz2', 'lzma',
-
+        "shutil",
+        "zipfile",
+        "tarfile",
+        "gzip",
+        "bz2",
+        "lzma",
         # 코드 실행/수정
-        'imp', 'importlib', 'pkgutil', 'runpy', 'code', 'codeop',
-
+        "imp",
+        "importlib",
+        "pkgutil",
+        "runpy",
+        "code",
+        "codeop",
         # 시스템 정보/제어
-        'resource', 'signal', 'syslog', 'logging.handlers'
+        "resource",
+        "signal",
+        "syslog",
+        "logging.handlers",
     }
 
     # 위험한 내장 함수들 (동적 import 우회 차단 강화)
     DANGEROUS_FUNCTIONS = {
-        '__import__', 'exec', 'eval', 'compile',
-        'getattr', 'setattr', 'delattr', 'hasattr',
-        'globals', 'locals', 'vars', 'dir',
-        'open',  # 파일 접근은 SafeFileAPI를 통해서만
+        "__import__",
+        "exec",
+        "eval",
+        "compile",
+        "getattr",
+        "setattr",
+        "delattr",
+        "hasattr",
+        "globals",
+        "locals",
+        "vars",
+        "dir",
+        "open",  # 파일 접근은 SafeFileAPI를 통해서만
         # 동적 import 우회 방지
-        'import_module',  # importlib.import_module 차단
-        'reload'  # importlib.reload 차단
+        "import_module",  # importlib.import_module 차단
+        "reload",  # importlib.reload 차단
     }
 
     # 위험한 속성 접근 (동적 import 우회 차단 강화)
     DANGEROUS_ATTRIBUTES = {
-        '__builtins__', '__globals__', '__locals__',
-        '__dict__', '__class__', '__bases__', '__mro__',
+        "__builtins__",
+        "__globals__",
+        "__locals__",
+        "__dict__",
+        "__class__",
+        "__bases__",
+        "__mro__",
         # importlib 모듈 우회 방지
-        'import_module',  # importlib.import_module 접근
-        'reload',  # importlib.reload 접근
-        '__import_module__'  # 대체 이름으로 우회 시도
+        "import_module",  # importlib.import_module 접근
+        "reload",  # importlib.reload 접근
+        "__import_module__",  # 대체 이름으로 우회 시도
     }
 
     def __init__(self, security_level: str = "normal"):
@@ -92,8 +160,15 @@ class SecurityValidator:
         if security_level == "strict":
             # 엄격한 모드: 최소한의 모듈만 허용 (화이트리스트)
             self.allowed_modules = {
-                'pathlib', 'json', 'datetime', 'math', 'string', 're', 'time',
-                'os', 'sys'  # 기본 모듈 추가
+                "pathlib",
+                "json",
+                "datetime",
+                "math",
+                "string",
+                "re",
+                "time",
+                "os",
+                "sys",  # 기본 모듈 추가
             }
         elif security_level == "legacy":
             # 레거시 모드: 기존 키워드 필터 사용
@@ -138,7 +213,7 @@ class SecurityValidator:
             "import_module",
             "__import__",
             "importlib.import_module",
-            "importlib.reload"
+            "importlib.reload",
         ]
 
         for pattern in dangerous_patterns:
@@ -172,10 +247,10 @@ class SecurityValidator:
     def _check_imports(self, node):
         """Import 문 보안성 검사 (deny-list 우선 방식)"""
         if isinstance(node, ast.Import):
-            modules = [alias.name.split('.')[0] for alias in node.names]
+            modules = [alias.name.split(".")[0] for alias in node.names]
         elif isinstance(node, ast.ImportFrom):
             if node.module:
-                modules = [node.module.split('.')[0]]
+                modules = [node.module.split(".")[0]]
             else:
                 modules = []  # relative import
         else:
@@ -219,31 +294,37 @@ class SecurityValidator:
     def _check_dynamic_import_bypass(self, node: ast.Attribute):
         """동적 import 우회 시도 검사 (importlib.import_module 등)"""
         # importlib.import_module() 패턴 검사
-        if (node.attr == 'import_module' and
-            isinstance(node.value, ast.Name) and
-            node.value.id == 'importlib'):
+        if (
+            node.attr == "import_module"
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "importlib"
+        ):
             raise SecurityError("Dynamic import bypass blocked: importlib.import_module")
 
         # importlib.reload() 패턴 검사
-        if (node.attr == 'reload' and
-            isinstance(node.value, ast.Name) and
-            node.value.id == 'importlib'):
+        if (
+            node.attr == "reload"
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "importlib"
+        ):
             raise SecurityError("Dynamic import bypass blocked: importlib.reload")
 
         # __import__ 속성 접근 검사
-        if node.attr == '__import__':
+        if node.attr == "__import__":
             raise SecurityError("Dynamic import bypass blocked: __import__ attribute access")
 
         # 기타 알려진 우회 패턴들
         dangerous_import_patterns = {
-            'util': 'importlib.util',
-            'machinery': 'importlib.machinery',
-            'find_spec': 'importlib.util.find_spec',
-            'spec_from_loader': 'importlib.util.spec_from_loader'
+            "util": "importlib.util",
+            "machinery": "importlib.machinery",
+            "find_spec": "importlib.util.find_spec",
+            "spec_from_loader": "importlib.util.spec_from_loader",
         }
 
         if node.attr in dangerous_import_patterns:
-            raise SecurityError(f"Dynamic import bypass blocked: {dangerous_import_patterns[node.attr]}")
+            raise SecurityError(
+                f"Dynamic import bypass blocked: {dangerous_import_patterns[node.attr]}"
+            )
 
 
 class SecureExecutionEnvironment:
@@ -281,6 +362,7 @@ class SecureExecutionEnvironment:
                     if loop.is_running():
                         # 이미 루프가 실행 중인 경우 새 스레드에서 실행
                         import concurrent.futures
+
                         with concurrent.futures.ThreadPoolExecutor() as executor:
                             future = executor.submit(asyncio.run, _async_execute())
                             result = future.result(timeout=timeout)
@@ -304,7 +386,7 @@ class SecureExecutionEnvironment:
                 "stdout": "",
                 "stderr": f"Security validation failed: {str(e)}",
                 "returncode": 1,
-                "success": False
+                "success": False,
             }
 
         # 2단계: 기본 subprocess 실행
@@ -318,7 +400,7 @@ class SecureExecutionEnvironment:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=os.getenv("PROJECT_ROOT", "/mnt/workspace"),
-                text=True
+                text=True,
             )
             stdout, stderr = proc.communicate(timeout=timeout)
 
@@ -327,7 +409,7 @@ class SecureExecutionEnvironment:
                 "stderr": stderr or "",
                 "returncode": proc.returncode or 0,
                 "success": proc.returncode == 0,
-                "sandbox_type": "legacy"
+                "sandbox_type": "legacy",
             }
         except subprocess.TimeoutExpired:
             proc.kill()
@@ -336,7 +418,7 @@ class SecureExecutionEnvironment:
                 "stderr": f"Timeout ({timeout}초)",
                 "returncode": 124,
                 "success": False,
-                "sandbox_type": "legacy"
+                "sandbox_type": "legacy",
             }
         except Exception as e:
             return {
@@ -344,7 +426,7 @@ class SecureExecutionEnvironment:
                 "stderr": f"Execution error: {str(e)}",
                 "returncode": 1,
                 "success": False,
-                "sandbox_type": "legacy"
+                "sandbox_type": "legacy",
             }
 
     async def execute_python_code_async(self, code: str, timeout: int = 30) -> dict:
@@ -366,7 +448,7 @@ class SecureExecutionEnvironment:
                 "stdout": "",
                 "stderr": f"Security validation failed: {str(e)}",
                 "returncode": 1,
-                "success": False
+                "success": False,
             }
 
         # 2단계: 비동기 subprocess 실행
@@ -379,10 +461,12 @@ class SecureExecutionEnvironment:
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                sys.executable, "-c", code,
+                sys.executable,
+                "-c",
+                code,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=os.getenv("PROJECT_ROOT", "/mnt/workspace")
+                cwd=os.getenv("PROJECT_ROOT", "/mnt/workspace"),
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
 
@@ -390,7 +474,7 @@ class SecureExecutionEnvironment:
                 "stdout": stdout.decode() if stdout else "",
                 "stderr": stderr.decode() if stderr else "",
                 "returncode": proc.returncode or 0,
-                "success": proc.returncode == 0
+                "success": proc.returncode == 0,
             }
         except asyncio.TimeoutError:
             proc.kill()
@@ -398,14 +482,14 @@ class SecureExecutionEnvironment:
                 "stdout": "",
                 "stderr": f"Timeout ({timeout}초)",
                 "returncode": 124,
-                "success": False
+                "success": False,
             }
         except Exception as e:
             return {
                 "stdout": "",
                 "stderr": f"Execution error: {str(e)}",
                 "returncode": 1,
-                "success": False
+                "success": False,
             }
 
 

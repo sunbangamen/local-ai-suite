@@ -14,7 +14,6 @@ import argparse
 import sys
 import json
 from pathlib import Path
-from datetime import datetime
 from rich.console import Console
 from rich.table import Table
 from rich.prompt import Prompt, Confirm
@@ -34,7 +33,8 @@ async def get_pending_requests(db_path: Path, limit: int = 20):
     """대기 중인 승인 요청 조회"""
     async with aiosqlite.connect(db_path) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute("""
+        cursor = await db.execute(
+            """
             SELECT
                 request_id,
                 tool_name,
@@ -48,7 +48,9 @@ async def get_pending_requests(db_path: Path, limit: int = 20):
             WHERE status = 'pending' AND datetime('now') < expires_at
             ORDER BY requested_at ASC
             LIMIT ?
-        """, (limit,))
+        """,
+            (limit,),
+        )
         requests = await cursor.fetchall()
         return [dict(row) for row in requests]
 
@@ -60,48 +62,55 @@ async def approve_request(db_path: Path, request_id: str, responder_id: str, rea
 
         # 요청 정보 조회
         cursor = await db.execute(
-            "SELECT * FROM approval_requests WHERE request_id = ?",
-            (request_id,)
+            "SELECT * FROM approval_requests WHERE request_id = ?", (request_id,)
         )
         row = await cursor.fetchone()
         if not row:
             return False, "Request not found"
 
         request_data = dict(row)
-        if request_data['status'] != 'pending':
+        if request_data["status"] != "pending":
             return False, f"Request already {request_data['status']}"
 
         # 승인 처리
-        await db.execute("""
+        await db.execute(
+            """
             UPDATE approval_requests
             SET status = 'approved',
                 responder_id = ?,
                 response_reason = ?,
                 responded_at = datetime('now')
             WHERE request_id = ? AND status = 'pending'
-        """, (responder_id, reason, request_id))
+        """,
+            (responder_id, reason, request_id),
+        )
         await db.commit()
 
         # 감사 로그 기록
         try:
-            await db.execute("""
+            await db.execute(
+                """
                 INSERT INTO security_audit_logs (
                     user_id, tool_name, action, status,
                     error_message, execution_time_ms, request_data, timestamp
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-            """, (
-                request_data['user_id'],
-                request_data['tool_name'],
-                'approval_granted',
-                'approved',
-                None,
-                None,
-                json.dumps({
-                    "request_id": request_id,
-                    "responder_id": responder_id,
-                    "reason": reason
-                }),
-            ))
+            """,
+                (
+                    request_data["user_id"],
+                    request_data["tool_name"],
+                    "approval_granted",
+                    "approved",
+                    None,
+                    None,
+                    json.dumps(
+                        {
+                            "request_id": request_id,
+                            "responder_id": responder_id,
+                            "reason": reason,
+                        }
+                    ),
+                ),
+            )
             await db.commit()
         except Exception as e:
             console.print(f"[yellow]Warning: Failed to log approval: {e}[/yellow]")
@@ -116,47 +125,49 @@ async def reject_request(db_path: Path, request_id: str, responder_id: str, reas
 
         # 요청 정보 조회
         cursor = await db.execute(
-            "SELECT * FROM approval_requests WHERE request_id = ?",
-            (request_id,)
+            "SELECT * FROM approval_requests WHERE request_id = ?", (request_id,)
         )
         row = await cursor.fetchone()
         if not row:
             return False, "Request not found"
 
         request_data = dict(row)
-        if request_data['status'] != 'pending':
+        if request_data["status"] != "pending":
             return False, f"Request already {request_data['status']}"
 
         # 거부 처리
-        await db.execute("""
+        await db.execute(
+            """
             UPDATE approval_requests
             SET status = 'rejected',
                 responder_id = ?,
                 response_reason = ?,
                 responded_at = datetime('now')
             WHERE request_id = ? AND status = 'pending'
-        """, (responder_id, reason, request_id))
+        """,
+            (responder_id, reason, request_id),
+        )
         await db.commit()
 
         # 감사 로그 기록
         try:
-            await db.execute("""
+            await db.execute(
+                """
                 INSERT INTO security_audit_logs (
                     user_id, tool_name, action, status,
                     error_message, execution_time_ms, request_data, timestamp
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-            """, (
-                request_data['user_id'],
-                request_data['tool_name'],
-                'approval_rejected',
-                'rejected',
-                reason,  # rejection reason as error_message
-                None,
-                json.dumps({
-                    "request_id": request_id,
-                    "responder_id": responder_id
-                }),
-            ))
+            """,
+                (
+                    request_data["user_id"],
+                    request_data["tool_name"],
+                    "approval_rejected",
+                    "rejected",
+                    reason,  # rejection reason as error_message
+                    None,
+                    json.dumps({"request_id": request_id, "responder_id": responder_id}),
+                ),
+            )
             await db.commit()
         except Exception as e:
             console.print(f"[yellow]Warning: Failed to log rejection: {e}[/yellow]")
@@ -180,18 +191,20 @@ def display_requests(requests):
 
     short_id_map = {}
     for req in requests:
-        request_id = req['request_id']
+        request_id = req["request_id"]
         short_id = request_id[:8]
 
         # 중복 short ID 체크
         if short_id in short_id_map and short_id_map[short_id] != request_id:
-            console.print(f"[red]Warning: Duplicate Short ID detected ({short_id}). Using full UUID.[/red]")
+            console.print(
+                f"[red]Warning: Duplicate Short ID detected ({short_id}). Using full UUID.[/red]"
+            )
             short_id = request_id
         short_id_map[short_id] = request_id
 
         # 시간 포맷팅
-        requested_at = req['requested_at']
-        seconds_left = req['seconds_left']
+        requested_at = req["requested_at"]
+        seconds_left = req["seconds_left"]
         if seconds_left > 60:
             expires_in = f"{seconds_left // 60}m {seconds_left % 60}s"
         else:
@@ -199,11 +212,11 @@ def display_requests(requests):
 
         table.add_row(
             short_id,
-            req['tool_name'],
-            req['user_id'],
-            req['role'],
-            requested_at.split('.')[0],  # Remove microseconds
-            expires_in
+            req["tool_name"],
+            req["user_id"],
+            req["role"],
+            requested_at.split(".")[0],  # Remove microseconds
+            expires_in,
         )
 
     console.print(table)
@@ -214,12 +227,14 @@ async def interactive_mode(db_path: Path, responder_id: str):
     """대화형 모드로 승인 처리"""
     while True:
         console.clear()
-        console.print(Panel.fit(
-            "[bold green]Approval Workflow CLI[/bold green]\n"
-            f"DB: {db_path}\n"
-            f"Responder: {responder_id}",
-            border_style="green"
-        ))
+        console.print(
+            Panel.fit(
+                "[bold green]Approval Workflow CLI[/bold green]\n"
+                f"DB: {db_path}\n"
+                f"Responder: {responder_id}",
+                border_style="green",
+            )
+        )
 
         # 대기 중인 요청 조회
         requests = await get_pending_requests(db_path)
@@ -240,11 +255,11 @@ async def interactive_mode(db_path: Path, responder_id: str):
 
         choice = Prompt.ask("\nYour choice", default="r")
 
-        if choice == 'q':
+        if choice == "q":
             console.print("[yellow]Exiting...[/yellow]")
             break
 
-        if choice == 'r':
+        if choice == "r":
             continue
 
         # 요청 처리
@@ -255,18 +270,20 @@ async def interactive_mode(db_path: Path, responder_id: str):
             continue
 
         # 요청 상세 정보 표시
-        selected_req = next((r for r in request_list if r['request_id'] == full_request_id), None)
+        selected_req = next((r for r in request_list if r["request_id"] == full_request_id), None)
         if selected_req:
-            console.print(Panel(
-                f"[bold]Request Details[/bold]\n\n"
-                f"ID: {selected_req['request_id']}\n"
-                f"Tool: {selected_req['tool_name']}\n"
-                f"User: {selected_req['user_id']}\n"
-                f"Role: {selected_req['role']}\n"
-                f"Requested: {selected_req['requested_at']}\n"
-                f"Data: {selected_req['request_data'][:100]}...",
-                border_style="cyan"
-            ))
+            console.print(
+                Panel(
+                    f"[bold]Request Details[/bold]\n\n"
+                    f"ID: {selected_req['request_id']}\n"
+                    f"Tool: {selected_req['tool_name']}\n"
+                    f"User: {selected_req['user_id']}\n"
+                    f"Role: {selected_req['role']}\n"
+                    f"Requested: {selected_req['requested_at']}\n"
+                    f"Data: {selected_req['request_data'][:100]}...",
+                    border_style="cyan",
+                )
+            )
 
         # 승인/거부 선택
         action = Prompt.ask("Action", choices=["approve", "reject", "skip"], default="skip")
@@ -321,6 +338,7 @@ async def main():
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

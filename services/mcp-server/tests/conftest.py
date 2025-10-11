@@ -13,13 +13,23 @@ from pathlib import Path
 from typing import AsyncGenerator, Generator
 
 import pytest
+import pytest_asyncio
 import aiosqlite
 
-# Add parent directory to Python path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+try:
+    from settings import SecuritySettings
+    from security_database import get_security_database, reset_security_database
+except ImportError:  # pragma: no cover
+    PARENT = Path(__file__).resolve().parents[1]
+    if str(PARENT) not in sys.path:
+        sys.path.insert(0, str(PARENT))
 
-from settings import SecuritySettings
-from security_database import reset_security_database
+    from settings import SecuritySettings  # type: ignore
+    from security_database import get_security_database, reset_security_database  # type: ignore
+
+# Tell pytest to ignore __init__.py in service root (prevents relative import errors)
+collect_ignore = ["../__init__.py"]
+collect_ignore_glob = ["../__init__.py"]
 
 
 @pytest.fixture(scope="session")
@@ -43,6 +53,34 @@ def temp_db_path() -> Generator[Path, None, None]:
         db_path.unlink()
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def override_security_paths(monkeypatch, temp_db_path: Path):
+    """Provide each test with an isolated, writable security DB."""
+    temp_dir = temp_db_path.parent
+
+    original_db_path = SecuritySettings.SECURITY_DB_PATH
+    original_data_dir = SecuritySettings.DATA_DIR
+
+    monkeypatch.setenv("SECURITY_DB_PATH", str(temp_db_path))
+    monkeypatch.setenv("DATA_DIR", str(temp_dir))
+
+    SecuritySettings.SECURITY_DB_PATH = str(temp_db_path)
+    SecuritySettings.DATA_DIR = str(temp_dir)
+
+    # Reset singleton and initialize schema on the temporary database
+    reset_security_database()
+    db = get_security_database()
+    await db.initialize()
+
+    yield
+
+    reset_security_database()
+    SecuritySettings.SECURITY_DB_PATH = original_db_path
+    SecuritySettings.DATA_DIR = original_data_dir
+    monkeypatch.delenv("SECURITY_DB_PATH", raising=False)
+    monkeypatch.delenv("DATA_DIR", raising=False)
+
+
 @pytest.fixture(scope="function")
 async def test_db(temp_db_path: Path) -> AsyncGenerator[aiosqlite.Connection, None]:
     """SQLite test database connection with schema"""
@@ -51,33 +89,42 @@ async def test_db(temp_db_path: Path) -> AsyncGenerator[aiosqlite.Connection, No
         await db.execute("PRAGMA journal_mode=WAL")
 
         # Create tables
-        await db.execute("""
+        await db.execute(
+            """
             CREATE TABLE IF NOT EXISTS security_users (
                 user_id TEXT PRIMARY KEY,
                 username TEXT NOT NULL,
                 role_id INTEGER,
-                created_at TEXT DEFAULT (CURRENT_TIMESTAMP)
+                created_at TEXT DEFAULT (CURRENT_TIMESTAMP),
+                is_active INTEGER DEFAULT 1
             )
-        """)
+        """
+        )
 
-        await db.execute("""
+        await db.execute(
+            """
             CREATE TABLE IF NOT EXISTS security_roles (
                 role_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 role_name TEXT NOT NULL UNIQUE,
                 description TEXT
             )
-        """)
+        """
+        )
 
-        await db.execute("""
+        await db.execute(
+            """
             CREATE TABLE IF NOT EXISTS security_permissions (
                 permission_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 permission_name TEXT NOT NULL UNIQUE,
                 resource_type TEXT,
-                action TEXT
+                action TEXT,
+                sensitivity_level INTEGER DEFAULT 0
             )
-        """)
+        """
+        )
 
-        await db.execute("""
+        await db.execute(
+            """
             CREATE TABLE IF NOT EXISTS security_role_permissions (
                 role_id INTEGER,
                 permission_id INTEGER,
@@ -85,9 +132,11 @@ async def test_db(temp_db_path: Path) -> AsyncGenerator[aiosqlite.Connection, No
                 FOREIGN KEY (role_id) REFERENCES security_roles(role_id) ON DELETE CASCADE,
                 FOREIGN KEY (permission_id) REFERENCES security_permissions(permission_id) ON DELETE CASCADE
             )
-        """)
+        """
+        )
 
-        await db.execute("""
+        await db.execute(
+            """
             CREATE TABLE IF NOT EXISTS security_audit_logs (
                 log_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT,
@@ -98,7 +147,27 @@ async def test_db(temp_db_path: Path) -> AsyncGenerator[aiosqlite.Connection, No
                 timestamp TEXT DEFAULT (CURRENT_TIMESTAMP),
                 execution_time_ms INTEGER
             )
-        """)
+        """
+        )
+
+        await db.execute(
+            """
+            CREATE VIEW IF NOT EXISTS v_user_permissions AS
+            SELECT
+                u.user_id,
+                u.username,
+                r.role_name,
+                p.permission_name,
+                p.resource_type,
+                p.action,
+                p.sensitivity_level
+            FROM security_users u
+            JOIN security_roles r ON u.role_id = r.role_id
+            JOIN security_role_permissions rp ON r.role_id = rp.role_id
+            JOIN security_permissions p ON rp.permission_id = p.permission_id
+            WHERE u.is_active = 1
+            """
+        )
 
         await db.commit()
 
@@ -111,30 +180,33 @@ async def seeded_db(test_db: aiosqlite.Connection) -> aiosqlite.Connection:
     # Insert default roles
     await test_db.execute(
         "INSERT INTO security_roles (role_name, description) VALUES (?, ?)",
-        ("guest", "Read-only access")
+        ("guest", "Read-only access"),
     )
     await test_db.execute(
         "INSERT INTO security_roles (role_name, description) VALUES (?, ?)",
-        ("developer", "Developer access with code execution")
+        ("developer", "Developer access with code execution"),
     )
     await test_db.execute(
         "INSERT INTO security_roles (role_name, description) VALUES (?, ?)",
-        ("admin", "Full administrative access")
+        ("admin", "Full administrative access"),
     )
 
     # Insert permissions
     permissions = [
-        ("read_file", "file", "read"),
-        ("write_file", "file", "write"),
-        ("execute_python", "tool", "execute"),
-        ("execute_bash", "tool", "execute"),
-        ("git_commit", "tool", "execute"),
+        ("read_file", "file", "read", 0),
+        ("write_file", "file", "write", 1),
+        ("execute_python", "tool", "execute", 2),
+        ("execute_bash", "tool", "execute", 2),
+        ("git_commit", "tool", "execute", 3),
     ]
 
-    for perm_name, resource, action in permissions:
+    for perm_name, resource, action, sensitivity in permissions:
         await test_db.execute(
-            "INSERT INTO security_permissions (permission_name, resource_type, action) VALUES (?, ?, ?)",
-            (perm_name, resource, action)
+            """
+            INSERT INTO security_permissions (permission_name, resource_type, action, sensitivity_level)
+            VALUES (?, ?, ?, ?)
+            """,
+            (perm_name, resource, action, sensitivity),
         )
 
     # Map role-permissions
@@ -144,31 +216,29 @@ async def seeded_db(test_db: aiosqlite.Connection) -> aiosqlite.Connection:
     )
 
     # Developer: read_file, write_file, execute_python, execute_bash
-    for perm_id in [1, 2, 3, 4]:
-        await test_db.execute(
-            "INSERT INTO security_role_permissions (role_id, permission_id) VALUES (2, ?)",
-            (perm_id,)
-        )
+    await test_db.executemany(
+        "INSERT INTO security_role_permissions (role_id, permission_id) VALUES (?, ?)",
+        [(2, perm_id) for perm_id in [1, 2, 3, 4]],
+    )
 
     # Admin: all permissions
-    for perm_id in [1, 2, 3, 4, 5]:
-        await test_db.execute(
-            "INSERT INTO security_role_permissions (role_id, permission_id) VALUES (3, ?)",
-            (perm_id,)
-        )
+    await test_db.executemany(
+        "INSERT INTO security_role_permissions (role_id, permission_id) VALUES (?, ?)",
+        [(3, perm_id) for perm_id in [1, 2, 3, 4, 5]],
+    )
 
     # Insert test users
     await test_db.execute(
-        "INSERT INTO security_users (user_id, username, role_id) VALUES (?, ?, ?)",
-        ("guest_user", "Guest User", 1)
+        "INSERT INTO security_users (user_id, username, role_id, is_active) VALUES (?, ?, ?, 1)",
+        ("guest_user", "Guest User", 1),
     )
     await test_db.execute(
-        "INSERT INTO security_users (user_id, username, role_id) VALUES (?, ?, ?)",
-        ("dev_user", "Developer User", 2)
+        "INSERT INTO security_users (user_id, username, role_id, is_active) VALUES (?, ?, ?, 1)",
+        ("dev_user", "Developer User", 2),
     )
     await test_db.execute(
-        "INSERT INTO security_users (user_id, username, role_id) VALUES (?, ?, ?)",
-        ("admin_user", "Admin User", 3)
+        "INSERT INTO security_users (user_id, username, role_id, is_active) VALUES (?, ?, ?, 1)",
+        ("admin_user", "Admin User", 3),
     )
 
     await test_db.commit()
@@ -234,7 +304,7 @@ def setup_integration_test_db():
         return
 
     # DB 경로 확인
-    db_path = SecuritySettings.get_db_path()
+    SecuritySettings.get_db_path()
 
     # 테스트용 임시 DB 사용 (선택적)
     # 환경 변수 TEST_MODE가 설정되어 있으면 실제 DB 건드리지 않음
@@ -257,7 +327,7 @@ def setup_integration_test_db():
                 [sys.executable, str(seed_script), "--reset"],
                 capture_output=True,
                 text=True,
-                cwd=script_dir.parent
+                cwd=script_dir.parent,
             )
             if result.returncode != 0:
                 print(f"Warning: Seed script failed: {result.stderr}")
@@ -286,7 +356,7 @@ def setup_integration_test_db():
                 [sys.executable, str(seed_script)],
                 capture_output=True,
                 text=True,
-                cwd=script_dir.parent
+                cwd=script_dir.parent,
             )
             if result.returncode != 0:
                 print(f"Warning: Seed script failed: {result.stderr}")
@@ -305,15 +375,14 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "docker: mark test as requiring Docker (skip if Docker unavailable)"
     )
-    config.addinivalue_line(
-        "markers", "slow: mark test as slow (deselect with '-m \"not slow\"')"
-    )
+    config.addinivalue_line("markers", "slow: mark test as slow (deselect with '-m \"not slow\"')")
 
 
 def pytest_collection_modifyitems(config, items):
     """Skip Docker tests if Docker is not available"""
     try:
         import subprocess
+
         subprocess.run(["docker", "ps"], capture_output=True, check=True)
         docker_available = True
     except (subprocess.CalledProcessError, FileNotFoundError):

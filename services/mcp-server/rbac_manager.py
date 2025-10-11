@@ -8,7 +8,6 @@ import asyncio
 import logging
 import time
 from typing import Dict, List, Optional, Tuple
-from collections import defaultdict
 
 from security_database import get_security_database
 from settings import SecuritySettings
@@ -38,11 +37,7 @@ class RBACManager:
         self._role_cache: Dict[str, int] = {}
         self.db = get_security_database()
 
-    async def check_permission(
-        self,
-        user_id: str,
-        tool_name: str
-    ) -> Tuple[bool, str]:
+    async def check_permission(self, user_id: str, tool_name: str) -> Tuple[bool, str]:
         """
         Check if user has permission to use tool
 
@@ -145,15 +140,11 @@ class RBACManager:
             return False
 
         # Require approval for HIGH and CRITICAL tools
-        sensitivity_level = permission.get('sensitivity_level', 'MEDIUM')
-        return sensitivity_level in ['HIGH', 'CRITICAL']
+        sensitivity_level = permission.get("sensitivity_level", "MEDIUM")
+        return sensitivity_level in ["HIGH", "CRITICAL"]
 
     async def _wait_for_approval(
-        self,
-        user_id: str,
-        tool_name: str,
-        request_data: dict,
-        timeout: int = 300
+        self, user_id: str, tool_name: str, request_data: dict, timeout: int = 300
     ) -> bool:
         """
         Wait for approval from admin/approver
@@ -176,7 +167,7 @@ class RBACManager:
 
         # 1. Create approval request
         request_id = str(uuid.uuid4())
-        role = await self.get_user_role(user_id) or 'unknown'
+        role = await self.get_user_role(user_id) or "unknown"
 
         success = await self.db.create_approval_request(
             request_id=request_id,
@@ -184,7 +175,7 @@ class RBACManager:
             user_id=user_id,
             role=role,
             request_data=json.dumps(request_data),
-            timeout_seconds=timeout
+            timeout_seconds=timeout,
         )
 
         if not success:
@@ -193,13 +184,14 @@ class RBACManager:
 
         # Log approval request creation
         from audit_logger import get_audit_logger
+
         audit_logger = get_audit_logger()
         try:
             await audit_logger.log_approval_requested(
                 user_id=user_id,
                 tool_name=tool_name,
                 request_id=request_id,
-                request_data=request_data
+                request_data=request_data,
             )
         except Exception as e:
             logger.error(f"Failed to log approval request: {e}")
@@ -214,10 +206,10 @@ class RBACManager:
                 request = await self.db.get_approval_request(request_id)
                 if not request:
                     logger.error(f"Approval request disappeared: {request_id}")
-                    return 'error'
+                    return "error"
 
-                status = request['status']
-                if status in ['approved', 'rejected', 'expired', 'timeout']:
+                status = request["status"]
+                if status in ["approved", "rejected", "expired", "timeout"]:
                     approval_event.set()
                     return status
 
@@ -228,7 +220,7 @@ class RBACManager:
             logger.info(f"Waiting for approval: {request_id} ({tool_name}) - timeout={timeout}s")
             status = await asyncio.wait_for(poll_approval(), timeout=timeout)
 
-            if status == 'approved':
+            if status == "approved":
                 logger.info(f"Approval granted: {request_id}")
                 return True
             else:
@@ -239,9 +231,9 @@ class RBACManager:
             # Mark as timeout in database
             await self.db.update_approval_status(
                 request_id=request_id,
-                status='timeout',
-                responder_id='system',
-                response_reason='Request timed out'
+                status="timeout",
+                responder_id="system",
+                response_reason="Request timed out",
             )
             logger.warning(f"Approval request timed out: {request_id}")
 
@@ -251,7 +243,7 @@ class RBACManager:
                     user_id=user_id,
                     tool_name=tool_name,
                     request_id=request_id,
-                    timeout_seconds=timeout
+                    timeout_seconds=timeout,
                 )
             except Exception as e:
                 logger.error(f"Failed to log approval timeout: {e}")
@@ -332,7 +324,7 @@ class RBACManager:
         return {
             "permission_cache_size": len(self._permission_cache),
             "role_cache_size": len(self._role_cache),
-            "cache_ttl_seconds": self.cache_ttl
+            "cache_ttl_seconds": self.cache_ttl,
         }
 
     # Private methods
@@ -355,7 +347,7 @@ class RBACManager:
         self._permission_cache[key] = {
             "allowed": allowed,
             "reason": reason,
-            "cached_at": time.time()
+            "cached_at": time.time(),
         }
 
 

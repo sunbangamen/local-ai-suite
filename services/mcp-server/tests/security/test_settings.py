@@ -18,7 +18,12 @@ class TestSecuritySettings:
         """Test default configuration values"""
         assert SecuritySettings.SECURITY_MODE in ["strict", "normal", "legacy"]
         assert SecuritySettings.SECURITY_QUEUE_SIZE > 0
-        assert SecuritySettings.SECURITY_LOG_LEVEL in ["DEBUG", "INFO", "WARNING", "ERROR"]
+        assert SecuritySettings.SECURITY_LOG_LEVEL in [
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR",
+        ]
 
     def test_rbac_enabled_flag(self, monkeypatch):
         """Test RBAC_ENABLED environment variable parsing"""

@@ -26,15 +26,18 @@ from pydantic import BaseModel
 from prometheus_fastapi_instrumentator import Instrumentator
 import base64
 import tempfile
-from io import BytesIO
-from PIL import Image
 
 # 새로운 보안 모듈 임포트
 try:
     from .security import get_security_validator, get_secure_executor, SecurityError
-    from .safe_api import get_safe_file_api, get_safe_command_executor, secure_resolve_path
+    from .safe_api import (
+        get_safe_file_api,
+        get_safe_command_executor,
+        secure_resolve_path,
+    )
     from .security_admin import security_app
     from .rate_limiter import get_rate_limiter, get_access_control
+
     # RBAC 및 감사 로깅 모듈 (Issue #8)
     from .settings import get_security_settings
     from .security_database import init_database
@@ -43,10 +46,15 @@ try:
     from .rbac_middleware import RBACMiddleware
 except ImportError:
     # 개발/테스트 환경에서의 절대 임포트
-    from security import get_security_validator, get_secure_executor, SecurityError
-    from safe_api import get_safe_file_api, get_safe_command_executor, secure_resolve_path
+    from security import get_secure_executor, SecurityError
+    from safe_api import (
+        get_safe_file_api,
+        get_safe_command_executor,
+        secure_resolve_path,
+    )
     from security_admin import security_app
     from rate_limiter import get_rate_limiter, get_access_control
+
     # RBAC 및 감사 로깅 모듈 (Issue #8)
     from settings import get_security_settings
     from security_database import init_database
@@ -58,23 +66,28 @@ except ImportError:
 playwright = None
 notion_client = None
 
+
 async def init_playwright():
     """Playwright 초기화"""
     global playwright
     if playwright is None:
         from playwright.async_api import async_playwright
+
         playwright = await async_playwright().start()
     return playwright
+
 
 def init_notion():
     """Notion 클라이언트 초기화"""
     global notion_client
     if notion_client is None:
         from notion_client import Client
+
         notion_token = os.getenv("NOTION_TOKEN")
         if notion_token:
             notion_client = Client(auth=notion_token)
     return notion_client
+
 
 # 환경 변수 (통일된 기본값)
 PROJECT_ROOT = os.getenv("PROJECT_ROOT", os.getenv("WORKSPACE_DIR", "/mnt/workspace"))
@@ -87,6 +100,7 @@ GIT_DIR_PATH = os.getenv("GIT_DIR_PATH", "/mnt/workspace/.git-main")
 
 CHAT_MODEL_NAME = os.getenv("API_GATEWAY_CHAT_MODEL", "chat-7b")
 CODE_MODEL_NAME = os.getenv("API_GATEWAY_CODE_MODEL", "code-7b")
+
 
 def resolve_path(path: str, working_dir: Optional[str] = None) -> Path:
     """
@@ -105,13 +119,13 @@ def resolve_path(path: str, working_dir: Optional[str] = None) -> Path:
 
         # Convert host absolute paths to container paths
         if working_path.is_absolute() and not working_path.exists():
-            working_path = Path('/mnt/host') / working_path.relative_to('/')
+            working_path = Path("/mnt/host") / working_path.relative_to("/")
 
-        if path.startswith('/'):
+        if path.startswith("/"):
             # Absolute path
             target_path = Path(path)
             if not target_path.exists():
-                target_path = Path('/mnt/host') / target_path.relative_to('/')
+                target_path = Path("/mnt/host") / target_path.relative_to("/")
             return target_path
         else:
             # Relative path
@@ -119,6 +133,7 @@ def resolve_path(path: str, working_dir: Optional[str] = None) -> Path:
     else:
         # No working_dir specified, use PROJECT_ROOT
         return Path(PROJECT_ROOT) / path
+
 
 def resolve_git_env(work_tree_path: str) -> dict:
     """
@@ -141,13 +156,11 @@ def resolve_git_env(work_tree_path: str) -> dict:
                 # Try /mnt/host prefix for container
                 gitdir_path = Path("/mnt/host") / gitdir_path.relative_to("/")
 
-            return {
-                "GIT_DIR": str(gitdir_path),
-                "GIT_WORK_TREE": str(work_tree)
-            }
+            return {"GIT_DIR": str(gitdir_path), "GIT_WORK_TREE": str(work_tree)}
 
     # Normal git repository or .git doesn't exist
     return {}
+
 
 # MCP 서버 인스턴스
 mcp = FastMCP("Local AI MCP Server")
@@ -172,8 +185,10 @@ settings = get_security_settings()
 if settings.is_rbac_enabled():
     app.add_middleware(RBACMiddleware)
     import logging
+
     logger = logging.getLogger(__name__)
     logger.info("RBAC middleware enabled")
+
 
 @app.middleware("http")
 async def ensure_utf8_content_type(request: Request, call_next):
@@ -181,13 +196,18 @@ async def ensure_utf8_content_type(request: Request, call_next):
     response = await call_next(request)
     if "content-type" not in response.headers:
         response.headers["content-type"] = "application/json; charset=utf-8"
-    elif "application/json" in response.headers["content-type"] and "charset" not in response.headers["content-type"]:
+    elif (
+        "application/json" in response.headers["content-type"]
+        and "charset" not in response.headers["content-type"]
+    ):
         response.headers["content-type"] = "application/json; charset=utf-8"
     return response
+
 
 # ============================================================================
 # Background Tasks (Issue #16)
 # ============================================================================
+
 
 async def approval_cleanup_task():
     """
@@ -223,10 +243,12 @@ async def approval_cleanup_task():
 # Application Lifecycle Events
 # ============================================================================
 
+
 @app.on_event("startup")
 async def startup_event():
     """애플리케이션 시작 시 초기화"""
     import logging
+
     logger = logging.getLogger(__name__)
 
     settings = get_security_settings()
@@ -281,6 +303,7 @@ async def startup_event():
 async def shutdown_event():
     """애플리케이션 종료 시 정리"""
     import logging
+
     logger = logging.getLogger(__name__)
 
     settings = get_security_settings()
@@ -302,11 +325,13 @@ async def shutdown_event():
 async def health_check():
     return {"status": "ok", "service": "mcp-server"}
 
+
 @app.get("/rate-limits/{tool_name}")
 async def get_rate_limit_status(tool_name: str, user_id: str = "default"):
     """특정 도구의 Rate Limit 상태 조회"""
     rate_limiter = get_rate_limiter()
     return rate_limiter.get_current_usage(tool_name, user_id)
+
 
 @app.get("/tool-info/{tool_name}")
 async def get_tool_security_info(tool_name: str):
@@ -314,15 +339,14 @@ async def get_tool_security_info(tool_name: str):
     access_control = get_access_control()
     return access_control.get_tool_info(tool_name)
 
+
 # ============================================================================
 # Approval Workflow API Endpoints (Issue #16)
 # ============================================================================
 
+
 @app.get("/api/approvals/pending")
-async def get_pending_approvals(
-    limit: int = 50,
-    user_id: str = Header(None, alias="X-User-ID")
-):
+async def get_pending_approvals(limit: int = 50, user_id: str = Header(None, alias="X-User-ID")):
     """
     대기 중인 승인 요청 목록 조회 (admin only)
 
@@ -339,23 +363,21 @@ async def get_pending_approvals(
     # Admin 권한 체크
     rbac = get_rbac_manager()
     role = await rbac.get_user_role(user_id or "anonymous")
-    if role != 'admin':
+    if role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
 
     # 대기 중인 승인 요청 조회
     db = get_security_database()
     requests = await db.list_pending_approvals(limit)
 
-    return {
-        "pending_approvals": requests,
-        "count": len(requests)
-    }
+    return {"pending_approvals": requests, "count": len(requests)}
+
 
 @app.post("/api/approvals/{request_id}/approve")
 async def approve_request(
     request_id: str,
     reason: str = Body(..., embed=True),
-    user_id: str = Header(None, alias="X-User-ID")
+    user_id: str = Header(None, alias="X-User-ID"),
 ):
     """
     승인 요청 승인
@@ -375,7 +397,7 @@ async def approve_request(
     # Admin 권한 체크
     rbac = get_rbac_manager()
     role = await rbac.get_user_role(user_id or "anonymous")
-    if role != 'admin':
+    if role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
 
     # 승인 처리
@@ -388,9 +410,9 @@ async def approve_request(
 
     success = await db.update_approval_status(
         request_id=request_id,
-        status='approved',
+        status="approved",
         responder_id=user_id or "admin",
-        response_reason=reason
+        response_reason=reason,
     )
 
     if not success:
@@ -399,24 +421,21 @@ async def approve_request(
     # 감사 로그 기록 (enhanced with specific approval logging)
     audit = get_audit_logger()
     await audit.log_approval_granted(
-        user_id=original_request['user_id'],
-        tool_name=original_request['tool_name'],
+        user_id=original_request["user_id"],
+        tool_name=original_request["tool_name"],
         request_id=request_id,
         responder_id=user_id or "admin",
-        reason=reason
+        reason=reason,
     )
 
-    return {
-        "status": "approved",
-        "request_id": request_id,
-        "responder": user_id
-    }
+    return {"status": "approved", "request_id": request_id, "responder": user_id}
+
 
 @app.post("/api/approvals/{request_id}/reject")
 async def reject_request(
     request_id: str,
     reason: str = Body(..., embed=True),
-    user_id: str = Header(None, alias="X-User-ID")
+    user_id: str = Header(None, alias="X-User-ID"),
 ):
     """
     승인 요청 거부
@@ -436,7 +455,7 @@ async def reject_request(
     # Admin 권한 체크
     rbac = get_rbac_manager()
     role = await rbac.get_user_role(user_id or "anonymous")
-    if role != 'admin':
+    if role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
 
     # 거부 처리
@@ -449,9 +468,9 @@ async def reject_request(
 
     success = await db.update_approval_status(
         request_id=request_id,
-        status='rejected',
+        status="rejected",
         responder_id=user_id or "admin",
-        response_reason=reason
+        response_reason=reason,
     )
 
     if not success:
@@ -460,22 +479,20 @@ async def reject_request(
     # 감사 로그 기록 (enhanced with specific approval logging)
     audit = get_audit_logger()
     await audit.log_approval_rejected(
-        user_id=original_request['user_id'],
-        tool_name=original_request['tool_name'],
+        user_id=original_request["user_id"],
+        tool_name=original_request["tool_name"],
         request_id=request_id,
         responder_id=user_id or "admin",
-        reason=reason
+        reason=reason,
     )
 
-    return {
-        "status": "rejected",
-        "request_id": request_id,
-        "responder": user_id
-    }
+    return {"status": "rejected", "request_id": request_id, "responder": user_id}
+
 
 # ============================================================================
 # MCP Tools API
 # ============================================================================
+
 
 # MCP 도구 목록 API 엔드포인트 (올바른 FastMCP 사용법)
 @app.get("/tools")
@@ -486,17 +503,22 @@ async def list_tools():
         # 도구 정보를 간단한 형태로 변환
         tools_info = []
         for tool in tools_result:
-            tools_info.append({
-                "name": tool.name,
-                "description": tool.description or "설명 없음",
-                "inputSchema": tool.inputSchema
-            })
+            tools_info.append(
+                {
+                    "name": tool.name,
+                    "description": tool.description or "설명 없음",
+                    "inputSchema": tool.inputSchema,
+                }
+            )
         return {"tools": tools_info}
     except Exception as e:
         return {"error": f"도구 목록 조회 실패: {str(e)}"}
 
+
 @app.post("/tools/{tool_name}/call")
-async def call_tool(tool_name: str, request: Request, arguments: dict = None, user_id: str = "default"):
+async def call_tool(
+    tool_name: str, request: Request, arguments: dict = None, user_id: str = "default"
+):
     """MCP 도구 실행 (Rate Limiting 및 Access Control 적용)"""
     try:
         # Extract user_id from header (X-User-ID) or fallback to parameter
@@ -517,16 +539,20 @@ async def call_tool(tool_name: str, request: Request, arguments: dict = None, us
         # 도구 실행 시작 (동시 실행 제한 강제 적용)
         allowed, error_msg = rate_limiter.start_execution(tool_name, actual_user_id, access_control)
         if not allowed:
-            return {"error": error_msg, "success": False, "error_type": "concurrent_limit"}
+            return {
+                "error": error_msg,
+                "success": False,
+                "error_type": "concurrent_limit",
+            }
 
         try:
             # FastMCP의 call_tool 메서드 사용
             result = await mcp.call_tool(tool_name, arguments or {})
 
             # 결과 처리 - FastMCP의 실제 반환 형식에 따라 조정
-            if hasattr(result, 'content') and result.content:
+            if hasattr(result, "content") and result.content:
                 # TextContent나 다른 content 타입인 경우
-                if hasattr(result.content[0], 'text'):
+                if hasattr(result.content[0], "text"):
                     return {"result": result.content[0].text, "success": True}
                 else:
                     return {"result": str(result.content[0]), "success": True}
@@ -540,15 +566,18 @@ async def call_tool(tool_name: str, request: Request, arguments: dict = None, us
     except Exception as e:
         return {"error": str(e), "success": False}
 
+
 # =============================================================================
 # Pydantic Models
 # =============================================================================
+
 
 class FileInfo(BaseModel):
     path: str
     content: str
     size: int
     type: str
+
 
 class ExecutionResult(BaseModel):
     command: str
@@ -557,15 +586,18 @@ class ExecutionResult(BaseModel):
     returncode: int
     success: bool
 
+
 class RAGResult(BaseModel):
     query: str
     response: str
     sources: List[str] = []
 
+
 class AIResponse(BaseModel):
     model: str
     message: str
     response: str
+
 
 class WebScreenshotResult(BaseModel):
     url: str
@@ -574,11 +606,13 @@ class WebScreenshotResult(BaseModel):
     height: int
     timestamp: str
 
+
 class WebScrapeResult(BaseModel):
     url: str
     selector: str
     data: List[str]
     count: int
+
 
 class WebUIAnalysis(BaseModel):
     url: str
@@ -588,15 +622,18 @@ class WebUIAnalysis(BaseModel):
     color_scheme: List[str]
     fonts: List[str]
 
+
 class NotionPageResult(BaseModel):
     page_id: str
     url: str
     title: str
     status: str
 
+
 # =============================================================================
 # MCP Resources - 파일 시스템 접근
 # =============================================================================
+
 
 @mcp.resource("file://{path}")
 async def read_file_resource(path: str) -> str:
@@ -608,9 +645,10 @@ async def read_file_resource(path: str) -> str:
     if not file_path.exists():
         raise FileNotFoundError(f"파일을 찾을 수 없음: {file_path}")
 
-    async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+    async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
         content = await f.read()
         return content
+
 
 @mcp.resource("project://files")
 async def list_project_files() -> str:
@@ -620,28 +658,34 @@ async def list_project_files() -> str:
 
     # Python 파일들
     for file_path in project_path.rglob("*.py"):
-        if not any(part.startswith('.') for part in file_path.parts):
-            files.append({
-                "path": str(file_path.relative_to(project_path)),
-                "type": "python",
-                "size": file_path.stat().st_size if file_path.exists() else 0
-            })
+        if not any(part.startswith(".") for part in file_path.parts):
+            files.append(
+                {
+                    "path": str(file_path.relative_to(project_path)),
+                    "type": "python",
+                    "size": file_path.stat().st_size if file_path.exists() else 0,
+                }
+            )
 
     # 설정 파일들
     for pattern in ["*.yml", "*.yaml", "*.json", "*.md", "*.env*"]:
         for file_path in project_path.rglob(pattern):
-            if not any(part.startswith('.') for part in file_path.parts):
-                files.append({
-                    "path": str(file_path.relative_to(project_path)),
-                    "type": "config",
-                    "size": file_path.stat().st_size if file_path.exists() else 0
-                })
+            if not any(part.startswith(".") for part in file_path.parts):
+                files.append(
+                    {
+                        "path": str(file_path.relative_to(project_path)),
+                        "type": "config",
+                        "size": file_path.stat().st_size if file_path.exists() else 0,
+                    }
+                )
 
     return json.dumps(files[:50], indent=2)  # 최대 50개 제한
+
 
 # =============================================================================
 # MCP Tools - 코드 실행 및 시스템 도구
 # =============================================================================
+
 
 @mcp.tool()
 async def execute_python(code: str, timeout: int = 30) -> ExecutionResult:
@@ -656,7 +700,7 @@ async def execute_python(code: str, timeout: int = 30) -> ExecutionResult:
             stdout=result["stdout"],
             stderr=result["stderr"],
             returncode=result["returncode"],
-            success=result["success"]
+            success=result["success"],
         )
     except Exception as e:
         return ExecutionResult(
@@ -664,11 +708,14 @@ async def execute_python(code: str, timeout: int = 30) -> ExecutionResult:
             stdout="",
             stderr=f"보안 실행 환경 오류: {str(e)}",
             returncode=1,
-            success=False
+            success=False,
         )
 
+
 @mcp.tool()
-async def execute_bash(command: str, timeout: int = 30, working_dir: Optional[str] = None) -> ExecutionResult:
+async def execute_bash(
+    command: str, timeout: int = 30, working_dir: Optional[str] = None
+) -> ExecutionResult:
     """보안이 강화된 Bash 명령어 실행"""
     try:
         # 새로운 안전한 명령어 실행기 사용
@@ -680,7 +727,7 @@ async def execute_bash(command: str, timeout: int = 30, working_dir: Optional[st
             stdout=result["stdout"],
             stderr=result["stderr"],
             returncode=result["returncode"],
-            success=result["success"]
+            success=result["success"],
         )
     except SecurityError as e:
         return ExecutionResult(
@@ -688,7 +735,7 @@ async def execute_bash(command: str, timeout: int = 30, working_dir: Optional[st
             stdout="",
             stderr=f"보안 검증 실패: {str(e)}",
             returncode=1,
-            success=False
+            success=False,
         )
     except Exception as e:
         return ExecutionResult(
@@ -696,8 +743,9 @@ async def execute_bash(command: str, timeout: int = 30, working_dir: Optional[st
             stdout="",
             stderr=f"명령어 실행 오류: {str(e)}",
             returncode=1,
-            success=False
+            success=False,
         )
+
 
 @mcp.tool()
 async def read_file(path: str, working_dir: Optional[str] = None) -> FileInfo:
@@ -714,12 +762,13 @@ async def read_file(path: str, working_dir: Optional[str] = None) -> FileInfo:
             path=str(safe_path),
             content=content,
             size=len(content),
-            type=safe_path.suffix
+            type=safe_path.suffix,
         )
     except SecurityError as e:
         raise ValueError(f"보안 검증 실패: {str(e)}")
     except (FileNotFoundError, IOError) as e:
         raise Exception(f"파일 읽기 오류: {str(e)}")
+
 
 @mcp.tool()
 async def write_file(path: str, content: str, working_dir: Optional[str] = None) -> FileInfo:
@@ -736,12 +785,13 @@ async def write_file(path: str, content: str, working_dir: Optional[str] = None)
             path=str(safe_path),
             content=content,
             size=len(content),
-            type=safe_path.suffix
+            type=safe_path.suffix,
         )
     except SecurityError as e:
         raise ValueError(f"보안 검증 실패: {str(e)}")
     except IOError as e:
         raise Exception(f"파일 쓰기 오류: {str(e)}")
+
 
 @mcp.tool()
 async def list_files(path: str = ".", working_dir: Optional[str] = None) -> Dict[str, Any]:
@@ -754,15 +804,12 @@ async def list_files(path: str = ".", working_dir: Optional[str] = None) -> Dict
         # 실제 경로 정보 가져오기 (보안 검증 후)
         safe_path = secure_resolve_path(path, working_dir)
 
-        return {
-            "path": str(safe_path),
-            "files": file_list,
-            "count": len(file_list)
-        }
+        return {"path": str(safe_path), "files": file_list, "count": len(file_list)}
     except SecurityError as e:
         raise ValueError(f"보안 검증 실패: {str(e)}")
     except (FileNotFoundError, IOError) as e:
         raise Exception(f"디렉토리 목록 조회 오류: {str(e)}")
+
 
 @mcp.tool()
 async def rag_search(query: str, collection: str = "default") -> RAGResult:
@@ -772,34 +819,75 @@ async def rag_search(query: str, collection: str = "default") -> RAGResult:
             response = await client.post(
                 f"{RAG_URL}/query",
                 json={"query": query, "collection": collection},
-                timeout=30.0
+                timeout=30.0,
             )
             response.raise_for_status()
 
             data = response.json()
             return RAGResult(
                 query=query,
-                response=data.get('response', '응답 없음'),
-                sources=data.get('sources', [])
+                response=data.get("response", "응답 없음"),
+                sources=data.get("sources", []),
             )
     except Exception as e:
         raise Exception(f"RAG 검색 오류: {str(e)}")
 
+
 def _detect_model_for_message(message: str) -> str:
     """메시지 내용 분석하여 적절한 모델 선택"""
     code_keywords = [
-        'function', 'class', 'import', 'export', 'const', 'let', 'var',
-        'def', 'return', 'if', 'for', 'while', 'try', 'catch', 'async', 'await',
-        '코드', '함수', '프로그래밍', '버그', 'API', 'HTML', 'CSS', 'JavaScript',
-        'Python', 'React', '개발', '구현', '디버그', '스크립트', '라이브러리',
-        'npm', 'pip', 'git', 'docker', '배포', '테스트', '알고리즘',
-        '```', 'console.log', 'print(', 'error', 'exception', '코딩', '프로그램'
+        "function",
+        "class",
+        "import",
+        "export",
+        "const",
+        "let",
+        "var",
+        "def",
+        "return",
+        "if",
+        "for",
+        "while",
+        "try",
+        "catch",
+        "async",
+        "await",
+        "코드",
+        "함수",
+        "프로그래밍",
+        "버그",
+        "API",
+        "HTML",
+        "CSS",
+        "JavaScript",
+        "Python",
+        "React",
+        "개발",
+        "구현",
+        "디버그",
+        "스크립트",
+        "라이브러리",
+        "npm",
+        "pip",
+        "git",
+        "docker",
+        "배포",
+        "테스트",
+        "알고리즘",
+        "```",
+        "console.log",
+        "print(",
+        "error",
+        "exception",
+        "코딩",
+        "프로그램",
     ]
 
     message_lower = message.lower()
     has_code_keywords = any(keyword.lower() in message_lower for keyword in code_keywords)
 
     return CODE_MODEL_NAME if has_code_keywords else CHAT_MODEL_NAME
+
 
 @mcp.tool()
 async def ai_chat(message: str, model: str = None) -> AIResponse:
@@ -818,21 +906,18 @@ async def ai_chat(message: str, model: str = None) -> AIResponse:
                     "model": model,
                     "messages": [{"role": "user", "content": message}],
                     "max_tokens": 512,
-                    "temperature": 0.3
+                    "temperature": 0.3,
                 },
-                timeout=60.0
+                timeout=60.0,
             )
             response.raise_for_status()
 
             data = response.json()
             ai_response = data["choices"][0]["message"]["content"]
-            return AIResponse(
-                model=model,
-                message=message,
-                response=ai_response
-            )
+            return AIResponse(model=model, message=message, response=ai_response)
     except Exception as e:
         raise Exception(f"AI 채팅 오류: {str(e)}")
+
 
 @mcp.tool()
 async def git_status(path: str = ".", working_dir: Optional[str] = None) -> ExecutionResult:
@@ -854,11 +939,12 @@ async def git_status(path: str = ".", working_dir: Optional[str] = None) -> Exec
         # 현재 디렉토리의 Git 저장소 자동 감지
         proc = await asyncio.create_subprocess_exec(
             "git",
-            "status", "--porcelain",
+            "status",
+            "--porcelain",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=git_cwd,
-            env=proc_env
+            env=proc_env,
         )
         stdout, stderr = await proc.communicate()
 
@@ -868,7 +954,7 @@ async def git_status(path: str = ".", working_dir: Optional[str] = None) -> Exec
                 stdout="",
                 stderr=stderr.decode() if stderr else "Git 명령 실행 실패",
                 returncode=proc.returncode or 1,
-                success=False
+                success=False,
             )
 
         status_output = stdout.decode().strip()
@@ -880,7 +966,7 @@ async def git_status(path: str = ".", working_dir: Optional[str] = None) -> Exec
             stdout=status_output,
             stderr="",
             returncode=0,
-            success=True
+            success=True,
         )
     except Exception as e:
         return ExecutionResult(
@@ -888,8 +974,9 @@ async def git_status(path: str = ".", working_dir: Optional[str] = None) -> Exec
             stdout="",
             stderr=f"Git 상태 확인 오류: {str(e)}",
             returncode=1,
-            success=False
+            success=False,
         )
+
 
 @mcp.tool()
 async def git_diff(
@@ -905,8 +992,10 @@ async def git_diff(
         git_cwd = PROJECT_ROOT
         cmd_args = [
             "git",
-            "--git-dir", GIT_DIR_PATH,
-            "--work-tree", PROJECT_ROOT,
+            "--git-dir",
+            GIT_DIR_PATH,
+            "--work-tree",
+            PROJECT_ROOT,
             "diff",
         ]
 
@@ -926,7 +1015,7 @@ async def git_diff(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=git_cwd,
-            env=proc_env
+            env=proc_env,
         )
         stdout, stderr = await proc.communicate()
 
@@ -959,8 +1048,11 @@ async def git_diff(
             success=False,
         )
 
+
 @mcp.tool()
-async def git_log(max_count: int = 10, oneline: bool = True, working_dir: Optional[str] = None) -> ExecutionResult:
+async def git_log(
+    max_count: int = 10, oneline: bool = True, working_dir: Optional[str] = None
+) -> ExecutionResult:
     """Git 커밋 히스토리 확인 (전역 Git 지원)"""
     # working_dir가 제공되면 해당 디렉토리 사용
     if working_dir:
@@ -973,11 +1065,7 @@ async def git_log(max_count: int = 10, oneline: bool = True, working_dir: Option
         git_env = resolve_git_env(git_cwd)
         proc_env = {**os.environ, **git_env} if git_env else None
 
-        cmd_args = [
-            "git",
-            "log",
-            f"--max-count={max_count}"
-        ]
+        cmd_args = ["git", "log", f"--max-count={max_count}"]
 
         if oneline:
             cmd_args.append("--oneline")
@@ -987,7 +1075,7 @@ async def git_log(max_count: int = 10, oneline: bool = True, working_dir: Option
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=git_cwd,
-            env=proc_env
+            env=proc_env,
         )
         stdout, stderr = await proc.communicate()
 
@@ -997,7 +1085,7 @@ async def git_log(max_count: int = 10, oneline: bool = True, working_dir: Option
                 stdout="",
                 stderr=stderr.decode() if stderr else "Git log 실행 실패",
                 returncode=proc.returncode or 1,
-                success=False
+                success=False,
             )
 
         log_output = stdout.decode().strip()
@@ -1009,7 +1097,7 @@ async def git_log(max_count: int = 10, oneline: bool = True, working_dir: Option
             stdout=log_output,
             stderr="",
             returncode=0,
-            success=True
+            success=True,
         )
     except Exception as e:
         return ExecutionResult(
@@ -1017,8 +1105,9 @@ async def git_log(max_count: int = 10, oneline: bool = True, working_dir: Option
             stdout="",
             stderr=f"Git log 오류: {str(e)}",
             returncode=1,
-            success=False
+            success=False,
         )
+
 
 @mcp.tool()
 async def git_add(file_paths: str, working_dir: Optional[str] = None) -> ExecutionResult:
@@ -1037,17 +1126,14 @@ async def git_add(file_paths: str, working_dir: Optional[str] = None) -> Executi
         # 여러 파일 지원을 위해 공백으로 분리
         files = file_paths.split() if file_paths.strip() else ["."]
 
-        cmd_args = [
-            "git",
-            "add"
-        ] + files
+        cmd_args = ["git", "add"] + files
 
         proc = await asyncio.create_subprocess_exec(
             *cmd_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=git_cwd,
-            env=proc_env
+            env=proc_env,
         )
         stdout, stderr = await proc.communicate()
 
@@ -1057,7 +1143,7 @@ async def git_add(file_paths: str, working_dir: Optional[str] = None) -> Executi
                 stdout="",
                 stderr=stderr.decode() if stderr else "Git add 실행 실패",
                 returncode=proc.returncode or 1,
-                success=False
+                success=False,
             )
 
         return ExecutionResult(
@@ -1065,7 +1151,7 @@ async def git_add(file_paths: str, working_dir: Optional[str] = None) -> Executi
             stdout=f"파일 스테이징 완료: {file_paths}",
             stderr="",
             returncode=0,
-            success=True
+            success=True,
         )
     except Exception as e:
         return ExecutionResult(
@@ -1073,11 +1159,14 @@ async def git_add(file_paths: str, working_dir: Optional[str] = None) -> Executi
             stdout="",
             stderr=f"Git add 오류: {str(e)}",
             returncode=1,
-            success=False
+            success=False,
         )
 
+
 @mcp.tool()
-async def git_commit(message: str, add_all: bool = False, working_dir: Optional[str] = None) -> ExecutionResult:
+async def git_commit(
+    message: str, add_all: bool = False, working_dir: Optional[str] = None
+) -> ExecutionResult:
     """Git 커밋 생성 (전역 Git 지원, Worktree 지원)"""
     # working_dir가 제공되면 해당 디렉토리 사용
     if working_dir:
@@ -1091,7 +1180,7 @@ async def git_commit(message: str, add_all: bool = False, working_dir: Optional[
             stdout="",
             stderr="커밋 메시지가 필요합니다",
             returncode=1,
-            success=False
+            success=False,
         )
 
     try:
@@ -1105,18 +1194,14 @@ async def git_commit(message: str, add_all: bool = False, working_dir: Optional[
         git_env = resolve_git_env(git_cwd)
         proc_env = {**os.environ, **git_env} if git_env else None
 
-        cmd_args = [
-            "git",
-            "commit",
-            "-m", message
-        ]
+        cmd_args = ["git", "commit", "-m", message]
 
         proc = await asyncio.create_subprocess_exec(
             *cmd_args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=git_cwd,
-            env=proc_env
+            env=proc_env,
         )
         stdout, stderr = await proc.communicate()
 
@@ -1126,7 +1211,7 @@ async def git_commit(message: str, add_all: bool = False, working_dir: Optional[
                 stdout="",
                 stderr=stderr.decode() if stderr else "Git commit 실행 실패",
                 returncode=proc.returncode or 1,
-                success=False
+                success=False,
             )
 
         commit_output = stdout.decode().strip()
@@ -1136,7 +1221,7 @@ async def git_commit(message: str, add_all: bool = False, working_dir: Optional[
             stdout=f"커밋 완료: {commit_output}",
             stderr="",
             returncode=0,
-            success=True
+            success=True,
         )
     except Exception as e:
         return ExecutionResult(
@@ -1144,12 +1229,14 @@ async def git_commit(message: str, add_all: bool = False, working_dir: Optional[
             stdout="",
             stderr=f"Git commit 오류: {str(e)}",
             returncode=1,
-            success=False
+            success=False,
         )
+
 
 # =============================================================================
 # Playwright 웹 자동화 도구
 # =============================================================================
+
 
 @mcp.tool()
 async def web_screenshot(url: str, width: int = 1280, height: int = 720) -> WebScreenshotResult:
@@ -1168,16 +1255,18 @@ async def web_screenshot(url: str, width: int = 1280, height: int = 720) -> WebS
         await browser.close()
 
         from datetime import datetime
+
         return WebScreenshotResult(
             url=url,
             screenshot_base64=screenshot_b64,
             width=width,
             height=height,
-            timestamp=datetime.now().isoformat()
+            timestamp=datetime.now().isoformat(),
         )
 
     except Exception as e:
         raise Exception(f"스크린샷 촬영 오류: {str(e)}")
+
 
 @mcp.tool()
 async def web_scrape(url: str, selector: str, attribute: str = "textContent") -> WebScrapeResult:
@@ -1210,15 +1299,11 @@ async def web_scrape(url: str, selector: str, attribute: str = "textContent") ->
 
         await browser.close()
 
-        return WebScrapeResult(
-            url=url,
-            selector=selector,
-            data=data,
-            count=len(data)
-        )
+        return WebScrapeResult(url=url, selector=selector, data=data, count=len(data))
 
     except Exception as e:
         raise Exception(f"웹 크롤링 오류: {str(e)}")
+
 
 @mcp.tool()
 async def web_analyze_ui(url: str) -> WebUIAnalysis:
@@ -1234,7 +1319,8 @@ async def web_analyze_ui(url: str) -> WebUIAnalysis:
         title = await page.title()
 
         # CSS 스타일 분석
-        css_analysis = await page.evaluate("""
+        css_analysis = await page.evaluate(
+            """
             () => {
                 const styles = {};
                 const computedStyle = window.getComputedStyle(document.body);
@@ -1279,7 +1365,8 @@ async def web_analyze_ui(url: str) -> WebUIAnalysis:
                     fonts: Array.from(fonts).slice(0, 5)
                 };
             }
-        """)
+        """
+        )
 
         await browser.close()
 
@@ -1289,17 +1376,19 @@ async def web_analyze_ui(url: str) -> WebUIAnalysis:
             css_styles=css_analysis["styles"],
             layout_info=css_analysis["layout"],
             color_scheme=css_analysis["colors"],
-            fonts=css_analysis["fonts"]
+            fonts=css_analysis["fonts"],
         )
 
     except Exception as e:
         raise Exception(f"UI 분석 오류: {str(e)}")
+
 
 @mcp.tool()
 async def web_automate(url: str, actions: str) -> ExecutionResult:
     """웹 자동화 실행 (JSON 형태의 액션 리스트)"""
     try:
         import json
+
         action_list = json.loads(actions)
 
         pw = await init_playwright()
@@ -1340,7 +1429,7 @@ async def web_automate(url: str, actions: str) -> ExecutionResult:
             stdout="\n".join(results),
             stderr="",
             returncode=0,
-            success=True
+            success=True,
         )
 
     except Exception as e:
@@ -1349,46 +1438,48 @@ async def web_automate(url: str, actions: str) -> ExecutionResult:
             stdout="",
             stderr=f"웹 자동화 오류: {str(e)}",
             returncode=1,
-            success=False
+            success=False,
         )
+
 
 # =============================================================================
 # Notion API 연동 도구
 # =============================================================================
 
+
 @mcp.tool()
-async def notion_create_page(database_id: str, title: str, properties: str = "{}") -> NotionPageResult:
+async def notion_create_page(
+    database_id: str, title: str, properties: str = "{}"
+) -> NotionPageResult:
     """Notion 데이터베이스에 새 페이지 생성"""
     try:
         notion = init_notion()
         if not notion:
-            raise Exception("Notion 토큰이 설정되지 않았습니다. NOTION_TOKEN 환경변수를 설정하세요.")
+            raise Exception(
+                "Notion 토큰이 설정되지 않았습니다. NOTION_TOKEN 환경변수를 설정하세요."
+            )
 
         import json
+
         props = json.loads(properties)
 
         # 기본 속성 설정
-        page_properties = {
-            "Name": {"title": [{"text": {"content": title}}]}
-        }
+        page_properties = {"Name": {"title": [{"text": {"content": title}}]}}
 
         # 추가 속성 병합
         page_properties.update(props)
 
         response = notion.pages.create(
-            parent={"database_id": database_id},
-            properties=page_properties
+            parent={"database_id": database_id}, properties=page_properties
         )
 
         return NotionPageResult(
-            page_id=response["id"],
-            url=response["url"],
-            title=title,
-            status="created"
+            page_id=response["id"], url=response["url"], title=title, status="created"
         )
 
     except Exception as e:
         raise Exception(f"Notion 페이지 생성 오류: {str(e)}")
+
 
 @mcp.tool()
 async def notion_search(query: str, filter_type: str = "page") -> List[Dict]:
@@ -1396,32 +1487,37 @@ async def notion_search(query: str, filter_type: str = "page") -> List[Dict]:
     try:
         notion = init_notion()
         if not notion:
-            raise Exception("Notion 토큰이 설정되지 않았습니다. NOTION_TOKEN 환경변수를 설정하세요.")
+            raise Exception(
+                "Notion 토큰이 설정되지 않았습니다. NOTION_TOKEN 환경변수를 설정하세요."
+            )
 
-        response = notion.search(
-            query=query,
-            filter={
-                "value": filter_type,
-                "property": "object"
-            }
-        )
+        response = notion.search(query=query, filter={"value": filter_type, "property": "object"})
 
         results = []
         for item in response["results"][:10]:  # 최대 10개 결과
-            results.append({
-                "id": item["id"],
-                "title": item.get("properties", {}).get("Name", {}).get("title", [{}])[0].get("text", {}).get("content", "제목 없음"),
-                "url": item["url"],
-                "last_edited": item["last_edited_time"]
-            })
+            results.append(
+                {
+                    "id": item["id"],
+                    "title": item.get("properties", {})
+                    .get("Name", {})
+                    .get("title", [{}])[0]
+                    .get("text", {})
+                    .get("content", "제목 없음"),
+                    "url": item["url"],
+                    "last_edited": item["last_edited_time"],
+                }
+            )
 
         return results
 
     except Exception as e:
         raise Exception(f"Notion 검색 오류: {str(e)}")
 
+
 @mcp.tool()
-async def web_to_notion(url: str, database_id: str, title_selector: str = "h1", content_selector: str = "p") -> NotionPageResult:
+async def web_to_notion(
+    url: str, database_id: str, title_selector: str = "h1", content_selector: str = "p"
+) -> NotionPageResult:
     """웹 크롤링 결과를 Notion에 저장"""
     try:
         # 웹 크롤링
@@ -1432,10 +1528,12 @@ async def web_to_notion(url: str, database_id: str, title_selector: str = "h1", 
         content = "\n".join(content_result.data[:5])  # 최대 5개 문단
 
         # Notion 페이지 생성
-        properties = json.dumps({
-            "URL": {"url": url},
-            "Content": {"rich_text": [{"text": {"content": content[:2000]}}]}  # 2000자 제한
-        })
+        properties = json.dumps(
+            {
+                "URL": {"url": url},
+                "Content": {"rich_text": [{"text": {"content": content[:2000]}}]},  # 2000자 제한
+            }
+        )
 
         result = await notion_create_page(database_id, title, properties)
         return result
@@ -1443,15 +1541,18 @@ async def web_to_notion(url: str, database_id: str, title_selector: str = "h1", 
     except Exception as e:
         raise Exception(f"웹→Notion 저장 오류: {str(e)}")
 
+
 # =============================================================================
 # 모델 관리 도구
 # =============================================================================
+
 
 class ModelSwitchResult(BaseModel):
     success: bool
     message: str
     current_model: str
     switch_time_seconds: Optional[float] = None
+
 
 async def _detect_phase() -> tuple[bool, str]:
     """
@@ -1464,27 +1565,45 @@ async def _detect_phase() -> tuple[bool, str]:
     try:
         # Phase 2 확인 (compose.p2.yml)
         result_p2 = subprocess.run(
-            ['docker', 'compose', '-f', '/mnt/workspace/docker/compose.p2.yml', 'ps', '--services'],
-            capture_output=True, text=True, cwd='/mnt/workspace'
+            [
+                "docker",
+                "compose",
+                "-f",
+                "/mnt/workspace/docker/compose.p2.yml",
+                "ps",
+                "--services",
+            ],
+            capture_output=True,
+            text=True,
+            cwd="/mnt/workspace",
         )
 
         if result_p2.returncode == 0:
-            services = set(result_p2.stdout.strip().split('\n'))
+            services = set(result_p2.stdout.strip().split("\n"))
             # inference-chat와 inference-code가 모두 있으면 Phase 2
-            if 'inference-chat' in services and 'inference-code' in services:
-                return True, 'docker/compose.p2.yml'
+            if "inference-chat" in services and "inference-code" in services:
+                return True, "docker/compose.p2.yml"
 
         # Phase 3 확인 (compose.p3.yml)
         result_p3 = subprocess.run(
-            ['docker', 'compose', '-f', '/mnt/workspace/docker/compose.p3.yml', 'ps', '--services'],
-            capture_output=True, text=True, cwd='/mnt/workspace'
+            [
+                "docker",
+                "compose",
+                "-f",
+                "/mnt/workspace/docker/compose.p3.yml",
+                "ps",
+                "--services",
+            ],
+            capture_output=True,
+            text=True,
+            cwd="/mnt/workspace",
         )
 
         if result_p3.returncode == 0:
-            services = set(result_p3.stdout.strip().split('\n'))
+            services = set(result_p3.stdout.strip().split("\n"))
             # inference 서비스만 있으면 Phase 3
-            if 'inference' in services:
-                return False, 'docker/compose.p3.yml'
+            if "inference" in services:
+                return False, "docker/compose.p3.yml"
 
         # 둘 다 없으면 감지 실패
         return None, None
@@ -1492,6 +1611,7 @@ async def _detect_phase() -> tuple[bool, str]:
     except Exception as e:
         print(f"Phase 감지 중 오류: {e}")
         return None, None
+
 
 async def _get_model_info(service_url: str) -> tuple[bool, str]:
     """
@@ -1508,16 +1628,19 @@ async def _get_model_info(service_url: str) -> tuple[bool, str]:
             response = await client.get(f"{service_url}/v1/models", timeout=10)
             if response.status_code == 200:
                 models_data = response.json()
-                if models_data.get('data'):
-                    model_path = models_data['data'][0]['id']
-                    model_name = model_path.split('/')[-1] if '/' in model_path else model_path
+                if models_data.get("data"):
+                    model_path = models_data["data"][0]["id"]
+                    model_name = model_path.split("/")[-1] if "/" in model_path else model_path
                     return True, model_name
         return False, "unknown"
     except Exception as e:
         print(f"모델 정보 조회 실패 ({service_url}): {e}")
         return False, "unknown"
 
-async def _restart_service(compose_file: str, service_name: str, env_vars: dict = None) -> tuple[bool, str]:
+
+async def _restart_service(
+    compose_file: str, service_name: str, env_vars: dict = None
+) -> tuple[bool, str]:
     """
     Docker Compose 서비스 재시작
 
@@ -1531,8 +1654,15 @@ async def _restart_service(compose_file: str, service_name: str, env_vars: dict 
     """
     try:
         # 서비스 중지
-        stop_cmd = ['docker', 'compose', '-f', f'/mnt/workspace/{compose_file}', 'stop', service_name]
-        result = subprocess.run(stop_cmd, capture_output=True, text=True, cwd='/mnt/workspace')
+        stop_cmd = [
+            "docker",
+            "compose",
+            "-f",
+            f"/mnt/workspace/{compose_file}",
+            "stop",
+            service_name,
+        ]
+        result = subprocess.run(stop_cmd, capture_output=True, text=True, cwd="/mnt/workspace")
         if result.returncode != 0:
             return False, f"서비스 중지 실패: {result.stderr}"
 
@@ -1542,8 +1672,18 @@ async def _restart_service(compose_file: str, service_name: str, env_vars: dict 
             env.update(env_vars)
 
         # 서비스 재시작
-        start_cmd = ['docker', 'compose', '-f', f'/mnt/workspace/{compose_file}', 'up', '-d', service_name]
-        result = subprocess.run(start_cmd, capture_output=True, text=True, cwd='/mnt/workspace', env=env)
+        start_cmd = [
+            "docker",
+            "compose",
+            "-f",
+            f"/mnt/workspace/{compose_file}",
+            "up",
+            "-d",
+            service_name,
+        ]
+        result = subprocess.run(
+            start_cmd, capture_output=True, text=True, cwd="/mnt/workspace", env=env
+        )
         if result.returncode != 0:
             return False, f"서비스 시작 실패: {result.stderr}"
 
@@ -1551,6 +1691,7 @@ async def _restart_service(compose_file: str, service_name: str, env_vars: dict 
 
     except Exception as e:
         return False, f"재시작 중 오류: {e}"
+
 
 async def _wait_for_health(service_url: str, max_wait: int = 30) -> bool:
     """
@@ -1576,6 +1717,7 @@ async def _wait_for_health(service_url: str, max_wait: int = 30) -> bool:
             continue
     return False
 
+
 @mcp.tool()
 async def switch_model(model_type: str) -> ModelSwitchResult:
     """
@@ -1588,19 +1730,20 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
         ModelSwitchResult: 교체 결과와 현재 모델 정보
     """
     import time
+
     start_time = time.time()
 
     try:
         # 환경변수에서 모델 파일명 가져오기
-        if model_type == 'chat':
-            target_model = os.getenv('CHAT_MODEL', 'Qwen2.5-7B-Instruct-Q4_K_M.gguf')
-        elif model_type == 'code':
-            target_model = os.getenv('CODE_MODEL', 'qwen2.5-coder-7b-instruct-q4_k_m.gguf')
+        if model_type == "chat":
+            target_model = os.getenv("CHAT_MODEL", "Qwen2.5-7B-Instruct-Q4_K_M.gguf")
+        elif model_type == "code":
+            target_model = os.getenv("CODE_MODEL", "qwen2.5-coder-7b-instruct-q4_k_m.gguf")
         else:
             return ModelSwitchResult(
                 success=False,
                 message=f"지원하지 않는 모델 타입: {model_type}",
-                current_model="unknown"
+                current_model="unknown",
             )
 
         # Phase 감지: docker compose ps 기반으로 실제 실행 중인 서비스 확인
@@ -1611,13 +1754,13 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
             return ModelSwitchResult(
                 success=False,
                 message="Phase 감지 실패: docker compose 서비스 목록을 확인할 수 없습니다.",
-                current_model="unknown"
+                current_model="unknown",
             )
 
         if is_phase2:
             # Phase 2: 이중화 구조
             # inference-chat (chat 모델), inference-code (code 모델)
-            service_name = 'inference-chat' if model_type == 'chat' else 'inference-code'
+            service_name = "inference-chat" if model_type == "chat" else "inference-code"
             service_url = f"http://{service_name}:8001"
 
             # 1. 현재 모델 확인
@@ -1626,7 +1769,7 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
                 return ModelSwitchResult(
                     success=False,
                     message=f"Phase 2: {service_name} 모델 정보 조회 실패",
-                    current_model="unknown"
+                    current_model="unknown",
                 )
 
             # 2. 기대하는 모델과 비교
@@ -1641,7 +1784,7 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
                     success=True,
                     message=f"Phase 2: {model_type} 모델은 {service_name}에서 이미 실행 중입니다 ({current_model_name}).",
                     current_model=current_model_name,
-                    switch_time_seconds=round(time.time() - start_time, 1)
+                    switch_time_seconds=round(time.time() - start_time, 1),
                 )
             else:
                 # 모델이 다르면 서비스 재시작 필요
@@ -1651,18 +1794,20 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
 
                 # 환경변수 설정 (필요시)
                 env_vars = {}
-                if model_type == 'chat':
-                    env_vars['CHAT_MODEL'] = target_model
+                if model_type == "chat":
+                    env_vars["CHAT_MODEL"] = target_model
                 else:
-                    env_vars['CODE_MODEL'] = target_model
+                    env_vars["CODE_MODEL"] = target_model
 
                 # 서비스 재시작
-                restart_success, restart_msg = await _restart_service(compose_file, service_name, env_vars)
+                restart_success, restart_msg = await _restart_service(
+                    compose_file, service_name, env_vars
+                )
                 if not restart_success:
                     return ModelSwitchResult(
                         success=False,
                         message=f"Phase 2: {service_name} 재시작 실패 - {restart_msg}",
-                        current_model=current_model_name
+                        current_model=current_model_name,
                     )
 
                 # 헬스체크 대기
@@ -1671,7 +1816,7 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
                     return ModelSwitchResult(
                         success=False,
                         message=f"Phase 2: {service_name} 헬스체크 타임아웃 (30초)",
-                        current_model="unknown"
+                        current_model="unknown",
                     )
 
                 # 재시작 후 모델 확인
@@ -1683,18 +1828,18 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
                         success=True,
                         message=f"Phase 2: {service_name} 재시작 완료, {model_type} 모델({new_model_name}) 로드됨",
                         current_model=new_model_name,
-                        switch_time_seconds=round(end_time - start_time, 1)
+                        switch_time_seconds=round(end_time - start_time, 1),
                     )
                 else:
                     return ModelSwitchResult(
                         success=False,
                         message=f"Phase 2: 재시작 후 모델 검증 실패 (현재: {new_model_name}, 기대: {expected_model})",
-                        current_model=new_model_name
+                        current_model=new_model_name,
                     )
 
         else:
             # Phase 3: 단일 inference 컨테이너 - 재시작으로 모델 교체
-            service_name = 'inference'
+            service_name = "inference"
             service_url = "http://inference:8001"
 
             # 1. 현재 로드된 모델 확인
@@ -1706,22 +1851,24 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
                     success=True,
                     message=f"Phase 3: 이미 {model_type} 모델({target_model})이 로드되어 있습니다.",
                     current_model=target_model,
-                    switch_time_seconds=round(time.time() - start_time, 1)
+                    switch_time_seconds=round(time.time() - start_time, 1),
                 )
 
             # 2. 모델이 다르면 컨테이너 재시작
             print(f"🔄 Phase 3: {current_model_name} → {target_model} 모델 교체 중...")
 
             # 환경변수 설정
-            env_vars = {'CHAT_MODEL': target_model}
+            env_vars = {"CHAT_MODEL": target_model}
 
             # 서비스 재시작
-            restart_success, restart_msg = await _restart_service(compose_file, service_name, env_vars)
+            restart_success, restart_msg = await _restart_service(
+                compose_file, service_name, env_vars
+            )
             if not restart_success:
                 return ModelSwitchResult(
                     success=False,
                     message=f"Phase 3: {service_name} 재시작 실패 - {restart_msg}",
-                    current_model=current_model_name if success else "unknown"
+                    current_model=current_model_name if success else "unknown",
                 )
 
             # 3. 헬스체크 대기
@@ -1730,7 +1877,7 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
                 return ModelSwitchResult(
                     success=False,
                     message="Phase 3: 모델 교체 후 서버가 응답하지 않습니다 (30초 타임아웃)",
-                    current_model="unknown"
+                    current_model="unknown",
                 )
 
             # 4. 재시작 후 모델 검증
@@ -1742,21 +1889,22 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
                     success=True,
                     message=f"Phase 3: {model_type} 모델({target_model})로 성공적으로 교체되었습니다.",
                     current_model=new_model_name,
-                    switch_time_seconds=round(end_time - start_time, 1)
+                    switch_time_seconds=round(end_time - start_time, 1),
                 )
             else:
                 return ModelSwitchResult(
                     success=False,
                     message=f"Phase 3: 재시작 후 모델 검증 실패 (현재: {new_model_name}, 기대: {target_model})",
-                    current_model=new_model_name
+                    current_model=new_model_name,
                 )
 
     except Exception as e:
         return ModelSwitchResult(
             success=False,
             message=f"모델 교체 중 오류 발생: {str(e)}",
-            current_model="unknown"
+            current_model="unknown",
         )
+
 
 @mcp.tool()
 async def get_current_model() -> Dict[str, Any]:
@@ -1779,11 +1927,11 @@ async def get_current_model() -> Dict[str, Any]:
 
             return {
                 "phase": "Phase 2 (Dual LLM)",
-                "chat_model": chat_model if chat_success else f"unavailable",
-                "code_model": code_model if code_success else f"unavailable",
+                "chat_model": chat_model if chat_success else "unavailable",
+                "code_model": code_model if code_success else "unavailable",
                 "service_chat": "inference-chat:8001",
                 "service_code": "inference-code:8004",
-                "compose_file": compose_file
+                "compose_file": compose_file,
             }
 
         else:
@@ -1792,49 +1940,53 @@ async def get_current_model() -> Dict[str, Any]:
 
             if success:
                 # 모델 타입 추정
-                model_type = 'code' if 'coder' in model_name.lower() else 'chat'
+                model_type = "code" if "coder" in model_name.lower() else "chat"
 
                 return {
                     "phase": "Phase 3 (Single LLM)",
                     "current_model": model_name,
                     "model_type": model_type,
                     "service": "inference:8001",
-                    "compose_file": compose_file
+                    "compose_file": compose_file,
                 }
             else:
                 return {
                     "phase": "Phase 3",
                     "error": "모델 정보를 가져올 수 없습니다.",
-                    "compose_file": compose_file
+                    "compose_file": compose_file,
                 }
 
     except Exception as e:
         return {"error": f"모델 정보 조회 실패: {str(e)}"}
 
+
 # =============================================================================
 # 서버 실행
 # =============================================================================
 
+
 async def start_security_admin_server():
     """보안 관리 API 서버를 별도 포트에서 실행"""
     import uvicorn
+
     config = uvicorn.Config(security_app, host="0.0.0.0", port=8021, log_level="info")
     server = uvicorn.Server(config)
     await server.serve()
 
+
 async def start_main_server():
     """메인 MCP 서버 실행"""
     import uvicorn
+
     config = uvicorn.Config(app, host="0.0.0.0", port=8020, log_level="info")
     server = uvicorn.Server(config)
     await server.serve()
 
+
 async def main():
     """메인 서버와 보안 관리 API 서버를 동시 실행"""
-    await asyncio.gather(
-        start_main_server(),
-        start_security_admin_server()
-    )
+    await asyncio.gather(start_main_server(), start_security_admin_server())
+
 
 if __name__ == "__main__":
     # HTTP 모드: FastAPI + 보안 관리 API 동시 실행

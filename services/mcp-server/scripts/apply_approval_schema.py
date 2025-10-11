@@ -33,7 +33,7 @@ async def apply_schema(db_path: Path, schema_path: Path):
 
     try:
         # Read schema
-        with open(schema_path, 'r') as f:
+        with open(schema_path, "r") as f:
             schema_sql = f.read()
 
         # Apply schema
@@ -77,6 +77,7 @@ async def apply_schema(db_path: Path, schema_path: Path):
     except Exception as e:
         print(f"Error applying schema: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -84,7 +85,9 @@ async def apply_schema(db_path: Path, schema_path: Path):
 async def main():
     parser = argparse.ArgumentParser(description="Apply Approval Workflow Schema")
     parser.add_argument("--db-path", type=str, default=str(DEFAULT_DB_PATH), help="Database path")
-    parser.add_argument("--schema-path", type=str, default=str(SCHEMA_PATH), help="Schema file path")
+    parser.add_argument(
+        "--schema-path", type=str, default=str(SCHEMA_PATH), help="Schema file path"
+    )
 
     args = parser.parse_args()
 

@@ -10,12 +10,7 @@ import time
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from rate_limiter import (
-    RateLimiter,
-    AccessControl,
-    ToolSensitivityLevel,
-    RateLimit
-)
+from rate_limiter import RateLimiter, AccessControl, ToolSensitivityLevel, RateLimit
 
 
 def test_rate_limiter_basic():

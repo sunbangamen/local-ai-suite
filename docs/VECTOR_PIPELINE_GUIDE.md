@@ -21,8 +21,9 @@ Phase 2에서는 메모리 시스템에 벡터 임베딩 기능이 추가되었�
 새로운 의존성 추가 후에는 이미지 리빌드만 하면 됩니다:
 
 ```bash
-# 백엔드 스택만 사용
+# 백엔드 스택만 사용 (CI와 동일한 CPU 프로필)
 make build-p2 && make up-p2
+# GPU 환경에서 실제 모델 사용 시: make up-p2-gpu
 
 # 전체 스택 (데스크톱 포함)
 make build-p3 && make up-p3
@@ -48,7 +49,8 @@ pip install qdrant-client httpx
 
 ```bash
 # Phase 2 서비스 시작 (FastEmbed + Qdrant + 전체 인프라)
-make up-p2
+make up-p2          # CPU 프로필
+# GPU 실행은 make up-p2-gpu
 ```
 
 ### 3. 서비스 상태 확인
@@ -194,8 +196,9 @@ pip install -r services/rag/requirements.txt
 # 서비스 상태 확인
 docker ps | grep -E "(embedding|qdrant)"
 
-# 서비스 재시작
+# 서비스 재시작 (CPU 프로필)
 make down && make up-p2
+# GPU 환경이라면 make up-p2-gpu 사용
 ```
 
 ### 임베딩 처리 실패
@@ -263,4 +266,4 @@ while True:
 
 ---
 
-이제 `make up-p2`와 의존성 설치만으로 완전한 벡터 검색 시스템을 사용할 수 있습니다! 🚀
+이제 `make up-p2`(CPU 프로필)와 의존성 설치만으로 완전한 벡터 검색 시스템을 사용할 수 있습니다! GPU 모델이 필요하면 `make up-p2-gpu`를 사용하세요. 🚀

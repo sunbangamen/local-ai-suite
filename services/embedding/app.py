@@ -24,7 +24,12 @@ Embedding Service (FastAPI + FastEmbed)
 
 DEFAULT_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "64"))
-NORMALIZE = os.getenv("EMBEDDING_NORMALIZE", "true").lower() in {"1", "true", "yes", "y"}
+NORMALIZE = os.getenv("EMBEDDING_NORMALIZE", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+    "y",
+}
 CACHE_DIR = os.getenv("FASTEMBED_CACHE", None)
 NUM_THREADS = int(os.getenv("EMBEDDING_THREADS", "0"))
 
@@ -104,7 +109,9 @@ def health():
 @app.post("/embed", response_model=EmbedResponse)
 def embed(req: EmbedRequest = Body(...)):
     if not req.texts:
-        return EmbedResponse(embeddings=[], model=_model_name, dim=_model_dim or 0, normalize=NORMALIZE)
+        return EmbedResponse(
+            embeddings=[], model=_model_name, dim=_model_dim or 0, normalize=NORMALIZE
+        )
 
     # 안전 제한: 입력 개수와 길이
     if len(req.texts) > MAX_TEXTS:
@@ -121,7 +128,12 @@ def embed(req: EmbedRequest = Body(...)):
     # 안전: float 변환
     out = [list(map(float, v)) for v in vecs]
 
-    return EmbedResponse(embeddings=out, model=_model_name, dim=_model_dim or len(out[0]), normalize=NORMALIZE)
+    return EmbedResponse(
+        embeddings=out,
+        model=_model_name,
+        dim=_model_dim or len(out[0]),
+        normalize=NORMALIZE,
+    )
 
 
 class ReloadRequest(BaseModel):
@@ -156,4 +168,5 @@ def prewarm():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8003)

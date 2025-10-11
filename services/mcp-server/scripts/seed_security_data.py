@@ -11,7 +11,7 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -32,8 +32,8 @@ DEFAULT_ROLES = [
             "ai_chat",
             "git_status",
             "git_log",
-            "git_diff"
-        ]
+            "git_diff",
+        ],
     },
     {
         "role_name": "developer",
@@ -54,8 +54,8 @@ DEFAULT_ROLES = [
             "web_screenshot",
             "web_scrape",
             "web_analyze_ui",
-            "get_current_model"
-        ]
+            "get_current_model",
+        ],
     },
     {
         "role_name": "admin",
@@ -82,47 +82,146 @@ DEFAULT_ROLES = [
             "notion_search",
             "web_to_notion",
             "switch_model",
-            "get_current_model"
-        ]
-    }
+            "get_current_model",
+        ],
+    },
 ]
 
 # All 18 MCP tools + permissions
 ALL_PERMISSIONS = [
     # File operations
-    {"name": "read_file", "resource_type": "file", "action": "read", "sensitivity": "MEDIUM"},
-    {"name": "write_file", "resource_type": "file", "action": "write", "sensitivity": "HIGH"},
-    {"name": "list_files", "resource_type": "file", "action": "read", "sensitivity": "LOW"},
-
+    {
+        "name": "read_file",
+        "resource_type": "file",
+        "action": "read",
+        "sensitivity": "MEDIUM",
+    },
+    {
+        "name": "write_file",
+        "resource_type": "file",
+        "action": "write",
+        "sensitivity": "HIGH",
+    },
+    {
+        "name": "list_files",
+        "resource_type": "file",
+        "action": "read",
+        "sensitivity": "LOW",
+    },
     # Code execution
-    {"name": "execute_python", "resource_type": "tool", "action": "execute", "sensitivity": "CRITICAL"},
-    {"name": "execute_bash", "resource_type": "tool", "action": "execute", "sensitivity": "CRITICAL"},
-
+    {
+        "name": "execute_python",
+        "resource_type": "tool",
+        "action": "execute",
+        "sensitivity": "CRITICAL",
+    },
+    {
+        "name": "execute_bash",
+        "resource_type": "tool",
+        "action": "execute",
+        "sensitivity": "CRITICAL",
+    },
     # RAG & AI
-    {"name": "rag_search", "resource_type": "tool", "action": "read", "sensitivity": "LOW"},
-    {"name": "ai_chat", "resource_type": "tool", "action": "execute", "sensitivity": "LOW"},
-
+    {
+        "name": "rag_search",
+        "resource_type": "tool",
+        "action": "read",
+        "sensitivity": "LOW",
+    },
+    {
+        "name": "ai_chat",
+        "resource_type": "tool",
+        "action": "execute",
+        "sensitivity": "LOW",
+    },
     # Git operations
-    {"name": "git_status", "resource_type": "tool", "action": "read", "sensitivity": "LOW"},
-    {"name": "git_log", "resource_type": "tool", "action": "read", "sensitivity": "LOW"},
-    {"name": "git_diff", "resource_type": "tool", "action": "read", "sensitivity": "MEDIUM"},
-    {"name": "git_add", "resource_type": "tool", "action": "write", "sensitivity": "MEDIUM"},
-    {"name": "git_commit", "resource_type": "tool", "action": "write", "sensitivity": "HIGH"},
-
+    {
+        "name": "git_status",
+        "resource_type": "tool",
+        "action": "read",
+        "sensitivity": "LOW",
+    },
+    {
+        "name": "git_log",
+        "resource_type": "tool",
+        "action": "read",
+        "sensitivity": "LOW",
+    },
+    {
+        "name": "git_diff",
+        "resource_type": "tool",
+        "action": "read",
+        "sensitivity": "MEDIUM",
+    },
+    {
+        "name": "git_add",
+        "resource_type": "tool",
+        "action": "write",
+        "sensitivity": "MEDIUM",
+    },
+    {
+        "name": "git_commit",
+        "resource_type": "tool",
+        "action": "write",
+        "sensitivity": "HIGH",
+    },
     # Web automation
-    {"name": "web_screenshot", "resource_type": "tool", "action": "execute", "sensitivity": "LOW"},
-    {"name": "web_scrape", "resource_type": "tool", "action": "execute", "sensitivity": "MEDIUM"},
-    {"name": "web_analyze_ui", "resource_type": "tool", "action": "execute", "sensitivity": "LOW"},
-    {"name": "web_automate", "resource_type": "tool", "action": "execute", "sensitivity": "HIGH"},
-
+    {
+        "name": "web_screenshot",
+        "resource_type": "tool",
+        "action": "execute",
+        "sensitivity": "LOW",
+    },
+    {
+        "name": "web_scrape",
+        "resource_type": "tool",
+        "action": "execute",
+        "sensitivity": "MEDIUM",
+    },
+    {
+        "name": "web_analyze_ui",
+        "resource_type": "tool",
+        "action": "execute",
+        "sensitivity": "LOW",
+    },
+    {
+        "name": "web_automate",
+        "resource_type": "tool",
+        "action": "execute",
+        "sensitivity": "HIGH",
+    },
     # Notion integration
-    {"name": "notion_create_page", "resource_type": "tool", "action": "write", "sensitivity": "MEDIUM"},
-    {"name": "notion_search", "resource_type": "tool", "action": "read", "sensitivity": "LOW"},
-    {"name": "web_to_notion", "resource_type": "tool", "action": "write", "sensitivity": "MEDIUM"},
-
+    {
+        "name": "notion_create_page",
+        "resource_type": "tool",
+        "action": "write",
+        "sensitivity": "MEDIUM",
+    },
+    {
+        "name": "notion_search",
+        "resource_type": "tool",
+        "action": "read",
+        "sensitivity": "LOW",
+    },
+    {
+        "name": "web_to_notion",
+        "resource_type": "tool",
+        "action": "write",
+        "sensitivity": "MEDIUM",
+    },
     # Model management
-    {"name": "switch_model", "resource_type": "tool", "action": "execute", "sensitivity": "HIGH"},
-    {"name": "get_current_model", "resource_type": "tool", "action": "read", "sensitivity": "LOW"},
+    {
+        "name": "switch_model",
+        "resource_type": "tool",
+        "action": "execute",
+        "sensitivity": "HIGH",
+    },
+    {
+        "name": "get_current_model",
+        "resource_type": "tool",
+        "action": "read",
+        "sensitivity": "LOW",
+    },
 ]
 
 # Test users
@@ -156,14 +255,14 @@ async def seed_permissions(db) -> Dict[str, int]:
                     perm["resource_type"],
                     perm["action"],
                     perm["sensitivity"],
-                    f"{perm['action'].capitalize()} permission for {perm['name']}"
-                )
+                    f"{perm['action'].capitalize()} permission for {perm['name']}",
+                ),
             )
 
             # Get permission_id (either newly inserted or existing)
             async with conn.execute(
                 "SELECT permission_id FROM security_permissions WHERE permission_name = ?",
-                (perm["name"],)
+                (perm["name"],),
             ) as cursor:
                 row = await cursor.fetchone()
                 if row:
@@ -197,14 +296,14 @@ async def seed_roles(db, permission_map: Dict[str, int]) -> Dict[str, int]:
                 (
                     role_config["role_name"],
                     role_config["description"],
-                    role_config["is_system_role"]
-                )
+                    role_config["is_system_role"],
+                ),
             )
 
             # Get role_id
             async with conn.execute(
                 "SELECT role_id FROM security_roles WHERE role_name = ?",
-                (role_config["role_name"],)
+                (role_config["role_name"],),
             ) as cursor:
                 row = await cursor.fetchone()
                 if row:
@@ -214,8 +313,7 @@ async def seed_roles(db, permission_map: Dict[str, int]) -> Dict[str, int]:
 
             # Clear existing role-permission mappings for idempotency
             await conn.execute(
-                "DELETE FROM security_role_permissions WHERE role_id = ?",
-                (role_id,)
+                "DELETE FROM security_role_permissions WHERE role_id = ?", (role_id,)
             )
 
             # Insert role-permission mappings
@@ -227,7 +325,7 @@ async def seed_roles(db, permission_map: Dict[str, int]) -> Dict[str, int]:
                         INSERT OR IGNORE INTO security_role_permissions (role_id, permission_id)
                         VALUES (?, ?)
                         """,
-                        (role_id, perm_id)
+                        (role_id, perm_id),
                     )
                 else:
                     print(f"  ⚠️  Unknown permission: {perm_name}")
@@ -260,7 +358,7 @@ async def seed_users(db, role_map: Dict[str, int]) -> None:
                 INSERT OR REPLACE INTO security_users (user_id, username, role_id)
                 VALUES (?, ?, ?)
                 """,
-                (user["user_id"], user["username"], role_id)
+                (user["user_id"], user["username"], role_id),
             )
             print(f"  ✓ User ready: {user['user_id']} ({user['role_name']})")
 
@@ -328,7 +426,7 @@ async def main():
     parser.add_argument(
         "--reset",
         action="store_true",
-        help="Reset database before seeding (DELETE ALL DATA)"
+        help="Reset database before seeding (DELETE ALL DATA)",
     )
 
     args = parser.parse_args()

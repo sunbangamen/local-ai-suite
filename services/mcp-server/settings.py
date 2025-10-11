@@ -6,7 +6,6 @@ Security Settings Module
 
 import os
 from pathlib import Path
-from typing import Optional
 
 
 class SecuritySettings:
@@ -16,10 +15,7 @@ class SecuritySettings:
     RBAC_ENABLED: bool = os.getenv("RBAC_ENABLED", "false").lower() == "true"
 
     # Database Settings
-    SECURITY_DB_PATH: str = os.getenv(
-        "SECURITY_DB_PATH",
-        "/mnt/e/ai-data/sqlite/security.db"
-    )
+    SECURITY_DB_PATH: str = os.getenv("SECURITY_DB_PATH", "/mnt/e/ai-data/sqlite/security.db")
 
     # Logging Settings
     SECURITY_QUEUE_SIZE: int = int(os.getenv("SECURITY_QUEUE_SIZE", "1000"))
@@ -31,7 +27,9 @@ class SecuritySettings:
     # Feature Flags
     SANDBOX_ENABLED: bool = os.getenv("SANDBOX_ENABLED", "true").lower() == "true"
     RATE_LIMIT_ENABLED: bool = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
-    APPROVAL_WORKFLOW_ENABLED: bool = os.getenv("APPROVAL_WORKFLOW_ENABLED", "false").lower() == "true"
+    APPROVAL_WORKFLOW_ENABLED: bool = (
+        os.getenv("APPROVAL_WORKFLOW_ENABLED", "false").lower() == "true"
+    )
 
     # Approval Workflow Settings (Issue #16)
     APPROVAL_TIMEOUT: int = int(os.getenv("APPROVAL_TIMEOUT", "300"))  # 5 minutes
@@ -67,6 +65,15 @@ class SecuritySettings:
     @classmethod
     def is_approval_enabled(cls) -> bool:
         """승인 워크플로우 활성화 여부"""
+        return cls.APPROVAL_WORKFLOW_ENABLED
+
+    @classmethod
+    def is_approval_workflow_enabled(cls) -> bool:
+        """
+        승인을 요구하는 워크플로우가 활성화되어 있는지 반환.
+        기존 메서드(is_approval_enabled)와 동치이지만, 테스트 및 외부 코드에서
+        사용 중인 이름을 그대로 지원한다.
+        """
         return cls.APPROVAL_WORKFLOW_ENABLED
 
     @classmethod
@@ -115,7 +122,9 @@ class SecuritySettings:
 
         # Production 환경 검증
         if cls.RBAC_ENABLED and cls.SECURITY_MODE == "legacy":
-            warnings.append("RBAC가 활성화되었지만 보안 모드가 'legacy'입니다. 'normal' 또는 'strict' 권장")
+            warnings.append(
+                "RBAC가 활성화되었지만 보안 모드가 'legacy'입니다. 'normal' 또는 'strict' 권장"
+            )
 
         return warnings
 

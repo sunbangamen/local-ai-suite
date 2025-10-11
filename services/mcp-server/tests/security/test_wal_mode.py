@@ -7,10 +7,8 @@ Issue #8 - P1-T3
 import asyncio
 import pytest
 import aiosqlite
-from pathlib import Path
-import tempfile
 
-from security_database import SecurityDatabase, init_database
+from security_database import SecurityDatabase
 
 
 @pytest.mark.integration
@@ -45,7 +43,9 @@ class TestWALModeConcurrency:
         async def read_role(reader_id: int):
             """Simulate concurrent reader"""
             async with db.get_connection() as conn:
-                async with conn.execute("SELECT * FROM security_roles WHERE role_name = 'test_role'") as cursor:
+                async with conn.execute(
+                    "SELECT * FROM security_roles WHERE role_name = 'test_role'"
+                ) as cursor:
                     result = await cursor.fetchone()
                     assert result is not None
                     return reader_id
@@ -73,7 +73,7 @@ class TestWALModeConcurrency:
                     user_id=f"writer_user_{i}",
                     tool_name="test_tool",
                     action="test",
-                    status="success"
+                    status="success",
                 )
                 write_count += 1
                 await asyncio.sleep(0.01)  # Small delay
@@ -82,7 +82,7 @@ class TestWALModeConcurrency:
             """Background reader"""
             nonlocal read_count
             for _ in range(20):
-                logs = await db.get_audit_logs(limit=5)
+                await db.get_audit_logs(limit=5)
                 read_count += 1
                 await asyncio.sleep(0.005)  # Faster than writer
 
@@ -109,7 +109,7 @@ class TestWALModeConcurrency:
                         user_id=f"user_{writer_id}",
                         tool_name="test_tool",
                         action="write",
-                        status="success"
+                        status="success",
                     )
                     await asyncio.sleep(0.01)
             except aiosqlite.OperationalError as e:
@@ -135,7 +135,7 @@ class TestWALModeConcurrency:
                 user_id=f"user_{i}",
                 tool_name="test_tool",
                 action="test",
-                status="success"
+                status="success",
             )
 
         # Checkpoint WAL
@@ -159,14 +159,14 @@ class TestWALModeConcurrency:
                 # Insert in transaction
                 await conn.execute(
                     "INSERT INTO security_roles (role_name, description) VALUES (?, ?)",
-                    (f"role_{tx_id}", f"Transaction {tx_id}")
+                    (f"role_{tx_id}", f"Transaction {tx_id}"),
                 )
                 await conn.commit()
 
                 # Read back
                 async with conn.execute(
                     "SELECT role_name FROM security_roles WHERE role_name = ?",
-                    (f"role_{tx_id}",)
+                    (f"role_{tx_id}",),
                 ) as cursor:
                     result = await cursor.fetchone()
                     results.append(result[0])
@@ -204,7 +204,7 @@ class TestDatabasePerformance:
         avg_latency = sum(latencies) / len(latencies)
         p95_latency = sorted(latencies)[94]  # 95th percentile
 
-        print(f"\nPermission Check Latency:")
+        print("\nPermission Check Latency:")
         print(f"  Average: {avg_latency:.2f}ms")
         print(f"  P95: {p95_latency:.2f}ms")
 
@@ -227,7 +227,7 @@ class TestDatabasePerformance:
                 tool_name="test_tool",
                 action="test",
                 status="success",
-                execution_time_ms=50
+                execution_time_ms=50,
             )
             end = time.time()
             latencies.append((end - start) * 1000)
@@ -235,12 +235,14 @@ class TestDatabasePerformance:
         avg_latency = sum(latencies) / len(latencies)
         p95_latency = sorted(latencies)[94]
 
-        print(f"\nAudit Log Insert Latency:")
+        print("\nAudit Log Insert Latency:")
         print(f"  Average: {avg_latency:.2f}ms")
         print(f"  P95: {p95_latency:.2f}ms")
 
         # Note: Actual async implementation will queue this, making it <1ms
-        assert p95_latency < 50, f"P95 latency should be <50ms for direct insert, got {p95_latency:.2f}ms"
+        assert (
+            p95_latency < 50
+        ), f"P95 latency should be <50ms for direct insert, got {p95_latency:.2f}ms"
 
 
 if __name__ == "__main__":

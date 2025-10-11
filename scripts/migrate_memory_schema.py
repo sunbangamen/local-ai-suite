@@ -21,11 +21,11 @@ import sqlite3
 import argparse
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Tuple
+from typing import List, Tuple
 
 # 메모리 디렉토리 경로
-AI_MEMORY_DIR = os.getenv('AI_MEMORY_DIR', '/mnt/e/ai-data/memory')
-PROJECTS_DIR = Path(AI_MEMORY_DIR) / 'projects'
+AI_MEMORY_DIR = os.getenv("AI_MEMORY_DIR", "/mnt/e/ai-data/memory")
+PROJECTS_DIR = Path(AI_MEMORY_DIR) / "projects"
 
 
 def check_schema_version(db_path: Path) -> Tuple[bool, str]:
@@ -47,13 +47,13 @@ def check_schema_version(db_path: Path) -> Tuple[bool, str]:
 
         # 필수 컬럼 확인
         required_columns = {
-            'id': 'INTEGER',
-            'conversation_id': 'INTEGER',
-            'embedding_vector': 'BLOB',
-            'sync_status': 'TEXT',
-            'synced_at': 'TEXT',
-            'qdrant_point_id': 'TEXT',
-            'created_at': 'DATETIME'
+            "id": "INTEGER",
+            "conversation_id": "INTEGER",
+            "embedding_vector": "BLOB",
+            "sync_status": "TEXT",
+            "synced_at": "TEXT",
+            "qdrant_point_id": "TEXT",
+            "created_at": "DATETIME",
         }
 
         missing_columns = []
@@ -84,8 +84,12 @@ def migrate_database(db_path: Path, dry_run: bool = False) -> bool:
     try:
         # 백업 생성
         if not dry_run:
-            backup_path = db_path.parent / f"{db_path.stem}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+            backup_path = (
+                db_path.parent
+                / f"{db_path.stem}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+            )
             import shutil
+
             shutil.copy2(db_path, backup_path)
             print(f"  ✅ 백업 생성됨: {backup_path.name}")
 
@@ -99,19 +103,22 @@ def migrate_database(db_path: Path, dry_run: bool = False) -> bool:
         migrations = []
 
         # 1. id 컬럼이 없으면 추가 (PRIMARY KEY로 재생성 필요)
-        if 'id' not in existing_columns:
+        if "id" not in existing_columns:
             migrations.append("id PRIMARY KEY로 테이블 재생성")
 
             if not dry_run:
                 # 기존 데이터 백업
-                cursor.execute("""
+                cursor.execute(
+                    """
                     CREATE TABLE conversation_embeddings_old AS
                     SELECT * FROM conversation_embeddings
-                """)
+                """
+                )
 
                 # 새 테이블 생성
                 cursor.execute("DROP TABLE conversation_embeddings")
-                cursor.execute("""
+                cursor.execute(
+                    """
                     CREATE TABLE conversation_embeddings (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         conversation_id INTEGER NOT NULL,
@@ -122,56 +129,69 @@ def migrate_database(db_path: Path, dry_run: bool = False) -> bool:
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (conversation_id) REFERENCES conversations (id)
                     )
-                """)
+                """
+                )
 
                 # 데이터 복원 (embedding_vector가 NULL인 행은 제외)
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO conversation_embeddings
                     (conversation_id, embedding_vector, created_at)
                     SELECT conversation_id, embedding_vector,
                            COALESCE(created_at, CURRENT_TIMESTAMP)
                     FROM conversation_embeddings_old
                     WHERE embedding_vector IS NOT NULL
-                """)
+                """
+                )
 
                 cursor.execute("DROP TABLE conversation_embeddings_old")
 
         else:
             # id 컬럼이 있으면 개별 컬럼 추가
-            if 'sync_status' not in existing_columns:
+            if "sync_status" not in existing_columns:
                 migrations.append("sync_status 컬럼 추가")
                 if not dry_run:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         ALTER TABLE conversation_embeddings
                         ADD COLUMN sync_status TEXT DEFAULT 'pending'
-                    """)
+                    """
+                    )
 
-            if 'synced_at' not in existing_columns:
+            if "synced_at" not in existing_columns:
                 migrations.append("synced_at 컬럼 추가")
                 if not dry_run:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         ALTER TABLE conversation_embeddings
                         ADD COLUMN synced_at TEXT
-                    """)
+                    """
+                    )
 
-            if 'qdrant_point_id' not in existing_columns:
+            if "qdrant_point_id" not in existing_columns:
                 migrations.append("qdrant_point_id 컬럼 추가")
                 if not dry_run:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         ALTER TABLE conversation_embeddings
                         ADD COLUMN qdrant_point_id TEXT
-                    """)
+                    """
+                    )
 
         # 인덱스 생성
         if not dry_run:
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_embeddings_conversation
                 ON conversation_embeddings(conversation_id)
-            """)
-            cursor.execute("""
+            """
+            )
+            cursor.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_embeddings_sync_status
                 ON conversation_embeddings(sync_status)
-            """)
+            """
+            )
 
         if not dry_run:
             conn.commit()
@@ -198,7 +218,7 @@ def find_memory_databases() -> List[Path]:
     databases = []
     for project_dir in PROJECTS_DIR.iterdir():
         if project_dir.is_dir():
-            db_path = project_dir / 'memory.db'
+            db_path = project_dir / "memory.db"
             if db_path.exists():
                 databases.append(db_path)
 
@@ -207,18 +227,12 @@ def find_memory_databases() -> List[Path]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='메모리 데이터베이스 스키마를 최신 버전으로 마이그레이션'
+        description="메모리 데이터베이스 스키마를 최신 버전으로 마이그레이션"
     )
     parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='실제 변경 없이 마이그레이션 대상만 표시'
+        "--dry-run", action="store_true", help="실제 변경 없이 마이그레이션 대상만 표시"
     )
-    parser.add_argument(
-        '--project',
-        type=str,
-        help='특정 프로젝트 ID만 마이그레이션'
-    )
+    parser.add_argument("--project", type=str, help="특정 프로젝트 ID만 마이그레이션")
 
     args = parser.parse_args()
 
@@ -274,7 +288,7 @@ def main():
         # 마이그레이션 실행
         if not args.dry_run:
             confirm = input("마이그레이션을 진행하시겠습니까? [y/N]: ")
-            if confirm.lower() != 'y':
+            if confirm.lower() != "y":
                 print("❌ 마이그레이션이 취소되었습니다")
                 return 0
             print()
@@ -301,5 +315,5 @@ def main():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

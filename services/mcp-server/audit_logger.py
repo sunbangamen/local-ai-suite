@@ -7,7 +7,6 @@ Asynchronous audit logging with queue for non-blocking performance
 import asyncio
 import json
 import logging
-import time
 from typing import Dict, Optional
 from datetime import datetime
 
@@ -67,7 +66,7 @@ class AuditLogger:
         status: str,
         error_message: Optional[str] = None,
         execution_time_ms: Optional[int] = None,
-        request_data: Optional[Dict] = None
+        request_data: Optional[Dict] = None,
     ) -> None:
         """
         Log tool invocation (non-blocking)
@@ -89,7 +88,7 @@ class AuditLogger:
             "error_message": error_message,
             "execution_time_ms": execution_time_ms,
             "request_data": json.dumps(request_data) if request_data else None,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         try:
@@ -102,12 +101,7 @@ class AuditLogger:
                 f"user={user_id}, tool={tool_name}"
             )
 
-    async def log_denied(
-        self,
-        user_id: str,
-        tool_name: str,
-        reason: str
-    ) -> None:
+    async def log_denied(self, user_id: str, tool_name: str, reason: str) -> None:
         """
         Log permission denied event
 
@@ -121,7 +115,7 @@ class AuditLogger:
             tool_name=tool_name,
             action="access",
             status="denied",
-            error_message=reason
+            error_message=reason,
         )
 
     async def log_success(
@@ -129,7 +123,7 @@ class AuditLogger:
         user_id: str,
         tool_name: str,
         execution_time_ms: int,
-        request_data: Optional[Dict] = None
+        request_data: Optional[Dict] = None,
     ) -> None:
         """
         Log successful tool execution
@@ -146,7 +140,7 @@ class AuditLogger:
             action="execute",
             status="success",
             execution_time_ms=execution_time_ms,
-            request_data=request_data
+            request_data=request_data,
         )
 
     async def log_error(
@@ -154,7 +148,7 @@ class AuditLogger:
         user_id: str,
         tool_name: str,
         error_message: str,
-        execution_time_ms: Optional[int] = None
+        execution_time_ms: Optional[int] = None,
     ) -> None:
         """
         Log tool execution error
@@ -171,7 +165,7 @@ class AuditLogger:
             action="execute",
             status="error",
             error_message=error_message,
-            execution_time_ms=execution_time_ms
+            execution_time_ms=execution_time_ms,
         )
 
     # Approval Workflow Logging Methods (Issue #16)
@@ -181,7 +175,7 @@ class AuditLogger:
         user_id: str,
         tool_name: str,
         request_id: str,
-        request_data: Optional[Dict] = None
+        request_data: Optional[Dict] = None,
     ) -> None:
         """
         Log approval request creation
@@ -197,7 +191,7 @@ class AuditLogger:
             tool_name=tool_name,
             action="approval_requested",
             status="pending",
-            request_data={"request_id": request_id, **(request_data or {})}
+            request_data={"request_id": request_id, **(request_data or {})},
         )
 
     async def log_approval_granted(
@@ -206,7 +200,7 @@ class AuditLogger:
         tool_name: str,
         request_id: str,
         responder_id: str,
-        reason: Optional[str] = None
+        reason: Optional[str] = None,
     ) -> None:
         """
         Log approval granted event
@@ -226,8 +220,8 @@ class AuditLogger:
             request_data={
                 "request_id": request_id,
                 "responder_id": responder_id,
-                "reason": reason
-            }
+                "reason": reason,
+            },
         )
 
     async def log_approval_rejected(
@@ -236,7 +230,7 @@ class AuditLogger:
         tool_name: str,
         request_id: str,
         responder_id: str,
-        reason: Optional[str] = None
+        reason: Optional[str] = None,
     ) -> None:
         """
         Log approval rejected event
@@ -254,18 +248,11 @@ class AuditLogger:
             action="approval_rejected",
             status="rejected",
             error_message=reason,
-            request_data={
-                "request_id": request_id,
-                "responder_id": responder_id
-            }
+            request_data={"request_id": request_id, "responder_id": responder_id},
         )
 
     async def log_approval_timeout(
-        self,
-        user_id: str,
-        tool_name: str,
-        request_id: str,
-        timeout_seconds: int
+        self, user_id: str, tool_name: str, request_id: str, timeout_seconds: int
     ) -> None:
         """
         Log approval timeout event
@@ -282,7 +269,7 @@ class AuditLogger:
             action="approval_timeout",
             status="timeout",
             error_message=f"Approval request timed out after {timeout_seconds}s",
-            request_data={"request_id": request_id}
+            request_data={"request_id": request_id},
         )
 
     async def _async_writer(self) -> None:
@@ -292,10 +279,7 @@ class AuditLogger:
         while self._running or not self.queue.empty():
             try:
                 # Get log entry from queue (with timeout)
-                log_entry = await asyncio.wait_for(
-                    self.queue.get(),
-                    timeout=1.0
-                )
+                log_entry = await asyncio.wait_for(self.queue.get(), timeout=1.0)
 
                 # Write to database
                 await self.db.insert_audit_log(
@@ -305,7 +289,7 @@ class AuditLogger:
                     status=log_entry["status"],
                     error_message=log_entry.get("error_message"),
                     execution_time_ms=log_entry.get("execution_time_ms"),
-                    request_data=log_entry.get("request_data")
+                    request_data=log_entry.get("request_data"),
                 )
 
                 self.queue.task_done()
@@ -324,7 +308,7 @@ class AuditLogger:
             "queue_size": self.queue.qsize(),
             "queue_max_size": self.queue_size,
             "queue_full": self.queue.full(),
-            "running": self._running
+            "running": self._running,
         }
 
 
