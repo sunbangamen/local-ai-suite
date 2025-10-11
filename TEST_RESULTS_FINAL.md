@@ -173,7 +173,7 @@ export RBAC_ENABLED=true && pytest tests/integration/test_rbac_integration.py
 
 | Criterion | Status | Evidence |
 |-----------|--------|----------|
-| ✅ DB 초기화 및 시딩 | ✅ **COMPLETE** | 10 tables, 4 users, 21 permissions deployed (PHASE1_DB_VERIFICATION.log:38) |
+| ✅ DB 초기화 및 시딩 | ✅ **COMPLETE** | 8 core tables + 4 views + 2 system tables, 4 users, 21 permissions (PHASE1_DB_VERIFICATION.log:38) |
 | ✅ RBAC 기능 테스트 (10+ 시나리오) | ✅ **COMPLETE** | **10/10 tests passing (100%)** ✅ (FINAL_TEST_VERIFICATION.log:1) |
 | ✅ 성능 벤치마크 | ✅ **ACCEPTED** | 80 RPS (80% of 100 target), 0% errors (BENCHMARK_RBAC.log:74) |
 | ✅ 문서 작성 (SECURITY.md, RBAC_GUIDE.md) | ✅ **COMPLETE** | See docs/security/SECURITY.md, docs/security/RBAC_GUIDE.md, PERFORMANCE_ASSESSMENT.md |
@@ -182,11 +182,13 @@ export RBAC_ENABLED=true && pytest tests/integration/test_rbac_integration.py
 **Overall Completion**: ✅ **100%** (5/5 criteria met)
 
 **Evidence Logs**:
-- DB Seeding: `PHASE1_DB_VERIFICATION.log:38`
-  - **8 Core Tables**: security_users, security_roles, security_permissions, security_role_permissions, security_audit_logs, security_sessions, schema_version, approval_requests
-  - **1 View**: pending_approvals
-  - **1 System Table**: sqlite_sequence (auto-managed by SQLite)
-  - **Data**: 4 users, 3 roles, 21 permissions, 43 role-permission mappings
+- DB Seeding: `PHASE1_DB_VERIFICATION.log:38` (6 tables listed in log)
+  - **Actual DB Schema** (verified via sqlite_master query):
+    - **8 Core Tables**: security_users, security_roles, security_permissions, security_role_permissions, security_audit_logs, security_sessions, schema_version, approval_requests
+    - **4 Views**: pending_approvals, v_permission_denials, v_recent_audit_logs, v_user_permissions
+    - **2 System Tables**: sqlite_sequence, sqlite_stat1 (auto-managed by SQLite)
+  - **Data** (from log): 4 users, 3 roles, 21 permissions, 43 role-permission mappings
+  - **Note**: Log mentions "Total tables: 10" but only lists 6 explicitly; full schema verified via direct DB query
 - Test Results: `FINAL_TEST_VERIFICATION.log:1` (10 passed in 2.64s)
 - Benchmark: `BENCHMARK_RBAC.log:74` (80.00 RPS, 154.59ms P95, 0.00% errors)
 - Documentation: `docs/security/SECURITY.md` (16KB), `docs/security/RBAC_GUIDE.md` (24KB), `PERFORMANCE_ASSESSMENT.md` (detailed analysis)
