@@ -1,0 +1,2 @@
+duration_sec,total_requests,successful,errors,error_rate_pct,rps,avg_latency_ms,median_latency_ms,min_latency_ms,max_latency_ms,p95_latency_ms,p99_latency_ms
+60,4800,4800,0,0.0,80.0,100.67406882413859,66.15199800035043,13.111096999637084,4019.354611999006,154.59497294868925,239.91441417092574

@@ -6,6 +6,7 @@ E2E tests for RBAC middleware with audit logging
 
 import asyncio
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 import sys
 from pathlib import Path
@@ -23,10 +24,12 @@ def anyio_backend():
     return "asyncio"
 
 
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module")
 async def client():
     """HTTP client for testing"""
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    from httpx import ASGITransport
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
 
@@ -189,10 +192,10 @@ class TestRBACIntegration:
             pytest.skip("RBAC disabled")
 
         db = get_security_database()
+        import time
 
-        # Get initial count
-        initial_logs = await db.get_audit_logs(limit=1000)
-        initial_count = len(initial_logs)
+        # Record start time to filter only new logs
+        start_time = time.time()
 
         # Make multiple requests
         for i in range(5):
@@ -205,11 +208,12 @@ class TestRBACIntegration:
         # Wait for async logging
         await asyncio.sleep(0.5)
 
-        # Check log count increased
-        final_logs = await db.get_audit_logs(limit=1000)
-        final_count = len(final_logs)
+        # Count logs created after start_time
+        all_logs = await db.get_audit_logs(limit=1000)
+        new_logs = [log for log in all_logs if log.get("timestamp", "") >= str(start_time)]
+        new_count = len(new_logs)
 
-        assert final_count >= initial_count + 5, "Audit logs should accumulate"
+        assert new_count >= 5, f"Expected at least 5 new audit logs, got {new_count}"
 
 
 @pytest.mark.integration
