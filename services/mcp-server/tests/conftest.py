@@ -13,18 +13,19 @@ from pathlib import Path
 from typing import AsyncGenerator, Generator
 
 import pytest
+import pytest_asyncio
 import aiosqlite
 
 try:
     from settings import SecuritySettings
-    from security_database import reset_security_database
+    from security_database import get_security_database, reset_security_database
 except ImportError:  # pragma: no cover
     PARENT = Path(__file__).resolve().parents[1]
     if str(PARENT) not in sys.path:
         sys.path.insert(0, str(PARENT))
 
     from settings import SecuritySettings  # type: ignore
-    from security_database import reset_security_database  # type: ignore
+    from security_database import get_security_database, reset_security_database  # type: ignore
 
 # Tell pytest to ignore __init__.py in service root (prevents relative import errors)
 collect_ignore = ["../__init__.py"]
@@ -52,12 +53,9 @@ def temp_db_path() -> Generator[Path, None, None]:
         db_path.unlink()
 
 
-@pytest.fixture(autouse=True)
-def override_security_paths(monkeypatch, temp_db_path: Path) -> Generator[None, None, None]:
-    """
-    Force SecuritySettings to use a writable temporary directory during tests.
-    Prevents PermissionError when running in CI (no access to /mnt/e).
-    """
+@pytest_asyncio.fixture(autouse=True)
+async def override_security_paths(monkeypatch, temp_db_path: Path):
+    """Provide each test with an isolated, writable security DB."""
     temp_dir = temp_db_path.parent
 
     original_db_path = SecuritySettings.SECURITY_DB_PATH
@@ -69,16 +67,14 @@ def override_security_paths(monkeypatch, temp_db_path: Path) -> Generator[None, 
     SecuritySettings.SECURITY_DB_PATH = str(temp_db_path)
     SecuritySettings.DATA_DIR = str(temp_dir)
 
-    # Reset singleton to ensure new temporary path is used
+    # Reset singleton and initialize schema on the temporary database
     reset_security_database()
+    db = get_security_database()
+    await db.initialize()
 
     yield
 
     reset_security_database()
-
-    # Release any connections referencing the temporary database
-    reset_security_database()
-
     SecuritySettings.SECURITY_DB_PATH = original_db_path
     SecuritySettings.DATA_DIR = original_data_dir
     monkeypatch.delenv("SECURITY_DB_PATH", raising=False)

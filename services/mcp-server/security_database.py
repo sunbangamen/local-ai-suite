@@ -66,9 +66,15 @@ class SecurityDatabase:
     @asynccontextmanager
     async def get_connection(self):
         """Get database connection (context manager)"""
-        async with aiosqlite.connect(self.db_path) as db:
-            db.row_factory = aiosqlite.Row  # Enable column access by name
-            yield db
+        if self._connection is not None:
+            # Reuse supplied connection (tests or externally managed)
+            conn = self._connection
+            conn.row_factory = aiosqlite.Row
+            yield conn
+        else:
+            async with aiosqlite.connect(self.db_path) as db:
+                db.row_factory = aiosqlite.Row  # Enable column access by name
+                yield db
 
     # ========================================================================
     # User Operations

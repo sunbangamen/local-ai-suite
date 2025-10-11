@@ -42,12 +42,20 @@ def mock_qdrant_client():
 def mock_httpx_response():
     """Create mock httpx response"""
 
+    class DummyResponse:
+        def __init__(self, data, status_code=200):
+            self._data = data
+            self.status_code = status_code
+
+        def json(self):
+            return self._data
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise RuntimeError(f"HTTP {self.status_code}")
+
     def create_response(data, status_code=200):
-        response = AsyncMock()
-        response.raise_for_status = MagicMock()
-        response.json.return_value = data
-        response.status_code = status_code
-        return response
+        return DummyResponse(data, status_code)
 
     return create_response
 
