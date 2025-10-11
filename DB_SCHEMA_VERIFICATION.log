@@ -1,0 +1,196 @@
+======================================================================
+Database Schema Verification Report
+======================================================================
+Date: 2025-10-11 09:57:56
+Database: /mnt/e/ai-data/sqlite/security.db
+======================================================================
+
+SUMMARY
+----------------------------------------------------------------------
+TABLES: 10
+VIEWS: 4
+
+TABLES
+----------------------------------------------------------------------
+1. approval_requests
+2. schema_version
+3. security_audit_logs
+4. security_permissions
+5. security_role_permissions
+6. security_roles
+7. security_sessions
+8. security_users
+9. sqlite_sequence
+10. sqlite_stat1
+
+VIEWS
+----------------------------------------------------------------------
+1. pending_approvals
+2. v_permission_denials
+3. v_recent_audit_logs
+4. v_user_permissions
+
+======================================================================
+DETAILED SCHEMA
+======================================================================
+
+-- TABLE: approval_requests
+CREATE TABLE approval_requests (
+    request_id TEXT PRIMARY KEY,                -- UUID
+    tool_name TEXT NOT NULL,                    -- MCP 도구명
+    user_id TEXT NOT NULL,                      -- 요청 사용자
+    role TEXT NOT NULL,                         -- 사용자 역할
+    request_data TEXT,                          -- JSON 직렬화된 도구 인자
+    status TEXT DEFAULT 'pending',              -- pending/approved/rejected/expired/timeout
+    requested_at TEXT DEFAULT (datetime('now')),
+    responded_at TEXT,                          -- 승인/거부 시각
+    responder_id TEXT,                          -- 승인/거부한 관리자
+    response_reason TEXT,                       -- 승인/거부 사유
+    expires_at TEXT NOT NULL,                   -- 만료 시각 (requested_at + timeout)
+    FOREIGN KEY (user_id) REFERENCES security_users(user_id)
+)
+
+-- TABLE: schema_version
+CREATE TABLE schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT DEFAULT (datetime('now')),
+    description TEXT
+)
+
+-- TABLE: security_audit_logs
+CREATE TABLE security_audit_logs (
+    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT,
+    tool_name TEXT,
+    action TEXT,
+    status TEXT,  -- success, denied, error, timeout
+    error_message TEXT,
+    request_data TEXT,  -- JSON string of request parameters
+    timestamp TEXT DEFAULT (datetime('now')),
+    execution_time_ms INTEGER,
+    ip_address TEXT,
+    session_id TEXT
+)
+
+-- TABLE: security_permissions
+CREATE TABLE security_permissions (
+    permission_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    permission_name TEXT NOT NULL UNIQUE,
+    resource_type TEXT,  -- tool, file, system
+    action TEXT,         -- read, write, execute
+    description TEXT,
+    sensitivity_level TEXT DEFAULT 'MEDIUM',  -- LOW, MEDIUM, HIGH, CRITICAL
+    created_at TEXT DEFAULT (datetime('now'))
+)
+
+-- TABLE: security_role_permissions
+CREATE TABLE security_role_permissions (
+    role_id INTEGER NOT NULL,
+    permission_id INTEGER NOT NULL,
+    granted_at TEXT DEFAULT (datetime('now')),
+    granted_by TEXT DEFAULT 'system',
+    PRIMARY KEY (role_id, permission_id),
+    FOREIGN KEY (role_id) REFERENCES security_roles(role_id) ON DELETE CASCADE,
+    FOREIGN KEY (permission_id) REFERENCES security_permissions(permission_id) ON DELETE CASCADE
+)
+
+-- TABLE: security_roles
+CREATE TABLE security_roles (
+    role_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    role_name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    is_system_role INTEGER DEFAULT 0  -- 1 = system role (cannot delete)
+)
+
+-- TABLE: security_sessions
+CREATE TABLE security_sessions (
+    session_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    last_activity TEXT DEFAULT (datetime('now')),
+    expires_at TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    is_active INTEGER DEFAULT 1,
+    FOREIGN KEY (user_id) REFERENCES security_users(user_id) ON DELETE CASCADE
+)
+
+-- TABLE: security_users
+CREATE TABLE security_users (
+    user_id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    role_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    is_active INTEGER DEFAULT 1,  -- 1 = active, 0 = disabled
+    FOREIGN KEY (role_id) REFERENCES security_roles(role_id) ON DELETE SET NULL
+)
+
+-- TABLE: sqlite_sequence
+CREATE TABLE sqlite_sequence(name,seq)
+
+-- TABLE: sqlite_stat1
+CREATE TABLE sqlite_stat1(tbl,idx,stat)
+
+-- VIEW: pending_approvals
+CREATE VIEW pending_approvals AS
+SELECT
+    request_id,
+    tool_name,
+    user_id,
+    role,
+    request_data,
+    requested_at,
+    expires_at,
+    CAST((julianday(expires_at) - julianday('now')) * 86400 AS INTEGER) AS seconds_until_expiry
+FROM approval_requests
+WHERE status = 'pending'
+  AND datetime('now') < expires_at
+ORDER BY requested_at ASC
+
+-- VIEW: v_permission_denials
+CREATE VIEW v_permission_denials AS
+SELECT
+    user_id,
+    tool_name,
+    COUNT(*) as denial_count,
+    MAX(timestamp) as last_denial
+FROM security_audit_logs
+WHERE status = 'denied'
+GROUP BY user_id, tool_name
+ORDER BY denial_count DESC
+
+-- VIEW: v_recent_audit_logs
+CREATE VIEW v_recent_audit_logs AS
+SELECT
+    log_id,
+    user_id,
+    tool_name,
+    action,
+    status,
+    timestamp,
+    execution_time_ms
+FROM security_audit_logs
+WHERE timestamp >= datetime('now', '-1 day')
+ORDER BY timestamp DESC
+
+-- VIEW: v_user_permissions
+CREATE VIEW v_user_permissions AS
+SELECT
+    u.user_id,
+    u.username,
+    r.role_name,
+    p.permission_name,
+    p.resource_type,
+    p.action,
+    p.sensitivity_level
+FROM security_users u
+JOIN security_roles r ON u.role_id = r.role_id
+JOIN security_role_permissions rp ON r.role_id = rp.role_id
+JOIN security_permissions p ON rp.permission_id = p.permission_id
+WHERE u.is_active = 1
+
+======================================================================
+Verification completed via sqlite_master query
+======================================================================

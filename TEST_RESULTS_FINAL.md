@@ -183,12 +183,13 @@ export RBAC_ENABLED=true && pytest tests/integration/test_rbac_integration.py
 
 **Evidence Logs**:
 - DB Seeding: `PHASE1_DB_VERIFICATION.log:38` (6 tables listed in log)
-  - **Actual DB Schema** (verified via sqlite_master query):
-    - **8 Core Tables**: security_users, security_roles, security_permissions, security_role_permissions, security_audit_logs, security_sessions, schema_version, approval_requests
+  - **Actual DB Schema** (verified via sqlite_master query - see `DB_SCHEMA_VERIFICATION.log`):
+    - **10 Tables**: approval_requests, schema_version, security_audit_logs, security_permissions, security_role_permissions, security_roles, security_sessions, security_users, sqlite_sequence, sqlite_stat1
     - **4 Views**: pending_approvals, v_permission_denials, v_recent_audit_logs, v_user_permissions
-    - **2 System Tables**: sqlite_sequence, sqlite_stat1 (auto-managed by SQLite)
-  - **Data** (from log): 4 users, 3 roles, 21 permissions, 43 role-permission mappings
-  - **Note**: Log mentions "Total tables: 10" but only lists 6 explicitly; full schema verified via direct DB query
+    - **Total**: 14 database objects
+  - **Data** (from PHASE1_DB_VERIFICATION.log): 4 users, 3 roles, 21 permissions, 43 role-permission mappings
+  - **Verification Method**: Direct sqlite_master query (2025-10-11) - full schema in DB_SCHEMA_VERIFICATION.log
+  - **Note**: PHASE1 log mentions "Total tables: 10" but only lists 6 row counts explicitly
 - Test Results: `FINAL_TEST_VERIFICATION.log:1` (10 passed in 2.64s)
 - Benchmark: `BENCHMARK_RBAC.log:74` (80.00 RPS, 154.59ms P95, 0.00% errors)
 - Documentation: `docs/security/SECURITY.md` (16KB), `docs/security/RBAC_GUIDE.md` (24KB), `PERFORMANCE_ASSESSMENT.md` (detailed analysis)
