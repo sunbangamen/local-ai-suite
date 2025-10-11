@@ -68,6 +68,15 @@ class SecuritySettings:
         return cls.APPROVAL_WORKFLOW_ENABLED
 
     @classmethod
+    def is_approval_workflow_enabled(cls) -> bool:
+        """
+        승인을 요구하는 워크플로우가 활성화되어 있는지 반환.
+        기존 메서드(is_approval_enabled)와 동치이지만, 테스트 및 외부 코드에서
+        사용 중인 이름을 그대로 지원한다.
+        """
+        return cls.APPROVAL_WORKFLOW_ENABLED
+
+    @classmethod
     def get_approval_timeout(cls) -> int:
         """승인 요청 타임아웃 (초)"""
         return cls.APPROVAL_TIMEOUT

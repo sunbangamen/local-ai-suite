@@ -10,6 +10,7 @@ NOTE: RAG service behavior:
 """
 
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock, MagicMock, patch
 import sys
@@ -51,7 +52,7 @@ def mock_httpx_response():
     return create_response
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def app_with_mocks(mock_qdrant_client, mock_httpx_response):
     """
     Get REAL RAG FastAPI app with mocked external dependencies
