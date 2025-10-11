@@ -35,9 +35,7 @@ def test_rate_limiter_time_window():
     limiter = RateLimiter()
 
     # 작은 rate limit 설정 (테스트용)
-    limiter.rate_limits["test_tool"] = RateLimit(
-        max_requests=2, time_window=2, burst_size=0
-    )
+    limiter.rate_limits["test_tool"] = RateLimit(max_requests=2, time_window=2, burst_size=0)
 
     # 2개 요청 허용
     for i in range(2):
@@ -62,9 +60,7 @@ def test_rate_limiter_time_window():
 def test_rate_limiter_multiple_users():
     """다중 사용자 테스트"""
     limiter = RateLimiter()
-    limiter.rate_limits["test_tool"] = RateLimit(
-        max_requests=2, time_window=60, burst_size=0
-    )
+    limiter.rate_limits["test_tool"] = RateLimit(max_requests=2, time_window=60, burst_size=0)
 
     # 사용자 1
     for i in range(2):

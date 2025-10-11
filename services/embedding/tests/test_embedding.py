@@ -177,9 +177,7 @@ async def test_reload_model_successfully(app_with_mocks):
             mock_model.embed = lambda texts, **kwargs: [[0.1] * 384 for _ in texts]
             mock_load.return_value = mock_model
 
-            response = await client.post(
-                "/reload", json={"model": "BAAI/bge-small-en-v1.5"}
-            )
+            response = await client.post("/reload", json={"model": "BAAI/bge-small-en-v1.5"})
 
             assert response.status_code == 200
             data = response.json()

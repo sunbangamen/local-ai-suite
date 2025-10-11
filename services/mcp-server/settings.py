@@ -15,9 +15,7 @@ class SecuritySettings:
     RBAC_ENABLED: bool = os.getenv("RBAC_ENABLED", "false").lower() == "true"
 
     # Database Settings
-    SECURITY_DB_PATH: str = os.getenv(
-        "SECURITY_DB_PATH", "/mnt/e/ai-data/sqlite/security.db"
-    )
+    SECURITY_DB_PATH: str = os.getenv("SECURITY_DB_PATH", "/mnt/e/ai-data/sqlite/security.db")
 
     # Logging Settings
     SECURITY_QUEUE_SIZE: int = int(os.getenv("SECURITY_QUEUE_SIZE", "1000"))
@@ -35,9 +33,7 @@ class SecuritySettings:
 
     # Approval Workflow Settings (Issue #16)
     APPROVAL_TIMEOUT: int = int(os.getenv("APPROVAL_TIMEOUT", "300"))  # 5 minutes
-    APPROVAL_POLLING_INTERVAL: int = int(
-        os.getenv("APPROVAL_POLLING_INTERVAL", "1")
-    )  # 1 second
+    APPROVAL_POLLING_INTERVAL: int = int(os.getenv("APPROVAL_POLLING_INTERVAL", "1"))  # 1 second
     APPROVAL_MAX_PENDING: int = int(os.getenv("APPROVAL_MAX_PENDING", "50"))
 
     # Paths
@@ -106,18 +102,14 @@ class SecuritySettings:
             try:
                 db_path = cls.get_db_path()
                 if not db_path.parent.exists():
-                    warnings.append(
-                        f"RBAC DB 디렉터리가 존재하지 않습니다: {db_path.parent}"
-                    )
+                    warnings.append(f"RBAC DB 디렉터리가 존재하지 않습니다: {db_path.parent}")
             except Exception as e:
                 warnings.append(f"RBAC DB 경로 검증 실패: {e}")
 
         # 보안 모드 검증
         valid_modes = ["strict", "normal", "legacy"]
         if cls.SECURITY_MODE not in valid_modes:
-            warnings.append(
-                f"유효하지 않은 보안 모드: {cls.SECURITY_MODE} (허용: {valid_modes})"
-            )
+            warnings.append(f"유효하지 않은 보안 모드: {cls.SECURITY_MODE} (허용: {valid_modes})")
 
         # Production 환경 검증
         if cls.RBAC_ENABLED and cls.SECURITY_MODE == "legacy":

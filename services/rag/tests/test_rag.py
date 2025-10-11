@@ -82,9 +82,7 @@ async def app_with_mocks(mock_qdrant_client, mock_httpx_response):
         elif "/chat/completions" in url:
             return mock_httpx_response(
                 {
-                    "choices": [
-                        {"message": {"content": "Mock answer based on context"}}
-                    ],
+                    "choices": [{"message": {"content": "Mock answer based on context"}}],
                     "usage": {
                         "prompt_tokens": 100,
                         "completion_tokens": 50,

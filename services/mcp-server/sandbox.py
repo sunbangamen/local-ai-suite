@@ -27,14 +27,10 @@ class ResourceLimits:
         # 기본 제한값들 (환경변수로 오버라이드 가능)
         self.max_memory_mb = int(os.getenv("SANDBOX_MAX_MEMORY_MB", "512"))  # 512MB
         self.max_cpu_time_sec = int(os.getenv("SANDBOX_MAX_CPU_TIME", "30"))  # 30초
-        self.max_output_size = int(
-            os.getenv("SANDBOX_MAX_OUTPUT_SIZE", "1048576")
-        )  # 1MB
+        self.max_output_size = int(os.getenv("SANDBOX_MAX_OUTPUT_SIZE", "1048576"))  # 1MB
         self.max_file_size = int(os.getenv("SANDBOX_MAX_FILE_SIZE", "10485760"))  # 10MB
         self.max_processes = int(os.getenv("SANDBOX_MAX_PROCESSES", "10"))
-        self.network_access = (
-            os.getenv("SANDBOX_NETWORK_ACCESS", "false").lower() == "true"
-        )
+        self.network_access = os.getenv("SANDBOX_NETWORK_ACCESS", "false").lower() == "true"
 
 
 class SandboxLogger:
@@ -45,9 +41,7 @@ class SandboxLogger:
         self.log_dir.mkdir(exist_ok=True)
         self.audit_log = self.log_dir / "security_audit.log"
 
-    def log_security_event(
-        self, event_type: str, details: Dict[str, Any], severity: str = "INFO"
-    ):
+    def log_security_event(self, event_type: str, details: Dict[str, Any], severity: str = "INFO"):
         """보안 이벤트 로깅"""
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         session_id = details.get("session_id", "unknown")
@@ -73,8 +67,7 @@ class SandboxLogger:
             "CODE_EXECUTION",
             {
                 "session_id": session_id,
-                "code_hash": hash(code)
-                % 100000,  # 코드 내용 직접 저장 안함 (프라이버시)
+                "code_hash": hash(code) % 100000,  # 코드 내용 직접 저장 안함 (프라이버시)
                 "code_length": len(code),
                 "success": result.get("success", False),
                 "execution_time": result.get("execution_time", 0),
@@ -83,9 +76,7 @@ class SandboxLogger:
             },
         )
 
-    def log_security_violation(
-        self, violation_type: str, details: Dict[str, Any], session_id: str
-    ):
+    def log_security_violation(self, violation_type: str, details: Dict[str, Any], session_id: str):
         """보안 위반 로깅"""
         self.log_security_event(
             "SECURITY_VIOLATION",
@@ -169,9 +160,7 @@ class ContainerSandbox:
     def _is_docker_available(self) -> bool:
         """Docker 사용 가능 여부 확인"""
         try:
-            result = subprocess.run(
-                ["docker", "--version"], capture_output=True, timeout=5
-            )
+            result = subprocess.run(["docker", "--version"], capture_output=True, timeout=5)
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
@@ -323,9 +312,7 @@ class ContainerSandbox:
         """출력 크기 제한"""
         if len(output) > self.limits.max_output_size:
             truncated = output[: self.limits.max_output_size]
-            truncated += (
-                f"\n... (output truncated, max {self.limits.max_output_size} bytes)"
-            )
+            truncated += f"\n... (output truncated, max {self.limits.max_output_size} bytes)"
             return truncated
         return output
 
@@ -403,9 +390,7 @@ class SessionManager:
     def cleanup_session(self, session_id: str):
         """세션 정리"""
         if session_id in self.sessions:
-            self.logger.log_security_event(
-                "SESSION_CLEANUP", {"session_id": session_id}
-            )
+            self.logger.log_security_event("SESSION_CLEANUP", {"session_id": session_id})
             del self.sessions[session_id]
 
     def cleanup_expired_sessions(self):
@@ -472,9 +457,7 @@ class EnhancedSandbox:
         self.session_manager.record_execution(session_id)
 
         # 코드 실행
-        result = await self.container_sandbox.execute_python_code(
-            code, session_id, working_dir
-        )
+        result = await self.container_sandbox.execute_python_code(code, session_id, working_dir)
 
         # 보안 위반 시 세션에 기록
         if not result.get("success", False) and "Security" in result.get("stderr", ""):

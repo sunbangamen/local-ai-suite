@@ -92,7 +92,9 @@ async def chat_completions(request: ChatCompletionRequest):
     is_code = any(keyword in user_message.lower() for keyword in code_keywords)
 
     if is_code:
-        mock_content = "```python\ndef mock_function():\n    return 'This is a mock code response'\n```"
+        mock_content = (
+            "```python\ndef mock_function():\n    return 'This is a mock code response'\n```"
+        )
 
     response = ChatCompletionResponse(
         id=f"chatcmpl-{uuid.uuid4().hex[:8]}",

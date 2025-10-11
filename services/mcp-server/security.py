@@ -206,9 +206,7 @@ class SecurityValidator:
 
         for module in dangerous_modules:
             if f"import {module}" in code or f"from {module}" in code:
-                raise SecurityError(
-                    f"Dangerous module import blocked (legacy mode): {module}"
-                )
+                raise SecurityError(f"Dangerous module import blocked (legacy mode): {module}")
 
         # 동적 import 우회 시도도 레거시 모드에서 차단
         dangerous_patterns = [
@@ -220,9 +218,7 @@ class SecurityValidator:
 
         for pattern in dangerous_patterns:
             if pattern in code:
-                raise SecurityError(
-                    f"Dynamic import bypass blocked (legacy mode): {pattern}"
-                )
+                raise SecurityError(f"Dynamic import bypass blocked (legacy mode): {pattern}")
 
         return True
 
@@ -303,9 +299,7 @@ class SecurityValidator:
             and isinstance(node.value, ast.Name)
             and node.value.id == "importlib"
         ):
-            raise SecurityError(
-                "Dynamic import bypass blocked: importlib.import_module"
-            )
+            raise SecurityError("Dynamic import bypass blocked: importlib.import_module")
 
         # importlib.reload() 패턴 검사
         if (
@@ -317,9 +311,7 @@ class SecurityValidator:
 
         # __import__ 속성 접근 검사
         if node.attr == "__import__":
-            raise SecurityError(
-                "Dynamic import bypass blocked: __import__ attribute access"
-            )
+            raise SecurityError("Dynamic import bypass blocked: __import__ attribute access")
 
         # 기타 알려진 우회 패턴들
         dangerous_import_patterns = {
@@ -340,9 +332,7 @@ class SecureExecutionEnvironment:
 
     def __init__(self, validator: SecurityValidator):
         self.validator = validator
-        self._use_enhanced_sandbox = (
-            os.getenv("USE_ENHANCED_SANDBOX", "true").lower() == "true"
-        )
+        self._use_enhanced_sandbox = os.getenv("USE_ENHANCED_SANDBOX", "true").lower() == "true"
 
     def execute_python_code(self, code: str, timeout: int = 30) -> dict:
         """

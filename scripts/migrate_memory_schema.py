@@ -304,9 +304,7 @@ def main():
         if args.dry_run:
             print(f"📋 {len(to_migrate)}개의 데이터베이스가 마이그레이션될 예정입니다")
         else:
-            print(
-                f"✅ {success_count}/{len(to_migrate)}개의 데이터베이스 마이그레이션 완료"
-            )
+            print(f"✅ {success_count}/{len(to_migrate)}개의 데이터베이스 마이그레이션 완료")
 
         if success_count < len(to_migrate):
             print(f"⚠️  실패: {len(to_migrate) - success_count}개")

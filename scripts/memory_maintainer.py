@@ -120,9 +120,7 @@ class MemoryMaintainer:
             conn.close()
 
             if deleted_count > 0:
-                logger.info(
-                    f"TTL 정리 완료 - {db_path.parent.name}: {deleted_count}개 대화 삭제"
-                )
+                logger.info(f"TTL 정리 완료 - {db_path.parent.name}: {deleted_count}개 대화 삭제")
 
             return deleted_count
 
@@ -149,9 +147,7 @@ class MemoryMaintainer:
             backup_json = self.backup_dir / f"{project_name}_{timestamp}.json"
             self.export_memory_to_json(db_path, backup_json)
 
-            logger.info(
-                f"백업 완료 - {project_name}: {backup_sql.name}, {backup_json.name}"
-            )
+            logger.info(f"백업 완료 - {project_name}: {backup_sql.name}, {backup_json.name}")
             return backup_sql
 
         except Exception as e:
@@ -251,17 +247,13 @@ class MemoryMaintainer:
                     )
 
                     point_data = {
-                        "id": item[
-                            "conversation_id"
-                        ],  # conversation_id를 Qdrant ID로 사용
+                        "id": item["conversation_id"],  # conversation_id를 Qdrant ID로 사용
                         "vector": embedding_vector,
                         "payload": payload,
                     }
 
                     points.append(point_data)
-                    synced_conversations.append(
-                        item["conversation_id"]
-                    )  # 성공 리스트에 추가
+                    synced_conversations.append(item["conversation_id"])  # 성공 리스트에 추가
 
                 except Exception as e:
                     logger.error(
@@ -335,10 +327,7 @@ class MemoryMaintainer:
         total_deleted = 0
 
         with ThreadPoolExecutor(max_workers=3) as executor:
-            futures = [
-                executor.submit(self.cleanup_expired_conversations, db)
-                for db in memory_dbs
-            ]
+            futures = [executor.submit(self.cleanup_expired_conversations, db) for db in memory_dbs]
             for future in futures:
                 total_deleted += future.result()
 
@@ -358,9 +347,7 @@ class MemoryMaintainer:
 
                 # 공통 헬퍼 함수로 컬렉션 확인
                 if not ensure_collection_util(project_id, QDRANT_URL):
-                    logger.warning(
-                        f"프로젝트 {project_id} Qdrant 컬렉션 생성 실패, 스킵"
-                    )
+                    logger.warning(f"프로젝트 {project_id} Qdrant 컬렉션 생성 실패, 스킵")
                     sync_stats["skipped"] += 1
                     continue
 
@@ -418,9 +405,7 @@ class MemoryMaintainer:
         memory_dbs = self.find_memory_databases()
 
         with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [
-                executor.submit(self.backup_memory_database, db) for db in memory_dbs
-            ]
+            futures = [executor.submit(self.backup_memory_database, db) for db in memory_dbs]
             for future in futures:
                 future.result()
 

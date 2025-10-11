@@ -346,9 +346,7 @@ async def get_tool_security_info(tool_name: str):
 
 
 @app.get("/api/approvals/pending")
-async def get_pending_approvals(
-    limit: int = 50, user_id: str = Header(None, alias="X-User-ID")
-):
+async def get_pending_approvals(limit: int = 50, user_id: str = Header(None, alias="X-User-ID")):
     """
     대기 중인 승인 요청 목록 조회 (admin only)
 
@@ -418,9 +416,7 @@ async def approve_request(
     )
 
     if not success:
-        raise HTTPException(
-            status_code=404, detail="Approval request already processed"
-        )
+        raise HTTPException(status_code=404, detail="Approval request already processed")
 
     # 감사 로그 기록 (enhanced with specific approval logging)
     audit = get_audit_logger()
@@ -478,9 +474,7 @@ async def reject_request(
     )
 
     if not success:
-        raise HTTPException(
-            status_code=404, detail="Approval request already processed"
-        )
+        raise HTTPException(status_code=404, detail="Approval request already processed")
 
     # 감사 로그 기록 (enhanced with specific approval logging)
     audit = get_audit_logger()
@@ -543,9 +537,7 @@ async def call_tool(
             return {"error": error_msg, "success": False, "error_type": "access_denied"}
 
         # 도구 실행 시작 (동시 실행 제한 강제 적용)
-        allowed, error_msg = rate_limiter.start_execution(
-            tool_name, actual_user_id, access_control
-        )
+        allowed, error_msg = rate_limiter.start_execution(tool_name, actual_user_id, access_control)
         if not allowed:
             return {
                 "error": error_msg,
@@ -779,9 +771,7 @@ async def read_file(path: str, working_dir: Optional[str] = None) -> FileInfo:
 
 
 @mcp.tool()
-async def write_file(
-    path: str, content: str, working_dir: Optional[str] = None
-) -> FileInfo:
+async def write_file(path: str, content: str, working_dir: Optional[str] = None) -> FileInfo:
     """보안이 강화된 파일 내용 쓰기 - 전역 파일시스템 지원"""
     try:
         # 새로운 안전한 파일 API 사용
@@ -804,9 +794,7 @@ async def write_file(
 
 
 @mcp.tool()
-async def list_files(
-    path: str = ".", working_dir: Optional[str] = None
-) -> Dict[str, Any]:
+async def list_files(path: str = ".", working_dir: Optional[str] = None) -> Dict[str, Any]:
     """보안이 강화된 디렉토리 파일 목록 조회"""
     try:
         # 새로운 안전한 파일 API 사용
@@ -896,9 +884,7 @@ def _detect_model_for_message(message: str) -> str:
     ]
 
     message_lower = message.lower()
-    has_code_keywords = any(
-        keyword.lower() in message_lower for keyword in code_keywords
-    )
+    has_code_keywords = any(keyword.lower() in message_lower for keyword in code_keywords)
 
     return CODE_MODEL_NAME if has_code_keywords else CHAT_MODEL_NAME
 
@@ -934,17 +920,13 @@ async def ai_chat(message: str, model: str = None) -> AIResponse:
 
 
 @mcp.tool()
-async def git_status(
-    path: str = ".", working_dir: Optional[str] = None
-) -> ExecutionResult:
+async def git_status(path: str = ".", working_dir: Optional[str] = None) -> ExecutionResult:
     """Git 저장소 상태 확인 (전역 Git 지원)"""
     # working_dir가 제공되면 해당 디렉토리 사용, 아니면 현재 경로
     if working_dir:
         # 전역 파일시스템 접근을 위한 경로 해결
         repo_path = resolve_path(path, working_dir)
-        git_cwd = str(
-            repo_path.parent if path != "." else resolve_path(".", working_dir)
-        )
+        git_cwd = str(repo_path.parent if path != "." else resolve_path(".", working_dir))
     else:
         repo_path = Path(PROJECT_ROOT) / path
         git_cwd = PROJECT_ROOT
@@ -1128,9 +1110,7 @@ async def git_log(
 
 
 @mcp.tool()
-async def git_add(
-    file_paths: str, working_dir: Optional[str] = None
-) -> ExecutionResult:
+async def git_add(file_paths: str, working_dir: Optional[str] = None) -> ExecutionResult:
     """Git 파일 스테이징 (전역 Git 지원)"""
     # working_dir가 제공되면 해당 디렉토리 사용
     if working_dir:
@@ -1259,9 +1239,7 @@ async def git_commit(
 
 
 @mcp.tool()
-async def web_screenshot(
-    url: str, width: int = 1280, height: int = 720
-) -> WebScreenshotResult:
+async def web_screenshot(url: str, width: int = 1280, height: int = 720) -> WebScreenshotResult:
     """웹사이트 스크린샷 촬영"""
     try:
         pw = await init_playwright()
@@ -1291,9 +1269,7 @@ async def web_screenshot(
 
 
 @mcp.tool()
-async def web_scrape(
-    url: str, selector: str, attribute: str = "textContent"
-) -> WebScrapeResult:
+async def web_scrape(url: str, selector: str, attribute: str = "textContent") -> WebScrapeResult:
     """웹사이트에서 특정 요소 크롤링"""
     try:
         pw = await init_playwright()
@@ -1416,9 +1392,7 @@ async def web_automate(url: str, actions: str) -> ExecutionResult:
         action_list = json.loads(actions)
 
         pw = await init_playwright()
-        browser = await pw.chromium.launch(
-            headless=False
-        )  # 디버깅을 위해 headless=False
+        browser = await pw.chromium.launch(headless=False)  # 디버깅을 위해 headless=False
         page = await browser.new_page()
 
         await page.goto(url, wait_until="networkidle")
@@ -1517,9 +1491,7 @@ async def notion_search(query: str, filter_type: str = "page") -> List[Dict]:
                 "Notion 토큰이 설정되지 않았습니다. NOTION_TOKEN 환경변수를 설정하세요."
             )
 
-        response = notion.search(
-            query=query, filter={"value": filter_type, "property": "object"}
-        )
+        response = notion.search(query=query, filter={"value": filter_type, "property": "object"})
 
         results = []
         for item in response["results"][:10]:  # 최대 10개 결과
@@ -1559,9 +1531,7 @@ async def web_to_notion(
         properties = json.dumps(
             {
                 "URL": {"url": url},
-                "Content": {
-                    "rich_text": [{"text": {"content": content[:2000]}}]
-                },  # 2000자 제한
+                "Content": {"rich_text": [{"text": {"content": content[:2000]}}]},  # 2000자 제한
             }
         )
 
@@ -1660,9 +1630,7 @@ async def _get_model_info(service_url: str) -> tuple[bool, str]:
                 models_data = response.json()
                 if models_data.get("data"):
                     model_path = models_data["data"][0]["id"]
-                    model_name = (
-                        model_path.split("/")[-1] if "/" in model_path else model_path
-                    )
+                    model_name = model_path.split("/")[-1] if "/" in model_path else model_path
                     return True, model_name
         return False, "unknown"
     except Exception as e:
@@ -1694,9 +1662,7 @@ async def _restart_service(
             "stop",
             service_name,
         ]
-        result = subprocess.run(
-            stop_cmd, capture_output=True, text=True, cwd="/mnt/workspace"
-        )
+        result = subprocess.run(stop_cmd, capture_output=True, text=True, cwd="/mnt/workspace")
         if result.returncode != 0:
             return False, f"서비스 중지 실패: {result.stderr}"
 
@@ -1772,9 +1738,7 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
         if model_type == "chat":
             target_model = os.getenv("CHAT_MODEL", "Qwen2.5-7B-Instruct-Q4_K_M.gguf")
         elif model_type == "code":
-            target_model = os.getenv(
-                "CODE_MODEL", "qwen2.5-coder-7b-instruct-q4_k_m.gguf"
-            )
+            target_model = os.getenv("CODE_MODEL", "qwen2.5-coder-7b-instruct-q4_k_m.gguf")
         else:
             return ModelSwitchResult(
                 success=False,
@@ -1796,9 +1760,7 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
         if is_phase2:
             # Phase 2: 이중화 구조
             # inference-chat (chat 모델), inference-code (code 모델)
-            service_name = (
-                "inference-chat" if model_type == "chat" else "inference-code"
-            )
+            service_name = "inference-chat" if model_type == "chat" else "inference-code"
             service_url = f"http://{service_name}:8001"
 
             # 1. 현재 모델 확인
@@ -1956,18 +1918,12 @@ async def get_current_model() -> Dict[str, Any]:
         # Phase 감지
         is_phase2, compose_file = await _detect_phase()
         if is_phase2 is None:
-            return {
-                "error": "Phase 감지 실패: docker compose 서비스 목록을 확인할 수 없습니다."
-            }
+            return {"error": "Phase 감지 실패: docker compose 서비스 목록을 확인할 수 없습니다."}
 
         if is_phase2:
             # Phase 2: 두 서비스 모두 조회
-            chat_success, chat_model = await _get_model_info(
-                "http://inference-chat:8001"
-            )
-            code_success, code_model = await _get_model_info(
-                "http://inference-code:8001"
-            )
+            chat_success, chat_model = await _get_model_info("http://inference-chat:8001")
+            code_success, code_model = await _get_model_info("http://inference-code:8001")
 
             return {
                 "phase": "Phase 2 (Dual LLM)",

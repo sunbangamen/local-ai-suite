@@ -217,9 +217,7 @@ class RBACManager:
 
         # 3. Wait with timeout
         try:
-            logger.info(
-                f"Waiting for approval: {request_id} ({tool_name}) - timeout={timeout}s"
-            )
+            logger.info(f"Waiting for approval: {request_id} ({tool_name}) - timeout={timeout}s")
             status = await asyncio.wait_for(poll_approval(), timeout=timeout)
 
             if status == "approved":
@@ -264,9 +262,7 @@ class RBACManager:
             del self._role_cache[user_id]
 
         # Remove all permission cache entries for this user
-        keys_to_remove = [
-            k for k in self._permission_cache.keys() if k.startswith(f"{user_id}:")
-        ]
+        keys_to_remove = [k for k in self._permission_cache.keys() if k.startswith(f"{user_id}:")]
         for key in keys_to_remove:
             del self._permission_cache[key]
 
@@ -279,9 +275,7 @@ class RBACManager:
         Args:
             tool_name: MCP tool name
         """
-        keys_to_remove = [
-            k for k in self._permission_cache.keys() if k.endswith(f":{tool_name}")
-        ]
+        keys_to_remove = [k for k in self._permission_cache.keys() if k.endswith(f":{tool_name}")]
         for key in keys_to_remove:
             del self._permission_cache[key]
 

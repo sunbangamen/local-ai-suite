@@ -185,9 +185,7 @@ class SecurityDatabase:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
 
-    async def check_permission(
-        self, user_id: str, permission_name: str
-    ) -> Tuple[bool, str]:
+    async def check_permission(self, user_id: str, permission_name: str) -> Tuple[bool, str]:
         """
         Check if user has permission
 
@@ -220,9 +218,7 @@ class SecurityDatabase:
     # Test Helper Methods (for test_approval_workflow.py)
     # ========================================================================
 
-    async def insert_user(
-        self, user_id: str, role: str, attributes: str = "{}"
-    ) -> bool:
+    async def insert_user(self, user_id: str, role: str, attributes: str = "{}") -> bool:
         """
         Insert user for testing (simplified version)
 
@@ -307,9 +303,7 @@ class SecurityDatabase:
             logger.error(f"Failed to insert test permission: {e}")
             return False
 
-    async def assign_permission_to_role(
-        self, role_name: str, permission_name: str
-    ) -> bool:
+    async def assign_permission_to_role(self, role_name: str, permission_name: str) -> bool:
         """
         Assign permission to role (for testing)
 
@@ -612,9 +606,7 @@ class SecurityDatabase:
                     (status, responder_id, response_reason, request_id),
                 )
                 await db.commit()
-                logger.info(
-                    f"Approval request {status}: {request_id} by {responder_id}"
-                )
+                logger.info(f"Approval request {status}: {request_id} by {responder_id}")
                 return True
         except Exception as e:
             logger.error(f"Failed to update approval status: {e}")

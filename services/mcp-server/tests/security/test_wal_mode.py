@@ -121,9 +121,7 @@ class TestWALModeConcurrency:
         await asyncio.gather(*tasks)
 
         # WAL mode should prevent locking errors (allow some tolerance for SQLite behavior)
-        assert (
-            len(errors) == 0
-        ), f"WAL mode should prevent locked errors, got: {len(errors)}"
+        assert len(errors) == 0, f"WAL mode should prevent locked errors, got: {len(errors)}"
 
     @pytest.mark.asyncio
     async def test_wal_checkpoint(self, temp_db_path):
@@ -178,9 +176,7 @@ class TestWALModeConcurrency:
         await asyncio.gather(*tasks)
 
         assert len(results) == 5, "All transactions should complete"
-        assert set(results) == {
-            f"role_{i}" for i in range(5)
-        }, "All roles should be created"
+        assert set(results) == {f"role_{i}" for i in range(5)}, "All roles should be created"
 
 
 @pytest.mark.integration
