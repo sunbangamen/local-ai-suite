@@ -165,8 +165,7 @@
             curl -f http://localhost:8004/health || echo "::warning::Inference Code health check failed"
 
             # Check API Gateway
-            curl -f http://localhost:8000/health || curl -f http://localhost:8000/v1/models || echo "::warning::API Gateway
-            health check failed"
+            curl -f http://localhost:8000/health || curl -f http://localhost:8000/v1/models || echo "::warning::API Gateway health check failed"
 
             # Check RAG
             curl -f http://localhost:8002/health || echo "::warning::RAG health check failed"
