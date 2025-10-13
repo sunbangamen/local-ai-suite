@@ -481,12 +481,13 @@ ai --interactive
 - **Phase 4 Desktop App**: Basic UI only, smart model selection incomplete
 - **Performance**: No caching, sequential MCP tool execution only
 - ⚠️ **테스트 커버리지 개선**: Issue #22 진행 중 (2025-10-13)
-  - **총 105개 테스트** (기존 78 + 신규 27)
-  - **실측 커버리지**: RAG 67%, Embedding 78% (목표 80%)
-  - API Gateway: 4 → 15 tests (integration, 커버리지 미측정)
-  - RAG Service: 5 → 15 tests (**67% coverage**, 342 stmts, 114 missed)
-  - Embedding: 7 → 13 tests (**78% coverage**, 88 stmts, 19 missed)
+  - **총 105개 테스트** (78 → 105, +27개 추가)
+  - **실측 커버리지**: RAG **67%**, Embedding **78%** (목표 80%)
+  - RAG Service: 15 tests (**67% coverage**, 342 stmts, 114 missed) ✅ 측정완료
+  - Embedding: 13 tests (**78% coverage**, 88 stmts, 19 missed) ✅ 측정완료
+  - API Gateway Integration: 15 tests (커버리지 미측정)
   - MCP Server: 47 tests (커버리지 미측정)
+  - Memory: 15 tests (커버리지 미측정)
 
 ### 🎯 Improvement Roadmap
 
