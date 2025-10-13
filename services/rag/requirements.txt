@@ -5,3 +5,6 @@ pydantic>=2.6
 qdrant-client>=1.10
 prometheus-fastapi-instrumentator>=7.0.0
 tenacity>=8.2.3
+pytest>=8.0.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.23.0
