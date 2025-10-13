@@ -508,8 +508,15 @@ ai --interactive
   - **정리 작업**: test_health_with_llm_check 중복 제거 (line 145), test_index_embedding_service_error assertion 검증 완료
   - **결론**: Unit test + mock 환경에서 실용적 최대치 도달
     - Embedding 81%: 모든 critical path 100% 커버, 인프라 코드만 미커버
-    - RAG 67%: 복잡한 통합 경로(DB, Qdrant, LLM) 추가 커버리지는 통합 테스트 또는 리팩토링 필요
-    - 추가 개선은 Issue #23으로 분리 권장 (배치 기능, DB 유틸리티 등)
+    - RAG 67%: 복잡한 통합 경로(DB, Qdrant, LLM) 추가 커버리지는 통합 테스트 필요
+    - **추가 개선**: Issue #23 (RAG Integration Tests) - 목표 ~75% 효과적 커버리지
+  - **Integration Testing Strategy** (Issue #23 준비 완료):
+    - 목표: Unit 67% + Integration ~8% = **75% 효과적 신뢰도**
+    - 환경: Docker Phase 2 (PostgreSQL + Qdrant + Embedding)
+    - 테스트: 5개 통합 시나리오 (indexing, query, cache, timeout, health)
+    - 실행: `make test-rag-integration` (requires `make up-p2`)
+    - 계획: `docs/progress/v1/RAG_INTEGRATION_PLAN.md` (18KB)
+    - 추적: `docs/progress/v1/ISSUE_23_TRACKING.md` (16KB)
 
 ### 🎯 Improvement Roadmap
 
