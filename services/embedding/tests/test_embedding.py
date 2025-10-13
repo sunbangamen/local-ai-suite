@@ -394,3 +394,34 @@ async def test_startup_model_loading_path(app_with_mocks):
         # Model should be ready for embedding
         embed_response = await client.post("/embed", json={"texts": ["Test after startup"]})
         assert embed_response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_load_model_with_cache_and_threads(app_with_mocks):
+    """Test _load_model() with cache_dir and threads configuration"""
+    transport = ASGITransport(app=app_with_mocks)
+
+    with patch("app.CACHE_DIR", "/tmp/cache"), \
+         patch("app.NUM_THREADS", 4):
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post("/embed", json={"texts": ["Test with cache"]})
+
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data["embeddings"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_health_endpoint_model_failure(app_with_mocks):
+    """Test /health endpoint when model initialization fails"""
+    transport = ASGITransport(app=app_with_mocks)
+
+    # Patch _ensure_model to raise exception
+    with patch("app._ensure_model", side_effect=Exception("Model load failed")):
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/health")
+
+            # Health check should return 200 but with ok=False
+            assert response.status_code == 200
+            data = response.json()
+            assert data["ok"] == False

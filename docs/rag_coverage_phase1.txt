@@ -1,0 +1,16 @@
+=== RAG Service Coverage (Actual Source Code Only) ===
+
+app.py:
+  Statements: 342
+  Missing: 114
+  Coverage: 66.7%
+
+database.py:
+  Statements: 98
+  Missing: 26
+  Coverage: 73.5%
+
+Total (excluding tests):
+  Statements: 797
+  Missing: 170
+  Coverage: 78.7%

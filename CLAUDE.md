@@ -481,10 +481,16 @@ ai --interactive
 - **Phase 4 Desktop App**: Basic UI only, smart model selection incomplete
 - **Performance**: No caching, sequential MCP tool execution only
 - ⚠️ **테스트 커버리지 개선**: Issue #22 Phase 2.2 완료 (2025-10-13)
-  - **총 115개 테스트** (78 → 116 → 115, +37개 추가, 중복 1개 제거)
-  - **Phase 2.2 실측 커버리지**: RAG **67%**, Embedding **78%** (목표 80% 미달)
+  - **총 117개 테스트** (78 → 117, +39개 추가)
+  - **Phase 2.2 실측 커버리지**: RAG **67%**, Embedding **81%** (목표 80% 초과 달성 ✅)
   - RAG Service: 22 tests (**67% coverage**, 342 stmts, 114 missed) ✅ Phase 2.2 완료
-  - Embedding: 16 tests (**78% coverage**, 88 stmts, 19 missed) ✅ Phase 2.2 완료
+  - Embedding: 18 tests (**81% coverage**, 88 stmts, 17 missed) ✅ Phase 2.2 완료, 80% 목표 초과 달성
+  - **Phase 2.2 추가 테스트** (Embedding):
+    - test_load_model_with_cache_and_threads: CACHE_DIR/NUM_THREADS 설정 검증
+    - test_health_endpoint_model_failure: 모델 로딩 실패 시 graceful degradation 검증
+  - **Phase 1 보고서**: `docs/progress/v1/PHASE_1_COVERAGE_MEASUREMENT.md` (8.2KB)
+  - **Phase 2.2 분석**: `docs/embedding_final_coverage_analysis.txt` (4.5KB)
+  - **커버리지 아티팩트**: `/tmp/embedding_final_coverage.json` (14KB), `/tmp/.coverage_embedding_final` (52KB)
   - API Gateway Integration: 15 tests (커버리지 미측정)
   - MCP Server: 47 tests (커버리지 미측정)
   - Memory: 7 tests (test_qdrant_failure.py, 커버리지 미측정)
@@ -574,7 +580,8 @@ ai --interactive
 
 **Remaining Weaknesses:**
 - **Performance Optimization**: 캐싱 및 병렬 처리 최적화 여지 있음
-- ⚠️ **테스트 커버리지**: 115개 테스트 (RAG 67%, Embedding 78%, Issue #22 Phase 2.2 완료)
+- ⚠️ **테스트 커버리지**: 115개 테스트 (RAG 67%, Embedding 78%, Issue #22 Phase 1 완료)
+  - 실측 근거: Docker pytest-cov (2025-10-13 19:30), 보고서: `docs/progress/v1/PHASE_1_COVERAGE_MEASUREMENT.md`
 
 **Suitability by Environment:**
 - **Personal Development**: ⭐⭐⭐⭐⭐ Excellent (100% ready)

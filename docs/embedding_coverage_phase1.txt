@@ -1,0 +1,7 @@
+=== Embedding Service Coverage (Actual Source Code Only) ===
+
+app.py:
+  Statements: 88
+  Missing: 19
+  Coverage: 78.4%
+
