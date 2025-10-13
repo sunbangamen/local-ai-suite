@@ -317,3 +317,80 @@ async def test_embed_with_whitespace_texts(app_with_mocks):
             assert "embeddings" in data
             # Service may return embeddings for all inputs or filter empties
             assert len(data["embeddings"]) <= len(mixed_texts)
+
+
+# ============================================================================
+# Phase 2.2: Additional Tests for 80% Coverage Target
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_batch_size_extreme_cases(app_with_mocks):
+    """Test embedding with very small and very large batch sizes"""
+    transport = ASGITransport(app=app_with_mocks)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Test 1: Very small batch (single item)
+        response1 = await client.post("/embed", json={"texts": ["Single item"]})
+        assert response1.status_code == 200
+        data1 = response1.json()
+        assert len(data1["embeddings"]) == 1
+
+        # Test 2: Moderate batch (exactly at batch size)
+        moderate_batch = [f"Text {i}" for i in range(64)]  # DEFAULT_BATCH_SIZE
+        response2 = await client.post("/embed", json={"texts": moderate_batch})
+        assert response2.status_code == 200
+        data2 = response2.json()
+        assert len(data2["embeddings"]) == 64
+
+        # Test 3: Large batch requiring multiple batches
+        large_batch = [f"Text {i}" for i in range(200)]
+        response3 = await client.post("/embed", json={"texts": large_batch})
+        # Should truncate to MAX_TEXTS or handle in batches
+        assert response3.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_model_dimension_consistency(app_with_mocks, mock_text_embedding):
+    """Test model always returns consistent embedding dimensions"""
+    transport = ASGITransport(app=app_with_mocks)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Test multiple requests to ensure dimension consistency
+        texts_batch1 = ["First", "Second", "Third"]
+        texts_batch2 = ["Fourth", "Fifth"]
+
+        response1 = await client.post("/embed", json={"texts": texts_batch1})
+        response2 = await client.post("/embed", json={"texts": texts_batch2})
+
+        assert response1.status_code == 200
+        assert response2.status_code == 200
+
+        data1 = response1.json()
+        data2 = response2.json()
+
+        # All embeddings should have same dimension
+        assert data1["dim"] == data2["dim"] == 384
+        assert all(len(emb) == 384 for emb in data1["embeddings"])
+        assert all(len(emb) == 384 for emb in data2["embeddings"])
+
+
+@pytest.mark.asyncio
+async def test_startup_model_loading_path(app_with_mocks):
+    """Test model loading during application startup"""
+    # This test verifies the startup event handler path
+    # The app_with_mocks fixture already tests model initialization
+    # We test that the model is properly loaded and accessible
+
+    transport = ASGITransport(app=app_with_mocks)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # First request after "startup" should work
+        response = await client.get("/health")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ok"] == True
+        assert "model" in data
+        assert "dim" in data
+        assert data["dim"] == 384
+
+        # Model should be ready for embedding
+        embed_response = await client.post("/embed", json={"texts": ["Test after startup"]})
+        assert embed_response.status_code == 200
