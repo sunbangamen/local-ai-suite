@@ -69,6 +69,63 @@ EMBEDDING_URL = "http://localhost:8003"
 RAG_URL = "http://localhost:8002"
 ```
 
+### Running Tests in Docker Container
+
+**Recommended Approach**: Run integration tests inside RAG container for consistent environment.
+
+**Step-by-Step Procedure**:
+
+```bash
+# 1. Prepare environment variables
+# Ensure .env file exists in project root with Phase 2 configuration
+
+# 2. Start Phase 2 stack
+make up-p2
+
+# Wait for all containers to start (~10-20 seconds)
+docker compose -f docker/compose.p2.cpu.yml ps
+
+# 3. Run integration tests inside RAG container
+docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc \
+  "cd /app && RUN_RAG_INTEGRATION_TESTS=1 pytest services/rag/tests/integration -q"
+
+# Options:
+# -q: Quiet mode (minimal output)
+# Remove -q for verbose output with full logs
+# Add -v for very verbose output
+# Add --tb=short for concise tracebacks
+
+# 4. Run with coverage
+docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc \
+  "cd /app && RUN_RAG_INTEGRATION_TESTS=1 pytest services/rag/tests/integration \
+   --cov=services/rag --cov-report=term-missing --cov-report=json"
+
+# 5. Cleanup (when done)
+make down
+# Or Phase 2 only:
+make down-p2
+```
+
+**Environment Variable**: `RUN_RAG_INTEGRATION_TESTS=1`
+- **Required**: Must be set to enable integration tests
+- **Purpose**: Skips integration tests in unit test runs (faster CI)
+- **Location**: Set in shell before pytest command
+
+**Manual Fixture Seeding** (if needed):
+```bash
+# Seed PostgreSQL
+docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc \
+  "cd /app && python services/rag/tests/fixtures/seed_postgres.py"
+
+# Seed Qdrant
+docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc \
+  "cd /app && python services/rag/tests/fixtures/seed_qdrant.py"
+
+# Cleanup fixtures
+docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc \
+  "cd /app && python services/rag/tests/fixtures/cleanup_fixtures.py"
+```
+
 ---
 
 ## Data Fixtures
@@ -403,6 +460,20 @@ import pytest
 import httpx
 from qdrant_client import QdrantClient
 import asyncpg
+import os
+
+# Skip integration tests unless explicitly enabled
+def pytest_configure(config):
+    """Skip integration tests unless RUN_RAG_INTEGRATION_TESTS=1"""
+    if not os.getenv("RUN_RAG_INTEGRATION_TESTS"):
+        config.option.markexpr = "not integration"
+
+# Mark all tests in integration/ directory
+def pytest_collection_modifyitems(items):
+    """Add 'integration' marker to all tests in integration directory"""
+    for item in items:
+        if "integration" in str(item.fspath):
+            item.add_marker(pytest.mark.integration)
 
 @pytest.fixture(scope="session")
 async def rag_client():
@@ -473,12 +544,26 @@ Add to `Makefile`:
 ```makefile
 .PHONY: test-rag-integration
 test-rag-integration:
-	@echo "Running RAG integration tests..."
+	@echo "Running RAG integration tests in Docker container..."
 	@echo "Prerequisites: Docker Phase 2 stack must be running (make up-p2)"
-	cd services/rag/tests/fixtures && python3 seed_postgres.py && python3 seed_qdrant.py
-	pytest services/rag/tests/integration/ -v --tb=short
-	cd services/rag/tests/fixtures && python3 cleanup_fixtures.py
+	@docker compose -f docker/compose.p2.cpu.yml ps | grep -q "Up" || \
+		(echo "❌ Docker services not running. Run: make up-p2" && exit 1)
+	@echo "Running tests inside RAG container..."
+	docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc \
+		"cd /app && RUN_RAG_INTEGRATION_TESTS=1 pytest services/rag/tests/integration -v --tb=short"
 	@echo "✅ Integration tests complete"
+
+.PHONY: test-rag-integration-coverage
+test-rag-integration-coverage:
+	@echo "Running RAG integration tests with coverage..."
+	@docker compose -f docker/compose.p2.cpu.yml ps | grep -q "Up" || \
+		(echo "❌ Docker services not running. Run: make up-p2" && exit 1)
+	docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc \
+		"cd /app && RUN_RAG_INTEGRATION_TESTS=1 pytest services/rag/tests/integration \
+		--cov=services/rag --cov-report=term-missing --cov-report=json"
+	@echo "Copying coverage report from container..."
+	docker compose -f docker/compose.p2.cpu.yml cp rag:/app/coverage.json docs/rag_integration_coverage.json
+	@echo "✅ Coverage report saved to docs/rag_integration_coverage.json"
 ```
 
 **Usage**:
@@ -486,11 +571,15 @@ test-rag-integration:
 # Start environment
 make up-p2
 
-# Run integration tests
+# Run integration tests (basic)
 make test-rag-integration
 
-# Run with coverage
-make test-rag-integration PYTEST_ARGS="--cov=services/rag --cov-report=term"
+# Run with coverage measurement
+make test-rag-integration-coverage
+
+# Manual Docker commands (alternative)
+docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc \
+  "cd /app && RUN_RAG_INTEGRATION_TESTS=1 pytest services/rag/tests/integration -q"
 ```
 
 ---
