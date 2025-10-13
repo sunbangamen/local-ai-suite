@@ -1,0 +1,335 @@
+{
+  "total_tests": 115,
+  "services": {
+    "rag": [
+      {
+        "path": "/mnt/e/worktree/issue-22/services/rag/tests/test_rag.py",
+        "test_count": 22,
+        "test_names": [
+          "test_health_endpoint_basic",
+          "test_query_with_existing_collection",
+          "test_query_with_nonexistent_collection",
+          "test_query_with_empty_results",
+          "test_query_timeout_handling",
+          "test_index_large_document_batch",
+          "test_index_invalid_document_format",
+          "test_qdrant_connection_retry",
+          "test_index_with_empty_collection_creation",
+          "test_health_qdrant_failure",
+          "test_health_embedding_failure",
+          "test_query_with_cache_hit",
+          "test_query_context_budget_limit",
+          "test_index_empty_documents_list",
+          "test_health_api_gateway_down",
+          "test_health_with_llm_check",
+          "test_index_long_document_chunking",
+          "test_index_embedding_service_error",
+          "test_query_llm_error_handling",
+          "test_query_empty_string_edge_case",
+          "test_ensure_collection_auto_creation",
+          "test_document_sentence_splitting"
+        ],
+        "line_numbers": [
+          130,
+          145,
+          171,
+          192,
+          214,
+          236,
+          260,
+          282,
+          308,
+          338,
+          355,
+          383,
+          412,
+          434,
+          454,
+          487,
+          530,
+          551,
+          586,
+          633,
+          655,
+          681
+        ]
+      }
+    ],
+    "embedding": [
+      {
+        "path": "/mnt/e/worktree/issue-22/services/embedding/tests/test_embedding.py",
+        "test_count": 16,
+        "test_names": [
+          "test_embed_single_text",
+          "test_embed_batch_texts",
+          "test_health_shows_model_info",
+          "test_exceed_max_texts_truncates",
+          "test_exceed_max_chars_truncates",
+          "test_empty_texts_list_returns_empty",
+          "test_reload_model_successfully",
+          "test_batch_embedding_concurrent_processing",
+          "test_embedding_model_error_handling",
+          "test_embedding_invalid_input_types",
+          "test_reload_model_with_new_model",
+          "test_reload_model_failure",
+          "test_embed_with_whitespace_texts",
+          "test_batch_size_extreme_cases",
+          "test_model_dimension_consistency",
+          "test_startup_model_loading_path"
+        ],
+        "line_numbers": [
+          67,
+          83,
+          97,
+          112,
+          133,
+          153,
+          170,
+          193,
+          210,
+          232,
+          256,
+          277,
+          298,
+          327,
+          352,
+          376
+        ]
+      }
+    ],
+    "api_gateway": [
+      {
+        "path": "/mnt/e/worktree/issue-22/tests/integration/test_api_gateway.py",
+        "test_count": 4,
+        "test_names": [
+          "test_chat_model_inference",
+          "test_code_model_inference",
+          "test_failover_from_chat_to_code",
+          "test_api_gateway_health"
+        ],
+        "line_numbers": [
+          29,
+          53,
+          77,
+          108
+        ]
+      },
+      {
+        "path": "/mnt/e/worktree/issue-22/tests/integration/test_api_gateway_extended.py",
+        "test_count": 11,
+        "test_names": [
+          "test_model_routing_auto_selection",
+          "test_model_routing_explicit_chat",
+          "test_model_routing_explicit_code",
+          "test_model_routing_invalid_model_name",
+          "test_failover_primary_to_secondary",
+          "test_failover_all_servers_down_returns_503",
+          "test_failover_retry_mechanism",
+          "test_health_check_all_dependencies_up",
+          "test_health_check_inference_down_scenario",
+          "test_health_check_timeout_handling",
+          "test_concurrent_requests_handling"
+        ],
+        "line_numbers": [
+          33,
+          52,
+          73,
+          93,
+          116,
+          140,
+          169,
+          198,
+          219,
+          237,
+          261
+        ]
+      }
+    ],
+    "mcp_server": [
+      {
+        "path": "/mnt/e/worktree/issue-22/services/mcp-server/tests/test_approval_workflow.py",
+        "test_count": 8,
+        "test_names": [
+          "test_db",
+          "test_approval_granted_flow",
+          "test_approval_rejected_flow",
+          "test_approval_timeout_flow",
+          "test_concurrent_approval_requests",
+          "test_permission_validation_flow",
+          "test_audit_logging_flow",
+          "test_performance_bulk_approvals"
+        ],
+        "line_numbers": [
+          44,
+          142,
+          200,
+          245,
+          287,
+          369,
+          423,
+          498
+        ]
+      },
+      {
+        "path": "/mnt/e/worktree/issue-22/services/mcp-server/tests/test_rate_limiter.py",
+        "test_count": 11,
+        "test_names": [
+          "test_rate_limiter_basic",
+          "test_rate_limiter_time_window",
+          "test_rate_limiter_multiple_users",
+          "test_rate_limiter_concurrent_execution",
+          "test_access_control_sensitivity_levels",
+          "test_access_control_basic",
+          "test_access_control_approval_required",
+          "test_rate_limiter_get_usage",
+          "test_access_control_tool_info",
+          "test_concurrent_execution_limit_enforcement",
+          "test_development_mode_security"
+        ],
+        "line_numbers": [
+          16,
+          33,
+          60,
+          82,
+          103,
+          125,
+          139,
+          155,
+          175,
+          188,
+          214
+        ]
+      },
+      {
+        "path": "/mnt/e/worktree/issue-22/services/mcp-server/tests/integration/test_rbac_integration.py",
+        "test_count": 10,
+        "test_names": [
+          "test_guest_denied_execute_python",
+          "test_developer_allowed_execute_python",
+          "test_guest_allowed_read_file",
+          "test_admin_allowed_git_commit",
+          "test_developer_denied_git_commit",
+          "test_unknown_user_denied",
+          "test_default_user_behavior",
+          "test_audit_log_accumulation",
+          "test_audit_logger_queue_overflow",
+          "test_audit_logger_start_stop"
+        ],
+        "line_numbers": [
+          43,
+          77,
+          105,
+          121,
+          137,
+          158,
+          174,
+          193,
+          229,
+          253
+        ]
+      },
+      {
+        "path": "/mnt/e/worktree/issue-22/services/mcp-server/tests/security/test_settings.py",
+        "test_count": 10,
+        "test_names": [
+          "test_default_values",
+          "test_rbac_enabled_flag",
+          "test_sandbox_enabled_flag",
+          "test_db_path_creation",
+          "test_validate_config_valid",
+          "test_validate_config_invalid_mode",
+          "test_get_security_settings_singleton",
+          "test_valid_security_modes",
+          "test_all_flags_boolean",
+          "test_flag_independence"
+        ],
+        "line_numbers": [
+          17,
+          28,
+          39,
+          44,
+          50,
+          56,
+          65,
+          73,
+          82,
+          89
+        ]
+      },
+      {
+        "path": "/mnt/e/worktree/issue-22/services/mcp-server/tests/security/test_wal_mode.py",
+        "test_count": 8,
+        "test_names": [
+          "test_wal_mode_enabled",
+          "test_concurrent_readers",
+          "test_concurrent_read_write",
+          "test_no_database_locked_errors",
+          "test_wal_checkpoint",
+          "test_connection_pooling_behavior",
+          "test_permission_check_latency",
+          "test_audit_log_insert_latency"
+        ],
+        "line_numbers": [
+          20,
+          31,
+          60,
+          97,
+          127,
+          149,
+          188,
+          214
+        ]
+      }
+    ],
+    "memory": [
+      {
+        "path": "/mnt/e/worktree/issue-22/tests/memory/test_qdrant_failure.py",
+        "test_count": 7,
+        "test_names": [
+          "test_qdrant_connection_failure",
+          "test_qdrant_sync_failure_handling",
+          "test_maintainer_qdrant_failure_handling",
+          "test_retry_mechanism",
+          "test_fts_fallback_search_quality",
+          "test_database_corruption_recovery",
+          "test_concurrent_failure_handling"
+        ],
+        "line_numbers": [
+          241,
+          270,
+          308,
+          336,
+          382,
+          416,
+          442
+        ]
+      }
+    ],
+    "other": [
+      {
+        "path": "/mnt/e/worktree/issue-22/tests/test_memory_integration.py",
+        "test_count": 8,
+        "test_names": [
+          "test_save_conversations",
+          "test_fts_search",
+          "test_vector_search",
+          "test_hybrid_search",
+          "test_stats",
+          "test_ttl_cleanup",
+          "test_database_optimization",
+          "test_backup"
+        ],
+        "line_numbers": [
+          39,
+          96,
+          120,
+          152,
+          176,
+          198,
+          220,
+          232
+        ]
+      }
+    ]
+  }
+}

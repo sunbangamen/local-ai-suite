@@ -142,25 +142,6 @@ async def test_health_endpoint_basic(app_with_mocks):
 
 
 @pytest.mark.asyncio
-async def test_health_with_llm_check(app_with_mocks):
-    """Test /health endpoint checks LLM gateway when llm=true"""
-    transport = ASGITransport(app=app_with_mocks)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.get("/health?llm=true")
-
-        assert response.status_code in [200, 503]
-        data = response.json()
-
-        # Verify dependency status structure
-        deps = data.get("dependencies", {}) or {}
-        assert "qdrant" in deps
-        assert "embedding" in deps
-        api_gateway = deps.get("api_gateway")
-        if api_gateway is not None:
-            assert isinstance(api_gateway, dict)
-
-
-@pytest.mark.asyncio
 async def test_query_with_existing_collection(app_with_mocks, mock_qdrant_client):
     """Test /query endpoint with existing collection (success path)"""
     transport = ASGITransport(app=app_with_mocks)
