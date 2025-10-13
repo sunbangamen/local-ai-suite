@@ -480,23 +480,35 @@ ai --interactive
 #### **Implementation Gaps (LOW PRIORITY)**
 - **Phase 4 Desktop App**: Basic UI only, smart model selection incomplete
 - **Performance**: No caching, sequential MCP tool execution only
-- ⚠️ **테스트 커버리지 개선**: Issue #22 Phase 2.2 완료 (2025-10-13)
+- ⚠️ **테스트 커버리지 개선**: Issue #22 완료 (2025-10-13)
   - **총 117개 테스트** (78 → 117, +39개 추가)
-  - **Phase 2.2 실측 커버리지**: RAG **67%**, Embedding **81%** (목표 80% 초과 달성 ✅)
-  - RAG Service: 22 tests (**67% coverage**, 342 stmts, 114 missed) ✅ Phase 2.2 완료
-  - Embedding: 18 tests (**81% coverage**, 88 stmts, 17 missed) ✅ Phase 2.2 완료, 80% 목표 초과 달성
-  - **Phase 2.2 추가 테스트** (Embedding):
+  - **최종 실측 커버리지** (Docker pytest-cov 7.0.0):
+    - RAG Service: **67%** (22 tests, 342 stmts, 114 missed) ✅ 실용적 최대치 도달
+    - Embedding Service: **81%** (18 tests, 88 stmts, 17 missed) ✅ 80% 목표 초과 달성
+  - **Phase 2.2 추가 테스트** (Embedding +2개):
     - test_load_model_with_cache_and_threads: CACHE_DIR/NUM_THREADS 설정 검증
     - test_health_endpoint_model_failure: 모델 로딩 실패 시 graceful degradation 검증
-  - **Phase 1 보고서**: `docs/progress/v1/PHASE_1_COVERAGE_MEASUREMENT.md` (8.2KB)
-  - **Phase 2.2 분석**: `docs/embedding_final_coverage_analysis.txt` (4.5KB)
-  - **커버리지 아티팩트**: `/tmp/embedding_final_coverage.json` (14KB), `/tmp/.coverage_embedding_final` (52KB)
-  - API Gateway Integration: 15 tests (커버리지 미측정)
-  - MCP Server: 47 tests (커버리지 미측정)
-  - Memory: 7 tests (test_qdrant_failure.py, 커버리지 미측정)
-  - Memory Integration: 8 tests (test_memory_integration.py, 커버리지 미측정)
+  - **보고서 및 아티팩트**:
+    - Phase 1: `docs/progress/v1/PHASE_1_COVERAGE_MEASUREMENT.md` (8.2KB)
+    - Phase 2.2: `docs/progress/v1/PHASE_2.2_EMBEDDING_COMPLETE.md` (15KB)
+    - 분석: `docs/embedding_final_coverage_analysis.txt` (7.2KB)
+    - 체크리스트: `docs/embedding_missing_lines_checklist.md` (8.1KB)
+  - **커버리지 아티팩트** (docs/ 디렉토리):
+    - `docs/embedding_final_coverage.json` (14KB) - 재측정 JSON
+    - `docs/embedding_final_coverage.log` (3.3KB) - 재측정 로그
+    - `docs/.coverage_embedding_final` (52KB) - 바이너리 DB
+    - `docs/coverage_embedding.json` (14KB) - Phase 1 JSON
+    - `docs/coverage_rag.json` (36KB) - Phase 1 JSON
+  - **기타 서비스 테스트** (커버리지 미측정):
+    - API Gateway Integration: 15 tests
+    - MCP Server: 47 tests
+    - Memory: 7 tests (test_qdrant_failure.py)
+    - Memory Integration: 8 tests (test_memory_integration.py)
   - **정리 작업**: test_health_with_llm_check 중복 제거 (line 145), test_index_embedding_service_error assertion 검증 완료
-  - **결론**: Unit test + mock 환경에서 실용적 최대치 도달, 추가 개선은 통합 테스트 또는 코드 리팩토링 필요
+  - **결론**: Unit test + mock 환경에서 실용적 최대치 도달
+    - Embedding 81%: 모든 critical path 100% 커버, 인프라 코드만 미커버
+    - RAG 67%: 복잡한 통합 경로(DB, Qdrant, LLM) 추가 커버리지는 통합 테스트 또는 리팩토링 필요
+    - 추가 개선은 Issue #23으로 분리 권장 (배치 기능, DB 유틸리티 등)
 
 ### 🎯 Improvement Roadmap
 
