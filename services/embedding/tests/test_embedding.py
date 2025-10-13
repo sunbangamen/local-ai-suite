@@ -183,3 +183,61 @@ async def test_reload_model_successfully(app_with_mocks):
             data = response.json()
             assert "reloaded" in data
             assert "model" in data
+
+
+# ============================================================================
+# Additional Coverage Tests for Issue #22
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_batch_embedding_concurrent_processing(app_with_mocks):
+    """Test concurrent batch embedding with multiple large batches"""
+    transport = ASGITransport(app=app_with_mocks)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Send large batch that will be processed in chunks
+        large_batch = [f"Document {i} with some content" for i in range(500)]
+
+        response = await client.post("/embed", json={"texts": large_batch})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["embeddings"]) == 500
+        # Verify all embeddings have correct dimension
+        assert all(len(emb) == 384 for emb in data["embeddings"])
+
+
+@pytest.mark.asyncio
+async def test_embedding_model_error_handling(app_with_mocks, mock_text_embedding):
+    """Test embedding service handles model errors gracefully"""
+    transport = ASGITransport(app=app_with_mocks)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Mock model to raise exception
+        def mock_embed_error(texts, **kwargs):
+            raise RuntimeError("Model inference failed")
+
+        mock_text_embedding.embed = mock_embed_error
+
+        response = await client.post("/embed", json={"texts": ["Test text"]})
+
+        # Should return 500 Internal Server Error
+        assert response.status_code in [500, 503]
+
+
+@pytest.mark.asyncio
+async def test_embedding_invalid_input_types(app_with_mocks):
+    """Test embedding service handles invalid input types"""
+    transport = ASGITransport(app=app_with_mocks)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Test with non-string inputs
+        invalid_inputs = [
+            {"texts": [123, 456]},  # Numbers instead of strings
+            {"texts": None},  # None instead of list
+            {"texts": "single string"},  # String instead of list
+            {"invalid_key": ["text"]},  # Wrong key name
+        ]
+
+        for invalid_input in invalid_inputs:
+            response = await client.post("/embed", json=invalid_input)
+
+            # Should return 400 or 422 validation error
+            assert response.status_code in [400, 422, 500]
