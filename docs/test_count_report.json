@@ -1,5 +1,5 @@
 {
-  "total_tests": 115,
+  "total_tests": 117,
   "services": {
     "rag": [
       {
@@ -58,7 +58,7 @@
     "embedding": [
       {
         "path": "/mnt/e/worktree/issue-22/services/embedding/tests/test_embedding.py",
-        "test_count": 16,
+        "test_count": 18,
         "test_names": [
           "test_embed_single_text",
           "test_embed_batch_texts",
@@ -75,7 +75,9 @@
           "test_embed_with_whitespace_texts",
           "test_batch_size_extreme_cases",
           "test_model_dimension_consistency",
-          "test_startup_model_loading_path"
+          "test_startup_model_loading_path",
+          "test_load_model_with_cache_and_threads",
+          "test_health_endpoint_model_failure"
         ],
         "line_numbers": [
           67,
@@ -93,7 +95,9 @@
           298,
           327,
           352,
-          376
+          376,
+          400,
+          415
         ]
       }
     ],
