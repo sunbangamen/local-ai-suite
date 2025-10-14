@@ -178,7 +178,9 @@ async def test_reload_model_successfully(app_with_mocks):
             mock_model.embed = lambda texts, **kwargs: [[0.1] * 384 for _ in texts]
             mock_load.return_value = mock_model
 
-            response = await client.post("/reload", json={"model": "BAAI/bge-small-en-v1.5"})
+            response = await client.post(
+                "/reload", json={"model": "BAAI/bge-small-en-v1.5"}
+            )
 
             assert response.status_code == 200
             data = response.json()
@@ -189,6 +191,7 @@ async def test_reload_model_successfully(app_with_mocks):
 # ============================================================================
 # Additional Coverage Tests for Issue #22
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_batch_embedding_concurrent_processing(app_with_mocks):
@@ -253,6 +256,7 @@ async def test_embedding_invalid_input_types(app_with_mocks):
 # Phase 2.1: Additional Coverage Tests for 80% Target
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_reload_model_with_new_model(app_with_mocks):
     """Test reloading with a different model name"""
@@ -265,8 +269,7 @@ async def test_reload_model_with_new_model(app_with_mocks):
             mock_load.return_value = new_model
 
             response = await client.post(
-                "/reload",
-                json={"model": "BAAI/bge-base-en-v1.5"}
+                "/reload", json={"model": "BAAI/bge-base-en-v1.5"}
             )
 
             assert response.status_code == 200
@@ -284,10 +287,7 @@ async def test_reload_model_failure(app_with_mocks):
             mock_load.side_effect = RuntimeError("Failed to load model")
 
             try:
-                response = await client.post(
-                    "/reload",
-                    json={"model": "invalid-model"}
-                )
+                response = await client.post("/reload", json={"model": "invalid-model"})
                 # If we get response, should be 500
                 assert response.status_code == 500
             except RuntimeError:
@@ -301,13 +301,7 @@ async def test_embed_with_whitespace_texts(app_with_mocks):
     transport = ASGITransport(app=app_with_mocks)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Mix of valid, empty, and whitespace texts
-        mixed_texts = [
-            "Valid text",
-            "",
-            "   ",
-            "\n\t",
-            "Another valid text"
-        ]
+        mixed_texts = ["Valid text", "", "   ", "\n\t", "Another valid text"]
 
         response = await client.post("/embed", json={"texts": mixed_texts})
 
@@ -323,6 +317,7 @@ async def test_embed_with_whitespace_texts(app_with_mocks):
 # ============================================================================
 # Phase 2.2: Additional Tests for 80% Coverage Target
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_batch_size_extreme_cases(app_with_mocks):
@@ -393,7 +388,9 @@ async def test_startup_model_loading_path(app_with_mocks):
         assert data["dim"] == 384
 
         # Model should be ready for embedding
-        embed_response = await client.post("/embed", json={"texts": ["Test after startup"]})
+        embed_response = await client.post(
+            "/embed", json={"texts": ["Test after startup"]}
+        )
         assert embed_response.status_code == 200
 
 
@@ -402,8 +399,7 @@ async def test_load_model_with_cache_and_threads(app_with_mocks):
     """Test _load_model() with cache_dir and threads configuration"""
     transport = ASGITransport(app=app_with_mocks)
 
-    with patch("app.CACHE_DIR", "/tmp/cache"), \
-         patch("app.NUM_THREADS", 4):
+    with patch("app.CACHE_DIR", "/tmp/cache"), patch("app.NUM_THREADS", 4):
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post("/embed", json={"texts": ["Test with cache"]})
 

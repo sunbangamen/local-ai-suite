@@ -184,6 +184,7 @@ def main():
 
     # Save JSON report
     import json
+
     output_file = base_dir / "docs" / "test_count_report.json"
     output_file.parent.mkdir(exist_ok=True)
 
@@ -201,7 +202,7 @@ def main():
                 for tf in test_files
             ]
             for service, test_files in report["services"].items()
-        }
+        },
     }
 
     with open(output_file, "w", encoding="utf-8") as f:

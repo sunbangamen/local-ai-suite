@@ -10,12 +10,13 @@ NOTE: RAG service behavior:
 - Tests validate actual service responses, not idealized error codes
 """
 
+import os
+import sys
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-from unittest.mock import AsyncMock, MagicMock, patch
-import sys
-import os
+from httpx import ASGITransport, AsyncClient
 
 # Add parent directory to path to import app module
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -95,7 +96,9 @@ async def app_with_mocks(mock_qdrant_client, mock_httpx_response):
         elif "/chat/completions" in url:
             return mock_httpx_response(
                 {
-                    "choices": [{"message": {"content": "Mock answer based on context"}}],
+                    "choices": [
+                        {"message": {"content": "Mock answer based on context"}}
+                    ],
                     "usage": {
                         "prompt_tokens": 100,
                         "completion_tokens": 50,
@@ -210,6 +213,7 @@ async def test_query_with_empty_results(app_with_mocks, mock_qdrant_client):
 # ============================================================================
 # Additional Coverage Tests for Issue #22
 # ============================================================================
+
 
 @pytest.mark.asyncio
 async def test_query_timeout_handling(app_with_mocks, mock_qdrant_client):
@@ -335,6 +339,7 @@ async def test_index_with_empty_collection_creation(app_with_mocks, mock_qdrant_
 # Phase 2.1: Additional Coverage Tests for 80% Target
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_health_qdrant_failure(app_with_mocks, mock_qdrant_client):
     """Test /health endpoint when Qdrant is down"""
@@ -451,6 +456,7 @@ async def test_index_empty_documents_list(app_with_mocks, mock_qdrant_client):
 # Phase 2.2: Additional Tests for 80% Coverage Target
 # ============================================================================
 
+
 @pytest.mark.asyncio
 async def test_health_api_gateway_down(app_with_mocks):
     """Test /health endpoint when API Gateway is completely down"""
@@ -462,10 +468,14 @@ async def test_health_api_gateway_down(app_with_mocks):
         async def mock_get_gateway_fail(url, **kwargs):
             if "health" in url:
                 raise ConnectionError("API Gateway unreachable")
+
             # For embedding health check
             class MockResp:
                 status_code = 200
-                def json(self): return {"ok": True, "dim": 384}
+
+                def json(self):
+                    return {"ok": True, "dim": 384}
+
             return MockResp()
 
         mock_client = AsyncMock()
@@ -496,18 +506,25 @@ async def test_health_with_llm_check(app_with_mocks):
             # Mock LLM response
             class MockResp:
                 status_code = 200
+
                 def json(self):
                     return {
                         "choices": [{"message": {"content": "ok"}}],
-                        "usage": {"total_tokens": 10}
+                        "usage": {"total_tokens": 10},
                     }
-                def raise_for_status(self): pass
+
+                def raise_for_status(self):
+                    pass
+
             return MockResp()
 
         async def mock_get_services(url, **kwargs):
             class MockResp:
                 status_code = 200
-                def json(self): return {"ok": True, "dim": 384}
+
+                def json(self):
+                    return {"ok": True, "dim": 384}
+
             return MockResp()
 
         mock_client = AsyncMock()
@@ -573,7 +590,10 @@ async def test_index_embedding_service_error(app_with_mocks, mock_qdrant_client)
             try:
                 response = await client.post(
                     "/index",
-                    json={"collection": "test", "documents": [{"text": "test", "metadata": {}}]},
+                    json={
+                        "collection": "test",
+                        "documents": [{"text": "test", "metadata": {}}],
+                    },
                 )
 
                 # Should return error status or succeed if fallback works
@@ -594,16 +614,21 @@ async def test_query_llm_error_handling(app_with_mocks, mock_qdrant_client):
         async def mock_post_llm_fail(url, **kwargs):
             if "/chat/completions" in url:
                 raise RuntimeError("LLM service error")
+
             # For embedding
             class MockResp:
                 status_code = 200
+
                 def json(self):
                     return {
                         "embeddings": [[0.1] * 384],
                         "model": "test",
-                        "dimension": 384
+                        "dimension": 384,
                     }
-                def raise_for_status(self): pass
+
+                def raise_for_status(self):
+                    pass
+
             return MockResp()
 
         mock_client = AsyncMock()
