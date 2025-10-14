@@ -51,3 +51,27 @@ logs-p2-gpu:
 
 logs-p3:
 	docker compose -f docker/compose.p3.yml logs -f
+
+.PHONY: test-rag-integration test-rag-integration-coverage
+
+test-rag-integration:
+	@echo "Running RAG integration tests in Docker container..."
+	@docker compose -f docker/compose.p2.cpu.yml ps | grep -q "Up" || \
+		(echo "❌ Phase 2 stack not running. Start with: make up-p2" && exit 1)
+	docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc "rm -rf /app/services/rag/tests && mkdir -p /app/services/rag"
+	docker compose -f docker/compose.p2.cpu.yml cp services/rag/tests rag:/app/services/rag
+	docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc \
+		"cd /app && RUN_RAG_INTEGRATION_TESTS=1 pytest services/rag/tests/integration -v --tb=short"
+	@echo "✅ Integration tests complete."
+
+test-rag-integration-coverage:
+	@echo "Running RAG integration tests with coverage..."
+	@docker compose -f docker/compose.p2.cpu.yml ps | grep -q "Up" || \
+		(echo "❌ Phase 2 stack not running. Start with: make up-p2" && exit 1)
+	docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc "rm -rf /app/services/rag/tests && mkdir -p /app/services/rag"
+	docker compose -f docker/compose.p2.cpu.yml cp services/rag/tests rag:/app/services/rag
+	docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc \
+		"cd /app && RUN_RAG_INTEGRATION_TESTS=1 pytest services/rag/tests/integration \
+		--cov=app --cov=services/rag/tests --cov-report=term-missing --cov-report=json"
+	docker compose -f docker/compose.p2.cpu.yml cp rag:/app/coverage.json docs/rag_integration_coverage.json
+	@echo "✅ Coverage saved to docs/rag_integration_coverage.json."

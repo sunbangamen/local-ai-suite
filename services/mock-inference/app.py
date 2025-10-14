@@ -17,6 +17,7 @@ app = FastAPI(title="Mock Inference Server", version="1.0.0")
 
 MODEL_NAME = os.getenv("MODEL_NAME", "mock-model")
 PORT = int(os.getenv("PORT", "8001"))
+HOST = os.getenv("MOCK_INFERENCE_HOST") or "0.0.0.0"  # nosec B104
 
 
 class Message(BaseModel):
@@ -129,4 +130,8 @@ async def root():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    uvicorn.run(
+        app,
+        host=HOST,  # nosec B104 - set MOCK_INFERENCE_HOST=0.0.0.0 inside Docker
+        port=PORT,
+    )

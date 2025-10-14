@@ -733,4 +733,8 @@ async def clear_cache():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    uvicorn.run(
+        app,
+        host=os.getenv("RAG_HOST", "0.0.0.0"),  # nosec B104 - default binding for containers
+        port=int(os.getenv("RAG_PORT", "8002")),
+    )

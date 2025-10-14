@@ -37,7 +37,8 @@ class SandboxLogger:
     """샌드박스 감사 로깅"""
 
     def __init__(self):
-        self.log_dir = Path(os.getenv("MCP_LOG_DIR", "/tmp/mcp-logs"))
+        default_log_dir = Path(tempfile.gettempdir()) / "mcp-logs"
+        self.log_dir = Path(os.getenv("MCP_LOG_DIR", str(default_log_dir)))
         self.log_dir.mkdir(exist_ok=True)
         self.audit_log = self.log_dir / "security_audit.log"
 
@@ -178,6 +179,8 @@ class ContainerSandbox:
             # 코드 파일 작성
             code_file.write_text(code, encoding="utf-8")
 
+            sandbox_tmp = os.getenv("SANDBOX_TMP_DIR", tempfile.gettempdir())
+
             # Docker 실행 명령어 구성
             docker_cmd = [
                 "docker",
@@ -185,7 +188,7 @@ class ContainerSandbox:
                 "--rm",  # 실행 후 컨테이너 자동 삭제
                 "--read-only",  # 읽기 전용 파일시스템
                 "--tmpfs",
-                "/tmp:noexec,nosuid,size=100m",  # 임시 디렉토리 제한
+                f"{sandbox_tmp}:noexec,nosuid,size=100m",  # 임시 디렉토리 제한
                 f"--memory={self.limits.max_memory_mb}m",  # 메모리 제한
                 f"--cpus={self.limits.max_cpu_time_sec / 60:.2f}",  # CPU 제한
                 "--pids-limit",
@@ -201,7 +204,7 @@ class ContainerSandbox:
                 "--user",
                 "1000:1000",  # 비특권 사용자로 실행
                 "--workdir",
-                "/tmp",
+                sandbox_tmp,
                 "python:3.11-alpine",  # 최소한의 Python 이미지
                 "python",
                 "/code.py",

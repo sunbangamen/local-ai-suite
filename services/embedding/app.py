@@ -169,4 +169,8 @@ def prewarm():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8003)
+    uvicorn.run(
+        app,
+        host=os.getenv("EMBEDDING_HOST", "0.0.0.0"),  # nosec B104 - container binding by default
+        port=int(os.getenv("EMBEDDING_PORT", "8003")),
+    )

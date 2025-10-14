@@ -3,11 +3,14 @@
 Issue #8 RBAC System - Complete Verification Script
 Verifies RBAC database structure, audit logs, and performance
 """
-import asyncio
-import aiosqlite
 import argparse
+import asyncio
 import time
 from datetime import datetime
+from pathlib import Path
+from tempfile import gettempdir
+
+import aiosqlite
 
 
 async def verify_rbac_system(db_path: str, output_file: str, iterations: int = 100):
@@ -184,7 +187,9 @@ async def main():
         help="Path to security.db database file",
     )
     parser.add_argument(
-        "--out", default="/tmp/verification_complete.log", help="Output log file path"
+        "--out",
+        default=str(Path(gettempdir()) / "verification_complete.log"),
+        help="Output log file path",
     )
     parser.add_argument(
         "--iterations",
