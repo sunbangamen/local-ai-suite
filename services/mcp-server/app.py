@@ -27,6 +27,13 @@ from prometheus_fastapi_instrumentator import Instrumentator
 import base64
 import tempfile
 
+
+def _resolve_host(env_var: str, default: str = "0.0.0.0") -> str:  # nosec B104
+    """Resolve host binding with fallback to default for container environments."""
+    value = os.getenv(env_var)
+    return value if value else default
+
+
 # 새로운 보안 모듈 임포트
 try:
     from .security import get_security_validator, get_secure_executor, SecurityError
@@ -1969,11 +1976,11 @@ async def start_security_admin_server():
     """보안 관리 API 서버를 별도 포트에서 실행"""
     import uvicorn
 
-    security_host = os.getenv("MCP_SECURITY_HOST", "127.0.0.1")
+    security_host = _resolve_host("MCP_SECURITY_HOST")
     security_port = int(os.getenv("MCP_SECURITY_PORT", "8021"))
     config = uvicorn.Config(
         security_app,
-        host=security_host,  # nosec B104 - override via MCP_SECURITY_HOST for container use
+        host=security_host,
         port=security_port,
         log_level="info",
     )
@@ -1985,11 +1992,11 @@ async def start_main_server():
     """메인 MCP 서버 실행"""
     import uvicorn
 
-    mcp_host = os.getenv("MCP_SERVER_HOST", "127.0.0.1")
+    mcp_host = _resolve_host("MCP_SERVER_HOST")
     mcp_port = int(os.getenv("MCP_SERVER_PORT", "8020"))
     config = uvicorn.Config(
         app,
-        host=mcp_host,  # nosec B104 - override via MCP_SERVER_HOST for container use
+        host=mcp_host,
         port=mcp_port,
         log_level="info",
     )

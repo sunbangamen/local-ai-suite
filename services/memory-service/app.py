@@ -364,9 +364,9 @@ if __name__ == "__main__":
     import uvicorn
 
     port = int(os.getenv("MEMORY_SERVICE_PORT", 8005))
-    host = os.getenv("MEMORY_SERVICE_HOST", "127.0.0.1")
+    host = os.getenv("MEMORY_SERVICE_HOST") or "0.0.0.0"  # nosec B104
     uvicorn.run(
         app,
-        host=host,  # nosec B104 - override via MEMORY_SERVICE_HOST when external binding required
+        host=host,  # nosec B104 - set MEMORY_SERVICE_HOST=0.0.0.0 when running inside Docker
         port=port,
     )
