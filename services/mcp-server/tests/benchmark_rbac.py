@@ -8,18 +8,21 @@ Usage:
     python3 tests/benchmark_rbac.py --duration 60 --rps 100
 """
 
-import asyncio
-import httpx
-import time
-import statistics
-import csv
 import argparse
+import asyncio
+import csv
+import statistics
+import time
 from pathlib import Path
-from typing import List, Dict
+from tempfile import gettempdir
+from typing import Dict, List
+
+import httpx
 
 BASE_URL = "http://localhost:8020"
 DEFAULT_DURATION = 60  # seconds
 DEFAULT_RPS = 100
+TMP_TOOL_FILE = str(Path(gettempdir()) / "rbac-test.txt")
 
 # Test scenarios: cycle through different users and tools
 TEST_SCENARIOS = [
@@ -27,7 +30,7 @@ TEST_SCENARIOS = [
     {
         "user_id": "dev_user",
         "tool_name": "read_file",
-        "args": {"file_path": "/tmp/test.txt"},
+        "args": {"file_path": TMP_TOOL_FILE},
     },
     {"user_id": "guest_user", "tool_name": "git_status", "args": {}},
     {"user_id": "guest_user", "tool_name": "git_log", "args": {"max_count": 5}},

@@ -4,8 +4,9 @@ Security Administration API - 보안 관리 및 모니터링 엔드포인트
 """
 
 import json
+import os
 import time
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -404,4 +405,8 @@ async def not_found_handler(request, exc):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(security_app, host="0.0.0.0", port=8021)
+    uvicorn.run(
+        security_app,
+        host=os.getenv("MCP_SECURITY_HOST", "0.0.0.0"),  # nosec B104 - container binding by default
+        port=int(os.getenv("MCP_SECURITY_PORT", "8021")),
+    )

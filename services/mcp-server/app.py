@@ -1969,7 +1969,14 @@ async def start_security_admin_server():
     """보안 관리 API 서버를 별도 포트에서 실행"""
     import uvicorn
 
-    config = uvicorn.Config(security_app, host="0.0.0.0", port=8021, log_level="info")
+    security_host = os.getenv("MCP_SECURITY_HOST", "0.0.0.0")
+    security_port = int(os.getenv("MCP_SECURITY_PORT", "8021"))
+    config = uvicorn.Config(
+        security_app,
+        host=security_host,  # nosec B104 - container binding by default
+        port=security_port,
+        log_level="info",
+    )
     server = uvicorn.Server(config)
     await server.serve()
 
@@ -1978,7 +1985,14 @@ async def start_main_server():
     """메인 MCP 서버 실행"""
     import uvicorn
 
-    config = uvicorn.Config(app, host="0.0.0.0", port=8020, log_level="info")
+    mcp_host = os.getenv("MCP_SERVER_HOST", "0.0.0.0")
+    mcp_port = int(os.getenv("MCP_SERVER_PORT", "8020"))
+    config = uvicorn.Config(
+        app,
+        host=mcp_host,  # nosec B104 - container binding by default
+        port=mcp_port,
+        log_level="info",
+    )
     server = uvicorn.Server(config)
     await server.serve()
 

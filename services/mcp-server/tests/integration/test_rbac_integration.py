@@ -5,11 +5,13 @@ E2E tests for RBAC middleware with audit logging
 """
 
 import asyncio
+import sys
+from pathlib import Path
+from tempfile import gettempdir
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-import sys
-from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -17,6 +19,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from app import app
 from security_database import get_security_database
 from settings import SecuritySettings
+
+TEST_FILE_PATH = str(Path(gettempdir()) / "rbac-test.txt")
+
+
+def temp_path(name: str) -> str:
+    return str(Path(gettempdir()) / name)
 
 
 @pytest.fixture(scope="module")
@@ -111,7 +119,7 @@ class TestRBACIntegration:
         response = await client.post(
             "/tools/read_file/call",
             headers={"X-User-ID": "guest_user"},
-            json={"arguments": {"path": "/tmp/test.txt"}},
+            json={"arguments": {"path": TEST_FILE_PATH}},
         )
 
         # Should NOT return 403 (guest has read_file permission)
@@ -164,7 +172,7 @@ class TestRBACIntegration:
         response = await client.post(
             "/tools/read_file/call",
             headers={"X-User-ID": "unknown_user_123"},
-            json={"arguments": {"path": "/tmp/test.txt"}},
+            json={"arguments": {"path": TEST_FILE_PATH}},
         )
 
         # Should return 403 Forbidden
@@ -180,7 +188,7 @@ class TestRBACIntegration:
         response = await client.post(
             "/tools/read_file/call",
             # No X-User-ID header - should default to "default"
-            json={"arguments": {"path": "/tmp/test.txt"}},
+            json={"arguments": {"path": TEST_FILE_PATH}},
         )
 
         # Behavior depends on whether "default" user exists
@@ -207,7 +215,7 @@ class TestRBACIntegration:
             await client.post(
                 "/tools/read_file/call",
                 headers={"X-User-ID": "guest_user"},
-                json={"arguments": {"path": f"/tmp/test{i}.txt"}},
+                json={"arguments": {"path": temp_path(f"rbac-test{i}.txt")}},
             )
 
         # Wait for async logging

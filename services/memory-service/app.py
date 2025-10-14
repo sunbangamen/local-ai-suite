@@ -7,8 +7,8 @@ from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
-import sys
 import os
+import sys
 from pathlib import Path
 from datetime import datetime
 
@@ -364,4 +364,9 @@ if __name__ == "__main__":
     import uvicorn
 
     port = int(os.getenv("MEMORY_SERVICE_PORT", 8005))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    host = os.getenv("MEMORY_SERVICE_HOST", "0.0.0.0")
+    uvicorn.run(
+        app,
+        host=host,  # nosec B104 - default container binding
+        port=port,
+    )

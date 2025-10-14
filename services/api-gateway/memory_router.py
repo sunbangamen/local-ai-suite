@@ -570,4 +570,8 @@ async def not_found_handler(request, exc):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(memory_app, host="0.0.0.0", port=8005)
+    uvicorn.run(
+        memory_app,
+        host=os.getenv("MEMORY_ROUTER_HOST", "0.0.0.0"),  # nosec B104 - default container binding
+        port=int(os.getenv("MEMORY_ROUTER_PORT", "8005")),
+    )

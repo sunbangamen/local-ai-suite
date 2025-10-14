@@ -11,16 +11,22 @@ NOTE: Embedding service truncates large inputs instead of rejecting them:
 
 import os
 import sys
+from importlib import import_module
+from pathlib import Path
+from tempfile import gettempdir
 from unittest.mock import MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+# Use OS temp directory to avoid hardcoded /tmp paths flagged by Bandit.
+TMP_CACHE_DIR = str(Path(gettempdir()) / "embedding-test-cache")
+
 # Add parent directory to path to import app module
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Import the REAL app module (not a mock)
-import app as embedding_app_module
+embedding_app_module = import_module("app")
 
 
 @pytest.fixture
@@ -393,7 +399,7 @@ async def test_load_model_with_cache_and_threads(app_with_mocks):
     """Test _load_model() with cache_dir and threads configuration"""
     transport = ASGITransport(app=app_with_mocks)
 
-    with patch("app.CACHE_DIR", "/tmp/cache"), patch("app.NUM_THREADS", 4):
+    with patch("app.CACHE_DIR", TMP_CACHE_DIR), patch("app.NUM_THREADS", 4):
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post("/embed", json={"texts": ["Test with cache"]})
 
