@@ -364,9 +364,9 @@ if __name__ == "__main__":
     import uvicorn
 
     port = int(os.getenv("MEMORY_SERVICE_PORT", 8005))
-    host = os.getenv("MEMORY_SERVICE_HOST", "0.0.0.0")
+    host = os.getenv("MEMORY_SERVICE_HOST", "127.0.0.1")
     uvicorn.run(
         app,
-        host=host,  # nosec B104 - default container binding
+        host=host,  # nosec B104 - override via MEMORY_SERVICE_HOST when external binding required
         port=port,
     )
