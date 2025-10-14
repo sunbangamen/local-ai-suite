@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import sys
+from importlib import import_module
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -13,28 +14,31 @@ import httpx
 import pytest
 import pytest_asyncio
 
-# Ensure SQLite paths are writable in CI environments
-os.environ.setdefault("RAG_DB_PATH", "/tmp/rag_analytics.db")
-
 TESTS_DIR = Path(__file__).resolve().parents[1]
 if str(TESTS_DIR) not in sys.path:
     sys.path.append(str(TESTS_DIR))
 
-# Add services/rag to path for app imports
 RAG_SERVICE_DIR = Path(__file__).resolve().parents[2]
 if str(RAG_SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(RAG_SERVICE_DIR))
 
-from fixtures.cleanup_fixtures import cleanup_postgres, cleanup_qdrant
-from fixtures.seed_postgres import PostgresSettings, seed_database
-from fixtures.seed_qdrant import seed as seed_qdrant
+os.environ.setdefault("RAG_DB_PATH", "/tmp/rag_analytics.db")
 
-# Import app module to ensure coverage tracking
-# This allows pytest-cov to measure code execution even in E2E tests
+cleanup_module = import_module("fixtures.cleanup_fixtures")
+cleanup_postgres = cleanup_module.cleanup_postgres
+cleanup_qdrant = cleanup_module.cleanup_qdrant
+
+seed_pg_module = import_module("fixtures.seed_postgres")
+PostgresSettings = seed_pg_module.PostgresSettings
+seed_database = seed_pg_module.seed_database
+
+seed_qdrant_module = import_module("fixtures.seed_qdrant")
+seed_qdrant = seed_qdrant_module.seed
+
 try:
     import app as _  # noqa: F401
 except ImportError:
-    pass  # App may not be importable in all test environments
+    pass
 
 DEFAULT_BASE_URL = "http://localhost:8002"
 
