@@ -510,13 +510,24 @@ ai --interactive
     - Embedding 81%: 모든 critical path 100% 커버, 인프라 코드만 미커버
     - RAG 67%: 복잡한 통합 경로(DB, Qdrant, LLM) 추가 커버리지는 통합 테스트 필요
     - **추가 개선**: Issue #23 (RAG Integration Tests) - 목표 ~75% 효과적 커버리지
-  - **Integration Testing Strategy** (Issue #23 준비 완료):
+  - **Integration Testing Strategy** (Issue #23 진행 중):
     - 목표: Unit 67% + Integration ~8% = **75% 효과적 신뢰도**
     - 환경: Docker Phase 2 (PostgreSQL + Qdrant + Embedding)
     - 테스트: 5개 통합 시나리오 (indexing, query, cache, timeout, health)
-    - 실행: `make test-rag-integration` (requires `make up-p2`)
-    - 계획: `docs/progress/v1/RAG_INTEGRATION_PLAN.md` (18KB)
-    - 추적: `docs/progress/v1/ISSUE_23_TRACKING.md` (16KB)
+    - **실행 절차**:
+      1. Phase 2 스택 시작: `make up-p2`
+      2. 통합 테스트 실행: `make test-rag-integration` (기본)
+      3. 커버리지 측정: `make test-rag-integration-coverage` (커버리지 JSON 생성)
+      4. 스택 종료: `make down-p2`
+    - **커버리지 아티팩트**:
+      - 출력 파일: `docs/rag_integration_coverage.json`
+      - 커버리지 범위: **app.py (44%), 테스트 fixtures, 통합 테스트 코드**
+      - app.py: 342 statements, 150 covered, 192 missing
+      - 전체: 890 statements, 329 covered (37%)
+      - 참고: `test_app_module.py`가 pytest 프로세스 내에서 FastAPI 앱을 직접 import하여 `/health` 엔드포인트 실행
+    - 최근 실행: 2025-10-14, 6/6 통과 (1.47초), app.py 커버리지 44% 달성 ✅
+    - 계획: `docs/progress/v1/RAG_INTEGRATION_PLAN.md` (~21KB)
+    - 추적: `docs/progress/v1/ISSUE_23_TRACKING.md` (~17KB), `docs/progress/v1/ISSUE_23_RESULTS.md` (~3.6KB)
 
 ### 🎯 Improvement Roadmap
 
