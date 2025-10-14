@@ -182,6 +182,21 @@
             pytest tests/integration/test_api_gateway.py::test_api_gateway_health -v || echo "::warning::Health test failed"
             echo "::endgroup::"
 
+        - name: Run RAG integration tests
+          run: |
+            echo "::group::RAG Integration Tests"
+            # Run RAG service end-to-end tests (requires Phase 2 stack)
+            make test-rag-integration-coverage || echo "::warning::RAG integration tests failed"
+            echo "::endgroup::"
+  
+        - name: Upload RAG integration coverage
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: rag-integration-coverage
+            path: docs/rag_integration_coverage.json
+            retention-days: 30
+
         - name: Show service logs on failure
           if: failure()
           run: |
