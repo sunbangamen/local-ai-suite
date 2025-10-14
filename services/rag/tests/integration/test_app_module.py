@@ -8,6 +8,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from tempfile import gettempdir
 
 import pytest
 
@@ -22,7 +23,7 @@ async def test_health_route_executes_within_same_process() -> None:
     if os.getenv("RUN_RAG_INTEGRATION_TESTS") != "1":
         pytest.skip("Skipping RAG integration tests (RUN_RAG_INTEGRATION_TESTS!=1).")
 
-    os.environ.setdefault("RAG_DB_PATH", "/tmp/rag_analytics.db")
+    os.environ.setdefault("RAG_DB_PATH", str(Path(gettempdir()) / "rag_analytics.db"))
 
     # Add /app to sys.path for importing the service module
     app_dir = Path("/app")

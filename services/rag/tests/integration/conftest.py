@@ -8,6 +8,7 @@ import os
 import sys
 from importlib import import_module
 from pathlib import Path
+from tempfile import gettempdir
 from typing import AsyncIterator
 
 import httpx
@@ -22,7 +23,7 @@ RAG_SERVICE_DIR = Path(__file__).resolve().parents[2]
 if str(RAG_SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(RAG_SERVICE_DIR))
 
-os.environ.setdefault("RAG_DB_PATH", "/tmp/rag_analytics.db")
+os.environ.setdefault("RAG_DB_PATH", str(Path(gettempdir()) / "rag_analytics.db"))
 
 cleanup_module = import_module("fixtures.cleanup_fixtures")
 cleanup_postgres = cleanup_module.cleanup_postgres
