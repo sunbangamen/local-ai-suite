@@ -13,6 +13,9 @@ import httpx
 import pytest
 import pytest_asyncio
 
+# Ensure SQLite paths are writable in CI environments
+os.environ.setdefault("RAG_DB_PATH", "/tmp/rag_analytics.db")
+
 TESTS_DIR = Path(__file__).resolve().parents[1]
 if str(TESTS_DIR) not in sys.path:
     sys.path.append(str(TESTS_DIR))

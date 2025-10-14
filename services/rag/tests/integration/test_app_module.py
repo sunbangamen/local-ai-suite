@@ -22,6 +22,8 @@ async def test_health_route_executes_within_same_process() -> None:
     if os.getenv("RUN_RAG_INTEGRATION_TESTS") != "1":
         pytest.skip("Skipping RAG integration tests (RUN_RAG_INTEGRATION_TESTS!=1).")
 
+    os.environ.setdefault("RAG_DB_PATH", "/tmp/rag_analytics.db")
+
     # Add /app to sys.path for importing the service module
     app_dir = Path("/app")
     if app_dir.exists() and str(app_dir) not in sys.path:

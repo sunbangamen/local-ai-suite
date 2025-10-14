@@ -9,11 +9,12 @@ NOTE: Embedding service truncates large inputs instead of rejecting them:
 - Empty texts: returns empty embeddings array (returns 200)
 """
 
-import pytest
-from httpx import AsyncClient, ASGITransport
-from unittest.mock import MagicMock, patch
-import sys
 import os
+import sys
+from unittest.mock import MagicMock, patch
+
+import pytest
+from httpx import ASGITransport, AsyncClient
 
 # Add parent directory to path to import app module
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -102,7 +103,7 @@ async def test_health_shows_model_info(app_with_mocks):
 
         assert response.status_code == 200
         data = response.json()
-        assert data["ok"] == True  # Actual key is "ok", not "status"
+        assert data["ok"] is True  # Actual key is "ok", not "status"
         assert "model" in data
         assert "dim" in data
         assert data["dim"] == 384
