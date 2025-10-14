@@ -5,9 +5,9 @@ Uses AST to accurately count test functions across all test files.
 """
 
 import ast
-from pathlib import Path
-from typing import Dict, List, Tuple
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 
 @dataclass
@@ -76,7 +76,7 @@ def find_test_files(base_dir: str = ".") -> List[str]:
     return [str(f) for f in test_files]
 
 
-def generate_report(base_dir: str = ".") -> Dict[str, any]:
+def generate_report(base_dir: str = ".") -> Dict[str, Any]:
     """Generate comprehensive test count report."""
     test_files = find_test_files(base_dir)
 
@@ -121,7 +121,7 @@ def generate_report(base_dir: str = ".") -> Dict[str, any]:
     }
 
 
-def print_report(report: Dict):
+def print_report(report: Dict[str, Any]) -> None:
     """Print formatted test count report."""
     print("=" * 70)
     print("LOCAL AI SUITE - TEST COUNT REPORT")
