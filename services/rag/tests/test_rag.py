@@ -4,7 +4,8 @@ Tests for /health, /index, /query endpoints using real app with mocked dependenc
 This tests the ACTUAL app.py module with dependency injection
 
 NOTE: RAG service behavior:
-- Nonexistent collections: Service attempts operation and may return 200/400/503 depending on context
+- Nonexistent collections: Service attempts operation and may return
+  200/400/503 depending on context
 - No explicit 404 handling in current implementation
 - Tests validate actual service responses, not idealized error codes
 """

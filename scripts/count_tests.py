@@ -64,7 +64,7 @@ def find_test_files(base_dir: str = ".") -> List[str]:
     if services_dir.exists():
         for service_dir in services_dir.iterdir():
             if service_dir.is_dir():
-                tests_dir = service_dir / 'tests'
+                tests_dir = service_dir / "tests"
                 if tests_dir.exists():
                     test_files.extend(tests_dir.rglob("test_*.py"))
 

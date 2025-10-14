@@ -22,7 +22,8 @@ async def cleanup_postgres() -> None:
             host=os.getenv("POSTGRES_HOST", "postgres"),
             port=int(os.getenv("POSTGRES_PORT", "5432")),
             user=os.getenv("POSTGRES_USER", "ai_user"),
-            password=os.getenv("POSTGRES_PASSWORD", "ai_secure_pass"),  # nosec B106 - Test fixture default, overridden by env var
+            # nosec B106 - Test fixture default, overridden by env var
+            password=os.getenv("POSTGRES_PASSWORD", "ai_secure_pass"),
             database=os.getenv("POSTGRES_DB", "ai_suite"),
         )
     except OSError as exc:

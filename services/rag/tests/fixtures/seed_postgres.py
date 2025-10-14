@@ -18,7 +18,8 @@ class PostgresSettings:
     host: str = os.getenv("POSTGRES_HOST", "postgres")
     port: int = int(os.getenv("POSTGRES_PORT", "5432"))
     user: str = os.getenv("POSTGRES_USER", "ai_user")
-    password: str = os.getenv("POSTGRES_PASSWORD", "ai_secure_pass")  # nosec B105 - Test fixture default, overridden by env var
+    # nosec B105 - Test fixture default, overridden by env var
+    password: str = os.getenv("POSTGRES_PASSWORD", "ai_secure_pass")
     database: str = os.getenv("POSTGRES_DB", "ai_suite")
 
     @classmethod
