@@ -39,12 +39,14 @@ class RegressionIssue:
 
     def to_github_payload(self) -> Dict:
         """Convert to GitHub issue creation payload."""
-        return {
+        payload = {
             "title": self.title,
             "body": self.body,
             "labels": self.labels,
-            **{"milestone": self.milestone} if self.milestone else {},
         }
+        if self.milestone:
+            payload["milestone"] = self.milestone
+        return payload
 
 
 class GitHubIssueCreator:

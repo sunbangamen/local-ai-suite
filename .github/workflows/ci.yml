@@ -382,6 +382,27 @@
             make test-load-mcp || echo "::warning::MCP Server load test failed"
             echo "::endgroup::"
 
+        - name: Extract metrics from load test results
+          if: always()
+          run: |
+            echo "::group::Performance Metrics Extraction"
+            python3 scripts/extract_metrics.py load_results_stats.csv load-results.json || echo "::warning::Metric extraction failed"
+            echo "::endgroup::"
+
+        - name: Compare against performance baseline
+          if: always()
+          run: |
+            echo "::group::Performance Regression Detection"
+            python3 scripts/compare_performance.py docs/performance-baselines.json load-results.json || echo "::notice::Performance regressions detected - see report"
+            echo "::endgroup::"
+
+        - name: Create GitHub issue for regressions
+          if: always() && failure()
+          run: |
+            echo "::group::GitHub Issue Auto-Creation"
+            python3 scripts/create_regression_issue.py load-test-results/regression-analysis.md || echo "::notice::Could not create issue (requires token in CI)"
+            echo "::endgroup::"
+
         - name: Collect load test results
           if: always()
           run: |
