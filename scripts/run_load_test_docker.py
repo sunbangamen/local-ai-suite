@@ -59,7 +59,7 @@ def run_locust_in_docker(
         "-v",
         f"{output_dir}:/results",
         "-v",
-        f"/mnt/e/worktree/issue-24/tests/load:/locust",
+        "/mnt/e/worktree/issue-24/tests/load:/locust",
         "locustio/locust:latest",
         "-f",
         "/locust/locustfile.py",
@@ -79,7 +79,7 @@ def run_locust_in_docker(
     ]
 
     try:
-        print(f"\n  Executing: docker run locustio/locust:latest ...")
+        print("\n  Executing: docker run locustio/locust:latest ...")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
 
         # Check if CSV file was created

@@ -197,7 +197,7 @@ class PerformanceComparator:
 
         # Summary
         total = len(self.regressions)
-        report += f"\n## Summary\n\n"
+        report += "\n## Summary\n\n"
         report += f"- **Total Metrics**: {total}\n"
         report += f"- **Failures**: {len(failures)}\n"
         report += f"- **Warnings**: {len(warnings)}\n"
