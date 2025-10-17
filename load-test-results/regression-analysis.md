@@ -4,7 +4,7 @@
 
 | Service | Metric | Expected | Current | Change | Impact |
 |---------|--------|----------|---------|--------|--------|
-| api_gateway | rps | 0.27 | 5.715169703827393 | +2016.7% | ❌ Critical |
+| api_gateway | rps | 5.72 | 5.715169703827393 | -0.1% | ❌ Critical |
 
 ### ✅ Passed (2 metrics within thresholds)
 

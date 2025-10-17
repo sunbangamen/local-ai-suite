@@ -1,16 +1,18 @@
 {
   "api_gateway": {
-    "baseline_users": 1,
-    "avg_latency_ms": 6.59375,
-    "median_latency_ms": 5.0,
+    "baseline_users": 100,
+    "baseline_note": "Updated to 100-user progressive load (production-like) from 1-user baseline",
+    "avg_latency_ms": 4.92,
+    "median_latency_ms": 4.0,
     "min_latency_ms": 1.0,
     "max_latency_ms": 36.0,
-    "p95_latency_ms": 9,
-    "p99_latency_ms": 11,
-    "error_rate_pct": 75.0,
-    "rps": 0.27,
-    "total_requests": 32,
-    "total_failures": 24,
-    "timestamp": "2025-10-17T07:34:57.946775Z"
+    "p95_latency_ms": 5,
+    "p99_latency_ms": 9,
+    "error_rate_pct": 0.0,
+    "rps": 5.72,
+    "total_requests": 25629,
+    "total_failures": 0,
+    "timestamp": "2025-10-17T15:15:00Z",
+    "source": "Progressive load test (100 users, 15 minutes)"
   }
 }
