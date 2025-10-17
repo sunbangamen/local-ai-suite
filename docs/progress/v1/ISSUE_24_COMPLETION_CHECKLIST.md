@@ -21,19 +21,21 @@
 - ✅ Coverage Report: `docs/rag_extended_coverage.json` (36KB)
 - ✅ Test Target: `make test-rag-integration-extended`
 
-### Phase 2: E2E Playwright Tests ✅ COMPLETE
+### Phase 2: E2E Playwright Tests ✅ 구현 완료, 실행 대기
 - [x] 22 test cases implemented (5 files)
 - [x] Multi-browser support (Chromium, Firefox, WebKit)
 - [x] Playwright v1.45.0 configuration
 - [x] npm scripts added (test:e2e, test:e2e:debug, test:e2e:ui, test:e2e:headed)
 - [x] WSL2 optimized setup
 - [x] E2E Testing Guide created (`docs/ops/E2E_TESTING_GUIDE.md`)
+- [ ] Test execution (not yet run)
 
 **Deliverables Status**:
 - ✅ Test Files: `desktop-app/tests/e2e/*.spec.js` (456 lines across 5 files)
 - ✅ Config: `desktop-app/playwright.config.js` (61 lines)
 - ✅ npm Scripts: All 4 test commands configured
 - ✅ Guide: `docs/ops/E2E_TESTING_GUIDE.md` complete
+- ⏳ Execution Status: Ready to run (execution pending)
 
 ### Phase 3: Load Testing Infrastructure ✅ 30% COMPLETE
 - [x] Scenario design (3 scenarios fully specified)
@@ -52,23 +54,25 @@
 - ✅ Guide: `docs/ops/LOAD_TESTING_GUIDE.md` (500+ lines)
 - ⏳ Execution: Pending manual execution
 
-### Phase 4: CI/CD Integration & Documentation ✅ 100% COMPLETE
+### Phase 4: CI/CD Integration & Documentation 🚀 계획 완료, 실행 준비
 - [x] GitHub Actions workflow extended (3 new jobs)
-- [x] RAG Integration Tests job implemented
-- [x] E2E Playwright Tests job implemented (matrix: 3 browsers)
-- [x] Load Tests job implemented (nightly only)
+- [x] RAG Integration Tests job configured (planned, not yet tested)
+- [x] E2E Playwright Tests job configured (planned, not yet tested)
+- [x] Load Tests job configured (planned, not yet tested)
 - [x] Test selection strategy documented (conservative approach)
-- [x] Performance regression detection plan complete
+- [x] Performance regression detection plan documented
+- [ ] Performance regression detection scripts (추후 구현 예정)
 - [x] CLAUDE.md updated with Issue #24 section
 - [x] README.md updated with testing guide
 - [x] CI workflow triggers configured (push, PR, schedule, dispatch)
-- [x] GitHub Actions free tier budget optimized (829 min/month, 41.5%)
+- [x] GitHub Actions free tier budget estimated (계획상의 예산: 829 min/month, 41.5%)
 
 **Deliverables Status**:
-- ✅ CI Workflow: `.github/workflows/ci.yml` (+210 lines)
+- ✅ CI Workflow: `.github/workflows/ci.yml` (+210 lines, 설정 완료)
 - ✅ Trigger Config: schedule (Sunday 2am UTC) + workflow_dispatch
-- ✅ Test Strategy: `docs/progress/v1/PHASE_4.2_TEST_SELECTION_STRATEGY.md` (385+ lines)
-- ✅ Regression Detection: `docs/progress/v1/PHASE_4.3_REGRESSION_DETECTION.md` (570+ lines)
+- ✅ Test Strategy: `docs/progress/v1/PHASE_4.2_TEST_SELECTION_STRATEGY.md` (432 lines)
+- ✅ Regression Detection Plan: `docs/progress/v1/PHASE_4.3_REGRESSION_DETECTION.md` (656 lines)
+- ⏳ Regression Detection Scripts: `scripts/compare_performance.py` 등 (추후 구현 예정)
 - ✅ Documentation: CLAUDE.md + README.md updated
 
 ---
@@ -84,25 +88,30 @@
 - [x] Timeout protection in place
 
 ### Test Coverage ✅
-- [x] Unit tests: 117 tests (Issue #22 baseline)
-- [x] Integration tests: 21 RAG tests (Phase 1)
-- [x] E2E tests: 22 Playwright tests (Phase 2)
-- [x] Load test scenarios: 3 scenarios (Phase 3)
-- [x] Total: 149+ tests
+- [x] Unit tests: 144 tests (정확한 AST 기반 카운팅, scripts/count_tests.py 참고)
+- [x] Integration tests: 21 RAG tests (Phase 1 - 실행 완료)
+- [x] E2E tests: 22 Playwright tests (Phase 2 - 구현 완료, 실행 대기)
+- [x] Load test scenarios: 3 scenarios (Phase 3 - 인프라 완료, 실행 대기)
+- [x] Total: 144 unit/integration tests + 22 E2E tests + 3 load scenarios = **169개 이상**
 
-**Coverage Status**:
+**Coverage Status** (docs/test_count_report.json 기준):
 ```
-Unit/Mock: 117 tests
-├── RAG Service: 22 tests (67% effective coverage)
-├── Embedding: 18 tests (81% effective coverage)
-├── Integration: 4 tests
-├── API Gateway: 15 tests
-├── MCP Server: 47 tests
-└── Memory/Other: 15 tests
+Python Unit & Integration Tests: 144개 (docs/test_count_report.json)
+├── RAG Service: 30 tests (22 + 7 integration + 1 module)
+├── Embedding: 18 tests
+├── API Gateway: 15 tests (4 basic + 11 extended)
+├── MCP Server: 47 tests (8 approval + 11 rate limiter + 10 RBAC + 10 settings + 8 WAL)
+└── Memory: 15 tests (7 Qdrant + 8 memory integration)
 
-Integration: 21 tests (Phase 1)
-E2E: 22 tests (Phase 2)
-Load Testing: 3 scenarios (Phase 3)
+E2E Tests: 22 tests (Phase 2 - 구현 완료, 실행 대기)
+└── Desktop App: 22 Playwright tests across 5 files
+
+Load Testing Scenarios: 3개 (Phase 3 - 인프라 완료, 실행 대기)
+├── API Gateway: 0→10→50→100 users
+├── RAG Service: 0→5→25→50 users
+└── MCP Server: 0→5→20 users
+
+총계: 144 + 22 + 3 = 169개 이상
 ```
 
 ### Documentation ✅
@@ -158,24 +167,27 @@ f2620b4 - docs(readme.md): add testing section
 
 ## Test Execution Matrix
 
-### Current Status
-| Phase | Tests | Status | Time | Pass Rate |
-|-------|-------|--------|------|-----------|
-| **Phase 1** | 21 | ✅ Executed | 6.06s | 100% |
-| **Phase 2** | 22 | ⏳ Ready | 10min | - |
-| **Phase 3** | 3 | ⏳ Ready | 40min | - |
-| **Existing** | ~103 | ✅ Passing | <5min | ~99% |
-| **TOTAL** | **149+** | - | - | - |
+### Current Status (실제 진행도)
+| Phase | Tests | Status | Time | Pass Rate | 비고 |
+|-------|-------|--------|------|-----------|------|
+| **Phase 1** | 21 | ✅ 실행 완료 | 6.06s | 100% | 21/21 통과 |
+| **Phase 2** | 22 | ⏳ 구현 완료, 실행 대기 | 10min | - | Playwright 설정 완료 |
+| **Phase 3** | 3 scenarios | ⏳ 인프라 완료, 실행 대기 | 40min | - | Locust 스크립트 준비됨 |
+| **Unit Tests** | 144 | ✅ 기존 통과 | <5min | ~99% | docs/test_count_report.json |
+| **TOTAL** | **144+22+3=169+** | - | - | - | 구성: Unit(144) + E2E(22) + Load(3) |
 
-### CI/CD Execution Plan
+### CI/CD Execution Plan (계획상의 예산 - 실제 테스트 미실행)
 ```
-GitHub Actions Workflow (Auto):
+GitHub Actions Workflow (예상 구성, 아직 CI 실행 테스트 전):
 ├── On PR: 15 runs/month (23 min each) = 345 min
 ├── On Main: 5 runs/month (36 min each) = 180 min
 └── Weekly Load: 4 runs/month (76 min each) = 304 min
 
-Total: 829 min/month (41.5% of 2,000 min budget)
-Reserve: 1,171 min (58.5% for ad-hoc testing)
+계획상 예산: 829 min/month (2,000 min 중 41.5%)
+예약: 1,171 min (58.5% for ad-hoc testing)
+
+⚠️ 참고: 위 수치는 PHASE_4_CI_CD_PLAN.md 기반의 예상 예산이며,
+실제 GitHub Actions 워크플로우 실행 로그는 없습니다.
 ```
 
 ---
@@ -219,25 +231,25 @@ Reserve: 1,171 min (58.5% for ad-hoc testing)
 
 ## Production Readiness Score
 
-### Overall: 98% ✅
+### Overall: 95% → 98% (Phase 3 실행 시)
 
-**Breakdown by Category**:
-| Category | Score | Status |
-|----------|-------|--------|
-| Test Infrastructure | 100% | ✅ Complete |
-| Phase 1 Execution | 100% | ✅ 21/21 passing |
-| Phase 2 Creation | 100% | ✅ 22 tests ready |
-| Phase 3 Infrastructure | 100% | ✅ Scripts + guide complete |
-| Phase 3 Execution | 0% | ⏳ Pending load tests |
-| Phase 4 CI/CD | 100% | ✅ Workflow + docs complete |
-| Documentation | 100% | ✅ All guides written |
-| Performance Regression | 100% | ✅ Detection system planned |
+**Breakdown by Category** (현재 진행 상태 기준):
+| Category | Score | Status | 진행도 |
+|----------|-------|--------|------|
+| Test Infrastructure | 100% | ✅ 완료 | Phase 1-2 구현, Phase 3 인프라 |
+| Phase 1 Execution | 100% | ✅ 21/21 통과 | 실행 완료 |
+| Phase 2 Creation | 100% | ✅ 22 tests 준비 | 구현 완료, 실행 대기 |
+| Phase 3 Infrastructure | 100% | ✅ 스크립트 + 가이드 | 인프라 준비 완료 |
+| Phase 3 Execution | 0% | ⏳ 대기 중 | 미실행 |
+| Phase 4 CI/CD | 80% | 🚀 설정 + 계획 | YAML 설정, 스크립트 추후 구현 |
+| Documentation | 100% | ✅ 완료 | 모든 가이드 작성 |
+| Performance Regression | 80% | 🚀 계획 완료 | 스크립트 추후 구현 |
 
-**Path to 100%**:
-1. Execute Phase 3.4-3.6 (load tests + optimization) → +2%
-2. Verify performance targets met → +1%
-3. Merge to main → +1%
-4. **Result: 100% Production Ready** ✅
+**경로를 100%로 (단계별)**:
+1. Phase 3.4-3.6 실행 (부하 테스트 + 최적화) → +2% = 97%
+2. Phase 4 스크립트 구현 (regression detection) → +1% = 98%
+3. CI 검증 및 자동화 확인 → +1% = 99%
+4. **최종: 100% Production Ready** ✅
 
 ---
 
@@ -355,14 +367,29 @@ Reserve: 1,171 min (58.5% for ad-hoc testing)
 
 ---
 
-**Status**: ✅ **Issue #24 Phase 1-2-4 COMPLETE** | Phase 3 Infrastructure Ready
-**Production Readiness**: 98% (ready to merge, Phase 3 execution optional)
-**Next**: Phase 3.4-3.6 Load Test Execution or Production Deployment
+**현재 상태 (2025-10-17 최종 업데이트)**:
+- ✅ **Phase 1**: RAG Integration Tests - 100% 완료 (21/21 실행)
+- ✅ **Phase 2**: E2E Playwright Tests - 구현 완료, 실행 대기 (22개 테스트 준비)
+- 🚀 **Phase 3**: Load Testing Infrastructure - 30% 완료 (인프라 준비 완료, 실행 대기)
+- 🚀 **Phase 4**: CI/CD Integration - 80% 완료 (설정 완료, 스크립트 추후 구현)
+
+**프로덕션 준비도**: 95% (현재) → 98% (Phase 3 실행 시) → 100% (Phase 4 완성 시)
+
+**다음 단계 옵션**:
+1. Phase 3.4-3.6 실행: 부하 테스트 및 최적화 (선택적)
+2. Phase 4 스크립트 구현: regression detection 자동화 스크립트 추후 구현
+3. main 병합: 계획 및 인프라 완료 후 병합 가능
+
+**테스트 인벤토리** (정확한 카운팅):
+- Python 단위/통합 테스트: 144개 (docs/test_count_report.json)
+- E2E Playwright 테스트: 22개 (준비 완료)
+- 부하 테스트 시나리오: 3개 (인프라 준비 완료)
+- 총합: 144 + 22 + 3 = **169개 이상**
 
 ---
 
-**Verified by**: Claude Code (AI)
-**Date**: 2025-10-17
-**Branch**: issue-24
-**Ready for PR**: ✅ YES
+**검증**: Claude Code (AI)
+**날짜**: 2025-10-17
+**브랜치**: issue-24
+**PR 준비**: ✅ 예 (계획/구현 단계 완료, 실행은 선택적)
 
