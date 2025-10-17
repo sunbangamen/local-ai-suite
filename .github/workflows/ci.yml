@@ -301,22 +301,6 @@
           with:
             python-version: '3.11'
 
-        - uses: actions/setup-node@v4
-          with:
-            node-version: '20'
-            cache: 'npm'
-            cache-dependency-path: desktop-app/package-lock.json
-
-        - name: Install desktop app dependencies
-          working-directory: desktop-app
-          run: |
-            npm install
-
-        - name: Install Playwright browsers
-          working-directory: desktop-app
-          run: |
-            npx playwright install ${{ matrix.browser }}
-
         - name: Start backend services with CPU profile
           run: |
             docker compose -f docker/compose.p2.cpu.yml up -d
@@ -335,11 +319,19 @@
             curl -f http://localhost:8003/health || echo "::warning::Embedding service health check failed"
             echo "::endgroup::"
 
-        - name: Run E2E tests
-          working-directory: desktop-app
+        - name: Run E2E tests in Docker container
           run: |
             echo "::group::E2E Tests - ${{ matrix.browser }} browser"
-            npm run test:e2e -- --project=${{ matrix.browser }} || {
+            docker run --rm \
+              --network docker_default \
+              -v $PWD/desktop-app:/app \
+              -w /app \
+              mcr.microsoft.com/playwright/node:v1.45.0-focal \
+              bash -lc "
+                npm install &&
+                npx playwright install ${{ matrix.browser }} &&
+                npx playwright test --project=${{ matrix.browser }}
+              " || {
               echo "::warning::E2E tests failed for ${{ matrix.browser }}"
               exit 1
             }
