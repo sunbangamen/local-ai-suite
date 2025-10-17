@@ -7,8 +7,9 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('Chat Interface', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to the app
-    await page.goto('/');
+    // Use absolute URL from environment or default to localhost
+    const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:3000';
+    await page.goto(baseURL);
     // Wait for app to load
     await page.waitForLoadState('networkidle');
   });

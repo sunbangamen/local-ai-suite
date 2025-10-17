@@ -7,7 +7,9 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('Model Selection', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    // Use absolute URL from environment or default to localhost
+    const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:3000';
+    await page.goto(baseURL);
     await page.waitForLoadState('networkidle');
   });
 

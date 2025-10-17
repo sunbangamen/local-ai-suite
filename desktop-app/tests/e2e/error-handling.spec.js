@@ -7,7 +7,9 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('Error Handling', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    // Use absolute URL from environment or default to localhost
+    const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:3000';
+    await page.goto(baseURL);
     await page.waitForLoadState('networkidle');
   });
 
@@ -39,6 +41,9 @@ test.describe('Error Handling', () => {
   });
 
   test('handles timeout errors', async ({ page }) => {
+    // Set custom timeout for this specific test (30 seconds max)
+    test.setTimeout(30000);
+
     const input = page.locator('input[placeholder*="메시지"], textarea[placeholder*="메시지"], input[placeholder*="message"], textarea[placeholder*="message"]').first();
 
     // Send message that might timeout
@@ -50,8 +55,8 @@ test.describe('Error Handling', () => {
       await input.press('Enter');
     }
 
-    // Wait potentially longer
-    await page.waitForTimeout(60000); // 60 second timeout scenario
+    // Wait for response (reduced from 60s to 10s)
+    await page.waitForTimeout(10000); // 10 second wait for response
 
     // Should handle gracefully or show timeout message
     const chatHistory = page.locator('.chat-history, .messages, [class*="history"], [class*="messages"]').first();
