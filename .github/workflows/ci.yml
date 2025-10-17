@@ -297,6 +297,10 @@
       steps:
         - uses: actions/checkout@v4
 
+        - uses: actions/setup-python@v5
+          with:
+            python-version: '3.11'
+
         - uses: actions/setup-node@v4
           with:
             node-version: '20'
@@ -312,6 +316,24 @@
           working-directory: desktop-app
           run: |
             npx playwright install ${{ matrix.browser }}
+
+        - name: Start backend services with CPU profile
+          run: |
+            docker compose -f docker/compose.p2.cpu.yml up -d
+            echo "::notice::Starting Phase 2 stack for E2E tests"
+
+        - name: Wait for backend services to be ready
+          run: |
+            echo "Waiting 60 seconds for all services to be ready..."
+            sleep 60
+
+        - name: Health check backend services
+          run: |
+            echo "::group::Backend Service Health Checks"
+            curl -f http://localhost:8000/v1/models || echo "::warning::API Gateway health check failed"
+            curl -f http://localhost:8002/health || echo "::warning::RAG service health check failed"
+            curl -f http://localhost:8003/health || echo "::warning::Embedding service health check failed"
+            echo "::endgroup::"
 
         - name: Run E2E tests
           working-directory: desktop-app
@@ -330,6 +352,18 @@
             name: playwright-report-${{ matrix.browser }}
             path: desktop-app/playwright-report/
             retention-days: 30
+
+        - name: Show backend service logs on failure
+          if: failure()
+          run: |
+            echo "::group::Backend Service Logs"
+            docker compose -f docker/compose.p2.cpu.yml logs
+            echo "::endgroup::"
+
+        - name: Teardown backend services
+          if: always()
+          run: |
+            docker compose -f docker/compose.p2.cpu.yml down -v
 
     # Phase 3: Load Tests (Nightly only)
     load-tests:
