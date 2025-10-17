@@ -134,18 +134,33 @@ class PerformanceComparator:
 
     @staticmethod
     def _determine_status(change_pct: float, threshold: float, current_val: float) -> str:
-        """Determine regression status based on threshold."""
+        """Determine regression status based on threshold.
+
+        For positive thresholds (latency, error_rate): fail if change_pct > threshold
+        For negative thresholds (rps decrease tolerance): fail if change_pct < threshold
+        """
         # Handle absolute threshold (e.g., sandbox_violations must be 0)
         if isinstance(threshold, int):
             return 'fail' if current_val > threshold else 'pass'
 
         # Handle percentage thresholds
-        if change_pct > threshold:
-            # Warning if between threshold and 1.5x threshold
-            if change_pct < threshold * 1.5:
-                return 'warning'
-            else:
+        if threshold < 0:
+            # Negative threshold: fail if change is worse (more negative) than threshold
+            # E.g., for rps with threshold -0.30, fail only if change < -0.30 (30%+ decrease)
+            if change_pct < threshold:
                 return 'fail'
+            # Add small tolerance for measurement noise (±1%)
+            elif change_pct < threshold * 1.5 and change_pct < -0.01:
+                return 'warning'
+        else:
+            # Positive threshold: fail if change is worse (more positive) than threshold
+            # E.g., for latency with threshold 0.50, fail only if change > 0.50 (50%+ increase)
+            if change_pct > threshold:
+                # Warning if between threshold and 1.5x threshold
+                if change_pct < threshold * 1.5:
+                    return 'warning'
+                else:
+                    return 'fail'
 
         return 'pass'
 
