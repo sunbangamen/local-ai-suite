@@ -180,7 +180,8 @@ make test-load
 |--------|-------|
 | **Planning Document** | 392 lines |
 | **Locust Scripts** | 337 lines |
-| **Total Code** | 729 lines |
+| **Makefile Addition** | ~89 lines |
+| **Total Code** | ~818 lines |
 | **User Classes** | 3 |
 | **Task Methods** | 10 |
 | **Makefile Targets** | 5 |
@@ -214,9 +215,10 @@ Lines: 392 (specification + framework)
 File: tests/load/locustfile.py
 Lines: 337 (3 user classes + 10 tasks + handlers)
 
-Makefile additions: ~270 lines (5 targets + helpers)
+Makefile additions: ~89 lines (5 targets + helpers)
+  (Before: 89 lines, After: 178 lines, Added: 89 lines)
 
-Total: 999 lines (rounded to ~1000)
+Total: 392 + 337 + 89 = ~818 lines
 ```
 
 ### Content Validation
@@ -320,7 +322,7 @@ locust -f tests/load/locustfile.py --host http://localhost:8000
 **Files Changed**: 3
 - tests/load/locustfile.py (NEW, 337 lines)
 - docs/progress/v1/PHASE_3_LOAD_TESTING_PLAN.md (NEW, 392 lines)
-- Makefile (UPDATED, ~270 lines added)
+- Makefile (UPDATED, +89 lines added)
 
 ---
 
@@ -359,6 +361,6 @@ locust -f tests/load/locustfile.py --host http://localhost:8000
 
 **Status**: Phase 3.1-3.2 Complete ✅
 **Ready for**: Phase 3.3 baseline establishment
-**Actual Line Counts**: 729 lines (PHASE_3_LOAD_TESTING_PLAN.md: 392, locustfile.py: 337)
+**Actual Line Counts**: ~818 lines (PHASE_3_LOAD_TESTING_PLAN.md: 392, locustfile.py: 337, Makefile: +89)
 **Last Updated**: 2025-10-17
 
