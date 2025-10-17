@@ -12,7 +12,7 @@
 **Phase 3 실행 결과 검증**:
 - ✅ Baseline: 32 requests
 - ✅ Progressive: 25,629 requests
-- ✅ 회귀 감지 스크립트: 1,072줄 로컬 검증 완료
+- ✅ 회귀 감지 스크립트: 1,107줄 로컬 검증 완료
 
 ---
 
@@ -21,22 +21,22 @@
 ### 방법: GitHub Actions workflow_dispatch 수동 트리거
 
 **전제 조건**:
-1. 원격 저장소 워크플로우 파일에 `workflow_dispatch` 트리거 설정 필요
-   - 상태: ✅ 로컬에 설정됨, 원격 수동 업데이트 필요
+1. 원격 저장소 워크플로우 파일에 `workflow_dispatch` 트리거가 반영되어 있어야 함
+   - 상태: ✅ 로컬에 설정됨, 원격 상태 확인 필요
 
 2. GitHub 웹 UI 또는 CLI 접근 가능
 
 ---
 
-## 📋 Step 1: 워크플로우 파일 원격 업데이트 (5분)
+## 📋 Step 1: 워크플로우 파일 원격 확인 (5분)
 
 ### 옵션 A: GitHub 웹 UI에서 직접 편집 (권장)
 
 **절차**:
 1. https://github.com/sunbangamen/local-ai-suite 접속
 2. `.github/workflows/ci.yml` 파일 검색/이동
-3. 연필 아이콘 클릭 → "Edit file"
-4. Line 9 (schedule 섹션 후) 다음 추가:
+3. `workflow_dispatch` 섹션이 이미 포함돼 있는지 확인
+4. 누락된 경우에만 아래 블록을 추가하고 "Commit changes" 클릭
 
 ```yaml
   workflow_dispatch:
@@ -47,11 +47,10 @@
         default: 'false'
 ```
 
-5. "Commit changes" 클릭
-   - Commit message: "chore: enable workflow_dispatch trigger"
-   - "Commit directly to main" 선택
+- Commit message 예시: "chore: enable workflow_dispatch trigger"
+- "Commit directly to main" 선택 가능
 
-**결과**: ✅ workflow_dispatch 설정 완료
+**결과**: ✅ 원격과 로컬 워크플로우 동기화
 
 ---
 
@@ -146,7 +145,7 @@ git push origin issue-24
   - extract_baselines.py 실행 완료
   - extract_metrics.py 실행 완료
   - compare_performance.py 실행 완료
-  → regression-analysis.md 생성 ✓
+  → regression-analysis.md 생성 (RPS Critical 항목 검토 필요)
 ```
 
 #### C. 아티팩트 확인
@@ -162,11 +161,13 @@ GitHub Actions 페이지:
 
 #### D. Regression Analysis 검증
 ```
-regression-analysis.md 내용:
-- 1 Critical: RPS +2016% (1→100 users, 정상)
-- 2 Passed: Latency metrics ✓
+regression-analysis.md 요약:
+- Critical: API Gateway RPS +2016.7% (baseline 1 user → progressive 100 users)
+- Passed: 2개 지표 유지
 
-결론: 성능 목표 초과 달성 ✓
+조치: 증가 폭이 의도된 개선인지 확인 후
+- 기준선 업데이트 또는 임계치 재조정
+- 필요 시 경고 상태 해제 커뮤니케이션
 ```
 
 ---
@@ -180,7 +181,7 @@ regression-analysis.md 내용:
 ```
 ✓ Phase 1: RAG 통합 테스트 (21/21)
 ✓ Phase 2: E2E 테스트 (22/22)
-✓ Phase 3: 부하 테스트 + 회귀 감지 (실행 완료)
+✓ Phase 3: 부하 테스트 + 회귀 분석 보고서 생성 (Critical 항목 검토 중)
 ✓ Phase 4: CI/CD 통합 (원격 검증 완료)
 
 모든 169개 테스트 실행 및 검증 완료 ✓

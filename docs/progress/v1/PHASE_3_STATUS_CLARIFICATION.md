@@ -1,5 +1,9 @@
 # Phase 3 상태 명확화 (Status Clarification)
 
+> **주의 (2025-10-17 현재)**  
+> 이 문서는 Phase 3 실행 전 상태(Production Readiness 95%)를 기록한 아카이브입니다.  
+> 최신 진행도는 Production Readiness 98%이며, API Gateway baseline + progressive 부하 테스트가 실행 완료되었습니다.
+
 **Last Updated**: 2025-10-17 14:45 UTC
 **Clarification**: Phase 3 실행 상태 및 샘플 데이터에 대한 명확한 문서
 

@@ -139,7 +139,7 @@ docs/progress/v1/ISSUE_24_C_STAGE_GITHUB_ACTIONS_GUIDE.md
 3. **결과 확인**
    - 모든 테스트 통과 확인
    - Load tests 성공 확인
-   - Regression analysis 검증
+   - Regression analysis 검증 (Critical 항목 검토)
 
 4. **최종 문서 업데이트** (선택사항)
    - CI 실행 결과 포함
@@ -155,15 +155,15 @@ docs/progress/v1/ISSUE_24_C_STAGE_GITHUB_ACTIONS_GUIDE.md
 
 **로컬 완료 사항**:
 ```
-✅ B-stage: 회귀 감지 스크립트 로컬 검증 (4개 스크립트 1,072줄)
+✅ B-stage: 회귀 감지 스크립트 로컬 검증 (4개 스크립트 1,107줄)
 ✅ D-stage: 문서 정합성 완벽 동기화 (모든 표/체크리스트 일관성 100%)
 ✅ 코드 커밋: 모든 변경사항 issue-24 브랜치에 커밋됨
 ```
 
 **준비 완료**:
 ```
-✅ GitHub Actions 워크플로우: 원격 레포지토리에 이미 배포됨
-✅ 회귀 감지 스크립트: CI 환경에서 실행 가능 상태
+✅ GitHub Actions 워크플로우: 원격 레포지토리에 이미 배포됨 (workflow_dispatch 포함 여부 확인 권장)
+✅ 회귀 감지 스크립트: CI 환경에서 실행 가능 상태 (RPS Critical 항목 검토 필요)
 ✅ 실행 가이드: 상세한 단계별 지침 문서화됨
 ```
 

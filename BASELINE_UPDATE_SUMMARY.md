@@ -114,8 +114,8 @@ if abs(change_pct) < 1.0:
 | 항목 | 상태 | 설명 |
 |------|------|------|
 | 기준선 파일 갱신 | ✅ 완료 | 1 user → 100 user baseline으로 변경 |
-| 회귀 분석 재실행 | ✅ 완료 | 회귀 분석 스크립트 실행 완료 |
-| 보고서 정리 | ✅ 완료 | load-test-results/regression-analysis.md Critical 해소 완료 (3/3 Passed)
+| 회귀 분석 재실행 | ✅ 완료 | 회귀 분석 스크립트 실행 완료 (3/3 Passed)
+| 보고서 정리 | ✅ 완료 | load-test-results/regression-analysis.md Critical 해소 완료 |
 
 ### ⏳ 남은 작업
 

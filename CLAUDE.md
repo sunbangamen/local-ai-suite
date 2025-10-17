@@ -535,7 +535,7 @@ ai --interactive
 - ✅ **Phase 1**: 완료 (21/21 RAG 통합 테스트 실행)
 - ✅ **Phase 2**: 완료 (22개 E2E 테스트 구현 완료, 실행 준비됨)
 - ✅ **Phase 3**: 완료 (API Gateway baseline + progressive 부하 테스트 실행, 성능 목표 초과 달성)
-- 🚀 **Phase 4**: 진행 중 (95% - CI/CD 설정 + 로컬 검증 완료, 원격 실행 대기)
+- 🚀 **Phase 4**: 진행 중 (98% - CI/CD 설정 + 로컬 검증 완료, 원격 실행 대기/RPS Critical 검토 중)
 
 **Production Readiness**: 98% (현재 - Phase 3 실행 + 문서 동기화) ✅ → 100% (GitHub Actions 원격 실행 확인 후)
 
@@ -559,10 +559,10 @@ ai --interactive
     - 100 사용자 점진적 증가, 15분 | 25,629 requests | 28.49 RPS 처리
     - 성능 목표 달성: ✅ (p95 < 2.0s 대비 실제 5-16ms, RPS > 10 대비 실제 28.49)
   - 회귀 감지 파이프라인: ✅ 4개 스크립트 구현 + 로컬 검증 완료
-    - extract_baselines.py (190줄): 기준선 메트릭 추출 ✅
-    - extract_metrics.py (244줄): 부하 테스트 메트릭 추출 ✅
+    - extract_baselines.py (218줄): 기준선 메트릭 추출 ✅
+    - extract_metrics.py (249줄): 부하 테스트 메트릭 추출 ✅
     - compare_performance.py (240줄): 회귀 분석 보고서 생성 ✅
-    - create_regression_issue.py (398줄): GitHub 이슈 자동 생성 (준비 완료)
+    - create_regression_issue.py (400줄): GitHub 이슈 자동 생성 (준비 완료)
   - 결과 저장소:
     - Baseline: `tests/load/load_results_baseline_actual_stats.csv` (32 requests)
     - Progressive: `tests/load/load_results_api_progressive_stats.csv` (25,629 requests)
@@ -570,12 +570,12 @@ ai --interactive
     - 회귀 분석: `load-test-results/regression-analysis.md` (자동 생성)
   - 문서: `docs/progress/v1/ISSUE_24_PHASE_3_LOAD_TEST_EXECUTION.md` (실행 결과 상세 기록)
 
-- 🚀 **Phase 4**: CI/CD Integration & 프로덕션 준비 - 95% 진행 중
+- 🚀 **Phase 4**: CI/CD Integration & 프로덕션 준비 - 98% (B-stage 완료, C-stage 대기)
   - GitHub Actions 확장: 3개 job YAML 설정 완료 (RAG, E2E, Load)
     - 워크플로우 파일: `.github/workflows/ci.yml` (원격 레포지토리 배포됨)
     - 트리거: schedule (일요일 2am UTC) + workflow_dispatch 설정 완료
   - 테스트 선택 전략: 계획상 예산 829min/month (PHASE_4.2_TEST_SELECTION_STRATEGY.md 참조)
-  - 성능 회귀 감지: ✅ 4개 스크립트 1,072줄 구현 + 실제 데이터로 로컬 검증 완료
+  - 성능 회귀 감지: ✅ 4개 스크립트 1,107줄 구현 + 실제 데이터로 로컬 검증 완료 (RPS Critical 검토 필요)
     - 스크립트 문서: docs/scripts/REGRESSION_DETECTION_SCRIPTS.md (489줄)
     - 문서 정합성: Test Execution Matrix, Performance Targets 모두 실제 수치 반영
   - 다음 단계: GitHub Actions 원격 실행 (C-stage) → CI 환경에서 회귀 감지 스크립트 검증
@@ -586,15 +586,15 @@ ai --interactive
 - E2E Playwright 테스트: **22개** ⏳ (구현 완료, 실행 대기)
 - 부하 테스트 시나리오: **API Gateway baseline + progressive** ✅ (RAG/MCP 시나리오 선택적)
 
-**Phase 4 상태:** 🚀 진행 중 (95% 완료, 2025-10-17)
+**Phase 4 상태:** 🚀 B-stage 완료 (98%, 2025-10-17)
 - GitHub Actions YAML: 설정 완료, 원격 배포됨 (`.github/workflows/ci.yml` +210 lines)
 - CI 예산: 계획상 829min/month (로컬 검증 완료, 원격 실행 준비)
 - 문서 정합성: ✅ 완벽 동기화 (모든 표/체크리스트 실제 수치 반영)
-- 회귀 감지 자동화 스크립트: 🚀 4개 스크립트 1,072줄 구현 완료 | CI 연동 테스트 대기
-  - `scripts/extract_metrics.py` (244줄): 다중 포맷 메트릭 추출
-  - `scripts/extract_baselines.py` (190줄): 기준선 수립
+- 회귀 감지 자동화 스크립트: 🚀 4개 스크립트 1,107줄 구현 완료 | CI 연동 테스트 대기 (Critical 검토 필요)
+  - `scripts/extract_metrics.py` (249줄): 다중 포맷 메트릭 추출
+  - `scripts/extract_baselines.py` (218줄): 기준선 수립
   - `scripts/compare_performance.py` (240줄): 회귀 감지
-  - `scripts/create_regression_issue.py` (398줄): GitHub 이슈 자동 생성
+  - `scripts/create_regression_issue.py` (400줄): GitHub 이슈 자동 생성
 - 스크립트 문서: `docs/scripts/REGRESSION_DETECTION_SCRIPTS.md` (489줄)
 
 **구현 가이드:**
@@ -725,7 +725,7 @@ make test-load                      # 전체 (40min)
 **최근 업데이트 (2025-10-17):**
 - 🚀 **Issue #24 Testing & QA Phase 3&4 진행 중** (부하 테스트 실행 + 회귀 감지 자동화)
   - **Phase 3**: 부하 테스트 baseline(1 user) & progressive(100 users) 실행 완료 → 98% 달성
-  - **Phase 4**: 회귀 감지 자동화 (80% 진행) | 4개 스크립트 1,072줄 구현 완료 | CI 연동 테스트 대기
+  - **Phase 4**: 회귀 감지 자동화 (B-stage 완료, 98%) | 4개 스크립트 1,107줄 구현 완료 | CI 연동 테스트 대기
   - **4개 회귀 감지 스크립트**: extract_metrics.py (244줄), extract_baselines.py (190줄), compare_performance.py (240줄), create_regression_issue.py (398줄)
   - **스크립트 문서**: `docs/scripts/REGRESSION_DETECTION_SCRIPTS.md` (489줄)
   - **Production Readiness**: 현재 98% → Phase 4 마무리 시 100%

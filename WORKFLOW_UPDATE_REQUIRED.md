@@ -1,26 +1,26 @@
-# ⚠️ Workflow 파일 원격 업데이트 필요
+# ⚠️ Workflow 파일 원격 상태 확인
 
 ## 상황
 
 **로컬 상태**: ✅ `.github/workflows/ci.yml`에 `workflow_dispatch` 트리거 설정 완료
-**원격 상태**: ⚠️ 워크플로우 파일이 업데이트되지 않음 (error: HTTP 422)
+**원격 상태**: ⏳ 최신 상태 확인 필요 (이전에 HTTP 422 오류 발생 보고)
 
 ---
 
 ## 원인
 
-GitHub Actions CLI (`gh workflow run`)가 실패하는 이유:
+이전에 GitHub Actions CLI (`gh workflow run`) 실행 시 아래 오류가 보고됨:
 ```
 Error: Workflow does not have 'workflow_dispatch' trigger
 ```
 
-원격 저장소의 `.github/workflows/ci.yml`이 아직 old 버전이므로 `workflow_dispatch` 트리거가 없음
+원격 저장소의 `.github/workflows/ci.yml`이 최신 상태가 아닐 가능성이 있으므로 수동 확인이 필요함
 
 ---
 
 ## 해결 방법 (3가지 옵션)
 
-### ✅ 옵션 1: GitHub 웹 UI에서 워크플로우 파일 직접 편집 (권장)
+### ✅ 옵션 1: GitHub 웹 UI에서 워크플로우 파일 확인 및 보정 (권장)
 
 **단계별 진행**:
 
@@ -32,34 +32,10 @@ Error: Workflow does not have 'workflow_dispatch' trigger
 2. **`.github/workflows/ci.yml` 파일로 이동**
    - 상단 검색 또는 파일 브라우저에서 찾기
 
-3. **파일 편집** (연필 아이콘 클릭)
+3. `workflow_dispatch` 섹션 포함 여부를 확인
+4. 누락된 경우에만 아래 블록을 추가하고 Commit
 
-4. **첫 번째 부분 수정** (line 1-15 부분):
-
-**기존 코드**:
 ```yaml
-name: CI Pipeline
-
-on:
-  push:
-    branches: [ main, develop, issue-* ]
-  pull_request:
-    branches: [ main, develop ]
-  schedule:
-    - cron: '0 2 * * *'  # Nightly at 2am UTC
-```
-
-**새로운 코드**:
-```yaml
-name: CI Pipeline
-
-on:
-  push:
-    branches: [ main, develop, issue-* ]
-  pull_request:
-    branches: [ main, develop ]
-  schedule:
-    - cron: '0 2 * * *'  # Nightly at 2am UTC
   workflow_dispatch:
     inputs:
       run_load_tests:
@@ -67,10 +43,6 @@ on:
         required: false
         default: 'false'
 ```
-
-5. **변경사항 커밋** (Commit changes)
-   - Commit message: "chore: enable workflow_dispatch trigger for CI Pipeline"
-   - Commit directly to main
 
 ---
 
@@ -87,7 +59,7 @@ on:
 
 ---
 
-### ✅ 옵션 3: 웹 UI에서 직접 워크플로우 트리거 (현재 권장)
+### ✅ 옵션 3: 웹 UI에서 직접 워크플로우 트리거 (가능한 경우)
 
 `workflow_dispatch` 없어도 다른 방법으로 실행:
 
@@ -107,7 +79,7 @@ on:
 
 ### 1단계: 빠른 점검 (선택)
 ```bash
-# 워크플로우 파일 업데이트 후
+# 워크플로우 파일 상태 확인 후
 gh workflow run ci.yml -f run_load_tests=true
 ```
 
@@ -149,14 +121,14 @@ workflow_dispatch:
       default: 'false'
 ```
 
-✅ 로컬 파일은 완벽함 → 원격에 업데이트하기만 하면 됨
+✅ 로컬 파일은 최신 상태 → 원격이 동일한지 확인하세요
 
 ---
 
 ## 다음 단계
 
-1. ⏳ **GitHub 웹 UI에서 워크플로우 파일 수동 편집** (5분)
-   - Option 1 참고
+1. ⏳ **GitHub 웹 UI에서 워크플로우 파일 상태 확인** (5분)
+   - Option 1 절차 참고
 
 2. ✅ **수정 후 CI Pipeline 워크플로우 실행**
    - 웹 UI에서 "Run workflow" 클릭
@@ -182,13 +154,13 @@ on:
       run_load_tests: ...
 ```
 
-### 원격 (업데이트 필요) ⚠️
+### 원격 (확인 필요) ⏳
 ```yaml
 on:
   push: ...
   pull_request: ...
   schedule: ...
-  # ⚠️ workflow_dispatch 없음
+  # ⏳ workflow_dispatch 확인 필요
 ```
 
 ---

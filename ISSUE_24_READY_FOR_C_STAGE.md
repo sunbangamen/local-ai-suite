@@ -19,7 +19,7 @@
 Phase 1: ✅ 100% (RAG 통합 테스트 21/21)
 Phase 2: ✅ 100% (E2E 테스트 22개 구현)
 Phase 3: ✅ 100% (부하 테스트 32 + 25,629 요청 실행)
-Phase 4: 🚀 준비 완료 (회귀 감지 스크립트 1,072줄 로컬 검증)
+Phase 4: 🚀 준비 완료 (회귀 감지 스크립트 1,107줄 로컬 검증)
 ```
 
 ---
@@ -27,10 +27,10 @@ Phase 4: 🚀 준비 완료 (회귀 감지 스크립트 1,072줄 로컬 검증)
 ## ✅ 완료된 작업
 
 ### B-stage (회귀 감지 스크립트 로컬 검증) ✅
-- ✅ extract_baselines.py: 기준선 메트릭 추출 (190줄)
-- ✅ extract_metrics.py: 부하 테스트 메트릭 추출 (244줄)
+- ✅ extract_baselines.py: 기준선 메트릭 추출 (218줄)
+- ✅ extract_metrics.py: 부하 테스트 메트릭 추출 (249줄)
 - ✅ compare_performance.py: 회귀 분석 보고서 생성 (240줄)
-- ✅ create_regression_issue.py: GitHub 이슈 자동 생성 (398줄)
+- ✅ create_regression_issue.py: GitHub 이슈 자동 생성 (400줄)
 - ✅ 엔드-투-엔드 파이프라인: 모든 스크립트 연계 정상
 
 ### D-stage (문서 정합성 완벽 동기화) ✅
@@ -85,13 +85,13 @@ Phase 4: 🚀 준비 완료 (회귀 감지 스크립트 1,072줄 로컬 검증)
 
 ### 최단 경로 (약 90분 총 소요)
 
-#### **Step 1: 워크플로우 파일 원격 업데이트** (5분)
+#### **Step 1: 워크플로우 파일 원격 확인** (5분)
 ```
 GitHub 웹 UI:
 1. https://github.com/sunbangamen/local-ai-suite
-2. .github/workflows/ci.yml 편집
-3. Line 9 이후에 workflow_dispatch 트리거 추가
-4. Commit changes
+2. .github/workflows/ci.yml 열기
+3. `workflow_dispatch` 섹션이 포함되어 있는지 확인
+4. 누락된 경우에만 동일 코드를 추가 후 Commit
 ```
 
 #### **Step 2: GitHub Actions 수동 트리거** (1분)
@@ -123,6 +123,7 @@ git push origin issue-24
 ✓ Regression analysis 생성 확인
 ✓ Artifacts 다운로드 (regression-analysis.md 등)
 ```
+> 현재 `load-test-results/regression-analysis.md`에는 API Gateway RPS가 기준 대비 +2016.7%로 표시되어 ❌ Critical 상태입니다. 부하 단계 확대로 인한 정상적인 개선인지 여부를 검토하고 필요 시 기준선을 갱신하세요.
 
 #### **Step 5: 최종 보고서** (선택)
 ```
@@ -137,7 +138,7 @@ git push origin issue-24
 ## ✅ 실행 전 체크리스트
 
 - [ ] 이 문서 읽음
-- [ ] 워크플로우 파일 원격 업데이트 준비
+- [ ] 워크플로우 파일 원격 확인 준비
 - [ ] GitHub 웹 UI 또는 CLI 접근 준비
 - [ ] 약 76분 모니터링 시간 확보
 - [ ] C_STAGE_EXECUTION_START.md 참고 준비
@@ -154,7 +155,7 @@ git push origin issue-24
 모든 Phase 1-4 완료:
 - Phase 1: 21/21 RAG 테스트 ✅
 - Phase 2: 22/22 E2E 테스트 ✅
-- Phase 3: 부하 테스트 + 회귀 감지 ✅
+- Phase 3: 부하 테스트 + 회귀 분석 보고서 생성 (Critical 항목 검토 필요)
 - Phase 4: CI/CD 원격 검증 ✅
 
 총 169개 이상 테스트 실행 및 검증
@@ -171,7 +172,7 @@ git push origin issue-24
 ⏳ **원격 실행**: 준비 완료 (수동 트리거만 필요)
 
 **다음 단계**:
-1. GitHub 웹 UI에서 workflow_dispatch 트리거 추가 (5분)
+1. GitHub 웹 UI에서 workflow_dispatch 섹션 확인 (누락 시 추가, 5분)
 2. "Run workflow" 클릭 (1분)
 3. 76분 대기 + 결과 확인
 4. Production Readiness 100% 달성 ✅
@@ -191,8 +192,8 @@ git push origin issue-24
 ## 🎯 지금 할 일
 
 **C_STAGE_EXECUTION_START.md 참고하여**:
-1. GitHub 웹 UI에서 워크플로우 파일 수동 편집
-2. workflow_dispatch 트리거 추가 및 Commit
+1. GitHub 웹 UI에서 워크플로우 파일 상태 확인
+2. workflow_dispatch 섹션이 없으면 추가 후 Commit
 3. GitHub Actions "Run workflow" 클릭
 4. 76분 대기 + 결과 확인
 

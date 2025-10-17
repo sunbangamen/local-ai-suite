@@ -66,7 +66,7 @@
 - [x] Load Tests job configured (planned, not yet tested)
 - [x] Test selection strategy documented (conservative approach)
 - [x] Performance regression detection plan documented
-- [x] Performance regression detection scripts implemented ✅ (1,072 lines)
+- [x] Performance regression detection scripts implemented ✅ (1,107 lines)
 - [x] Scripts locally validated with real test data ✅ (B-stage: extract_baselines → extract_metrics → compare_performance)
 - [x] CLAUDE.md updated with Issue #24 section
 - [x] README.md updated with testing guide
@@ -80,11 +80,11 @@
 - ✅ Trigger Config: schedule (Sunday 2am UTC) + workflow_dispatch
 - ✅ Test Strategy: `docs/progress/v1/PHASE_4.2_TEST_SELECTION_STRATEGY.md` (432 lines)
 - ✅ Regression Detection Plan: `docs/progress/v1/PHASE_4.3_REGRESSION_DETECTION.md` (656 lines)
-- ✅ Regression Detection Scripts: 4 scripts 1,072줄 구현 완료 및 로컬 검증 완료
-  - ✅ `scripts/extract_metrics.py` (244줄): 다중 포맷 메트릭 추출 (CSV/JSON) - 실제 데이터로 검증 ✅
-  - ✅ `scripts/extract_baselines.py` (190줄): Locust 결과 파싱 기준선 수립 - 검증 완료 ✅
+- ✅ Regression Detection Scripts: 4 scripts 1,107줄 구현 완료 및 로컬 검증 완료 (RPS Critical 검토 필요)
+  - ✅ `scripts/extract_metrics.py` (249줄): 다중 포맷 메트릭 추출 (CSV/JSON) - 실제 데이터로 검증 ✅
+  - ✅ `scripts/extract_baselines.py` (218줄): Locust 결과 파싱 기준선 수립 - 검증 완료 ✅
   - ✅ `scripts/compare_performance.py` (240줄): 기준선 대비 회귀 감지 - 회귀 보고서 생성 확인 ✅
-  - ✅ `scripts/create_regression_issue.py` (398줄): GitHub 이슈 자동 생성 - 준비 완료
+  - ✅ `scripts/create_regression_issue.py` (400줄): GitHub 이슈 자동 생성 - 준비 완료
 - ✅ Script Documentation: `docs/scripts/REGRESSION_DETECTION_SCRIPTS.md` (489줄)
 - ✅ Documentation: CLAUDE.md + README.md + 체크리스트 최종 동기화 완료
 
@@ -268,7 +268,7 @@ GitHub Actions Workflow (설정 완료, 로컬 검증 완료):
 | Phase 2 Creation | 100% | ✅ 22 tests 준비 | 구현 완료, 실행 대기 |
 | Phase 3 Infrastructure | 100% | ✅ 스크립트 + 가이드 | 인프라 준비 완료 |
 | Phase 3 Execution | 100% | ✅ API Gateway 완료, RAG/MCP 선택적 | 실행 완료 (1/3 시나리오) ✅ |
-| Phase 4 CI/CD | 95% | ✅ 설정 + 로컬 검증 | 스크립트 1,072줄 로컬 검증 ✅, 원격 실행 준비 |
+| Phase 4 CI/CD | 98% | ✅ 설정 + 로컬 검증 | 스크립트 1,107줄 로컬 검증 ✅, RPS Critical 검토 + 원격 실행 준비 |
 | Documentation | 100% | ✅ 완료 | 모든 가이드 + 문서 일관성 동기화 완료 ✅ |
 | Performance Regression | 100% | ✅ 검증 완료 | 스크립트 4개 완성, 실제 데이터 검증 ✅ |
 
