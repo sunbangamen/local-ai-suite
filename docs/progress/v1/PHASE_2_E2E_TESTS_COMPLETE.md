@@ -163,10 +163,14 @@ npm run test:e2e:debug
 npm run test:e2e:ui
 ```
 
-### Expected Output
+### Expected Output (Design Specification - Not Yet Executed)
 ```
 22 passed in ~45 seconds
 ```
+
+**Status**: Tests have been created and configured but have NOT yet been executed.
+The output specification above represents the expected result based on test design.
+Actual test execution and results will be captured when Phase 2 tests are run.
 
 ### Test Execution Flow
 ```
