@@ -99,11 +99,18 @@ class BaselineExtractor:
         Returns:
             Dictionary with service metrics or None if not found
         """
-        # Find relevant rows for this service
-        service_rows = [r for r in self.stats if service_name.lower() in r.get('Name', '').lower()]
+        # Map service names to endpoint patterns or use Aggregated row for API Gateway
+        endpoint_patterns = {
+            'api_gateway': 'Aggregated',  # Use aggregated metrics for API Gateway
+            'rag_service': '/query',  # RAG service query endpoint
+            'mcp_server': '/tools'    # MCP server tools endpoint
+        }
+
+        pattern = endpoint_patterns.get(service_name, service_name)
+        service_rows = [r for r in self.stats if pattern.lower() in r.get('Name', '').lower()]
 
         if not service_rows:
-            print(f"⚠️  No data found for service: {service_name}")
+            print(f"⚠️  No data found for service: {service_name} (pattern: {pattern})")
             return None
 
         # Aggregate metrics (typically one row per service from Locust)
@@ -113,12 +120,13 @@ class BaselineExtractor:
         row = service_rows[0]
 
         try:
-            requests = int(row.get('# requests', '0') or 0)
-            failures = int(row.get('# failures', '0') or 0)
-            median_ms = self._parse_response_time(row.get('Median response time', '0'))
-            avg_ms = self._parse_response_time(row.get('Average response time', '0'))
-            min_ms = self._parse_response_time(row.get('Min response time', '0'))
-            max_ms = self._parse_response_time(row.get('Max response time', '0'))
+            # Handle both Locust column name formats
+            requests = int(row.get('Request Count', row.get('# requests', '0')) or 0)
+            failures = int(row.get('Failure Count', row.get('# failures', '0')) or 0)
+            median_ms = self._parse_response_time(row.get('Median Response Time', row.get('Median response time', '0')))
+            avg_ms = self._parse_response_time(row.get('Average Response Time', row.get('Average response time', '0')))
+            min_ms = self._parse_response_time(row.get('Min Response Time', row.get('Min response time', '0')))
+            max_ms = self._parse_response_time(row.get('Max Response Time', row.get('Max response time', '0')))
             rps = self._parse_rate(row.get('Requests/s', '0'))
             error_rate = self._parse_error_rate(requests, failures)
 
@@ -145,29 +153,49 @@ class BaselineExtractor:
 
     def extract_all_baselines(self) -> Dict:
         """Extract baselines for all known services."""
-        services = ['api_gateway', 'rag_service', 'mcp_server']
+        # For Phase 3, we have baseline data for api_gateway only
+        # RAG service and MCP server baselines will be added when their test data is available
+        services_to_extract = ['api_gateway']
         baselines = {}
 
-        for service in services:
+        for service in services_to_extract:
             metrics = self.extract_service_metrics(service)
             if metrics:
                 baselines[service] = metrics
                 print(f"✅ Extracted baseline for {service}")
+            else:
+                print(f"⏳ Baseline data not available for {service} (will add in future phases)")
 
         return baselines
 
     def save_baselines(self, output_file: str) -> None:
-        """Save extracted baselines to JSON file."""
+        """Save extracted baselines to JSON file.
+
+        Output structure (service-based for compatibility with compare_performance.py):
+        {
+            "api_gateway": {
+                "avg_latency_ms": ...,
+                "error_rate_pct": ...,
+                ...
+            }
+        }
+        """
         baselines = self.extract_all_baselines()
 
         output_path = Path(output_file)
         output_path.parent.mkdir(exist_ok=True)
 
+        # Save in simple service-based structure (not nested under "baseline_test")
         with open(output_file, 'w') as f:
             json.dump(baselines, f, indent=2)
 
         print(f"\n✅ Baselines saved to: {output_file}")
-        print(f"\n📊 Extracted {len(baselines)} service baselines")
+        print(f"📊 Extracted {len(baselines)} service baselines")
+
+        if baselines:
+            print("\n📋 Services included:")
+            for service in baselines.keys():
+                print(f"  - {service}")
 
 
 def main():

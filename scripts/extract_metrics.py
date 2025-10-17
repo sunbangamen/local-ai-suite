@@ -101,20 +101,25 @@ class MetricsExtractor:
                 continue
 
             try:
+                # Handle both Locust CSV column formats (CamelCase and lowercase with #)
+                requests = int(row.get('Request Count', row.get('# requests', 0)) or 0)
+                failures = int(row.get('Failure Count', row.get('# failures', 0)) or 0)
+                avg_time = row.get('Average Response Time', row.get('Average response time', '0'))
+                median_time = row.get('Median Response Time', row.get('Median response time', '0'))
+                min_time = row.get('Min Response Time', row.get('Min response time', '0'))
+                max_time = row.get('Max Response Time', row.get('Max response time', '0'))
+
                 metrics[service_key] = {
-                    'avg_latency_ms': self._parse_time(row.get('Average response time', '0')),
-                    'median_latency_ms': self._parse_time(row.get('Median response time', '0')),
+                    'avg_latency_ms': self._parse_time(avg_time),
+                    'median_latency_ms': self._parse_time(median_time),
                     'p95_latency_ms': self._parse_time(row.get('95%', '0')),
                     'p99_latency_ms': self._parse_time(row.get('99%', '0')),
-                    'min_latency_ms': self._parse_time(row.get('Min response time', '0')),
-                    'max_latency_ms': self._parse_time(row.get('Max response time', '0')),
-                    'error_rate_pct': self._parse_error_rate(
-                        int(row.get('# requests', 0) or 0),
-                        int(row.get('# failures', 0) or 0)
-                    ),
+                    'min_latency_ms': self._parse_time(min_time),
+                    'max_latency_ms': self._parse_time(max_time),
+                    'error_rate_pct': self._parse_error_rate(requests, failures),
                     'rps': float(row.get('Requests/s', 0) or 0),
-                    'total_requests': int(row.get('# requests', 0) or 0),
-                    'total_failures': int(row.get('# failures', 0) or 0),
+                    'total_requests': requests,
+                    'total_failures': failures,
                 }
             except (ValueError, KeyError):
                 continue
