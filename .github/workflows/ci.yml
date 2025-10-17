@@ -5,6 +5,14 @@
       branches: [ main, develop, issue-* ]
     pull_request:
       branches: [ main, develop ]
+    schedule:
+      - cron: '0 2 * * *'  # Nightly at 2am UTC
+    workflow_dispatch:
+      inputs:
+        run_load_tests:
+          description: 'Run load tests'
+          required: false
+          default: 'false'
 
   jobs:
     lint:
@@ -209,6 +217,218 @@
           run: |
             docker compose -f docker/compose.p2.cpu.yml down -v
 
+    # Phase 1: RAG Integration Tests
+    rag-integration-tests:
+      name: RAG Integration Tests (Phase 1)
+      runs-on: ubuntu-latest
+      needs: [lint, unit-tests]
+      steps:
+        - uses: actions/checkout@v4
+
+        - uses: actions/setup-python@v5
+          with:
+            python-version: '3.11'
+            cache: 'pip'
+
+        - name: Install test dependencies
+          run: |
+            pip install pytest pytest-asyncio pytest-cov httpx
+
+        - name: Install service dependencies
+          run: |
+            if [ -f services/rag/requirements.txt ]; then
+              pip install -r services/rag/requirements.txt
+            fi
+
+        - name: Start services with CPU profile
+          run: |
+            docker compose -f docker/compose.p2.cpu.yml up -d
+            echo "::notice::Starting Phase 2 stack for RAG integration tests"
+
+        - name: Wait for services
+          run: |
+            echo "Waiting 60 seconds for all services to be ready..."
+            sleep 60
+
+        - name: Health checks
+          run: |
+            echo "::group::RAG Service Health Checks"
+            curl -f http://localhost:8000/v1/models || echo "::warning::API Gateway health check failed"
+            curl -f http://localhost:8002/health || echo "::warning::RAG service health check failed"
+            curl -f http://localhost:8003/health || echo "::warning::Embedding service health check failed"
+            echo "::endgroup::"
+
+        - name: Run RAG integration tests (Phase 1)
+          run: |
+            echo "::group::RAG Integration Tests - Phase 1"
+            make test-rag-integration-extended
+            echo "::endgroup::"
+
+        - name: Upload coverage reports
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: rag-integration-phase1-coverage
+            path: docs/rag_extended_coverage.json
+            retention-days: 30
+
+        - name: Show logs on failure
+          if: failure()
+          run: |
+            echo "::group::Service Logs"
+            docker compose -f docker/compose.p2.cpu.yml logs
+            echo "::endgroup::"
+
+        - name: Teardown
+          if: always()
+          run: |
+            docker compose -f docker/compose.p2.cpu.yml down -v
+
+    # Phase 2: E2E Playwright Tests
+    e2e-tests:
+      name: E2E Tests - Desktop App (Phase 2)
+      runs-on: ubuntu-latest
+      needs: [lint]
+      strategy:
+        fail-fast: false
+        matrix:
+          browser: [chromium, firefox, webkit]
+
+      steps:
+        - uses: actions/checkout@v4
+
+        - uses: actions/setup-node@v4
+          with:
+            node-version: '20'
+            cache: 'npm'
+            cache-dependency-path: desktop-app/package-lock.json
+
+        - name: Install desktop app dependencies
+          working-directory: desktop-app
+          run: |
+            npm install
+
+        - name: Install Playwright browsers
+          working-directory: desktop-app
+          run: |
+            npx playwright install ${{ matrix.browser }}
+
+        - name: Run E2E tests
+          working-directory: desktop-app
+          run: |
+            echo "::group::E2E Tests - ${{ matrix.browser }} browser"
+            npm run test:e2e -- --headed=false --project=${{ matrix.browser }} || {
+              echo "::warning::E2E tests failed for ${{ matrix.browser }}"
+              exit 1
+            }
+            echo "::endgroup::"
+
+        - name: Upload Playwright report
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: playwright-report-${{ matrix.browser }}
+            path: desktop-app/playwright-report/
+            retention-days: 30
+
+    # Phase 3: Load Tests (Nightly only)
+    load-tests:
+      name: Load Tests (Phase 3)
+      runs-on: ubuntu-latest
+      if: github.event_name == 'schedule' || github.event.inputs.run_load_tests == 'true'
+      steps:
+        - uses: actions/checkout@v4
+
+        - uses: actions/setup-python@v5
+          with:
+            python-version: '3.11'
+            cache: 'pip'
+
+        - name: Install Locust and dependencies
+          run: |
+            pip install locust fasthttp
+
+        - name: Start services with CPU profile
+          run: |
+            docker compose -f docker/compose.p2.cpu.yml up -d
+            echo "::notice::Starting Phase 2 stack for load testing"
+
+        - name: Wait for services
+          run: |
+            echo "Waiting 60 seconds for all services to be ready..."
+            sleep 60
+
+        - name: Run baseline test
+          run: |
+            echo "::group::Load Test - Baseline (1 user, 2 min)"
+            make test-load-baseline || echo "::warning::Baseline test failed"
+            echo "::endgroup::"
+
+        - name: Run API Gateway load tests
+          run: |
+            echo "::group::Load Test - API Gateway (10→50→100 users, 15 min)"
+            make test-load-api || echo "::warning::API Gateway load test failed"
+            echo "::endgroup::"
+
+        - name: Run RAG Service load tests
+          run: |
+            echo "::group::Load Test - RAG Service (5→25→50 users, 15 min)"
+            make test-load-rag || echo "::warning::RAG Service load test failed"
+            echo "::endgroup::"
+
+        - name: Run MCP Server load tests
+          run: |
+            echo "::group::Load Test - MCP Server (5→20 users, 10 min)"
+            make test-load-mcp || echo "::warning::MCP Server load test failed"
+            echo "::endgroup::"
+
+        - name: Extract metrics from load test results
+          if: always()
+          run: |
+            echo "::group::Performance Metrics Extraction"
+            python3 scripts/extract_metrics.py load_results_stats.csv load-results.json || echo "::warning::Metric extraction failed"
+            echo "::endgroup::"
+
+        - name: Compare against performance baseline
+          if: always()
+          run: |
+            echo "::group::Performance Regression Detection"
+            python3 scripts/compare_performance.py docs/performance-baselines.json load-results.json || echo "::notice::Performance regressions detected - see report"
+            echo "::endgroup::"
+
+        - name: Create GitHub issue for regressions
+          if: always() && failure()
+          run: |
+            echo "::group::GitHub Issue Auto-Creation"
+            python3 scripts/create_regression_issue.py load-test-results/regression-analysis.md || echo "::notice::Could not create issue (requires token in CI)"
+            echo "::endgroup::"
+
+        - name: Collect load test results
+          if: always()
+          run: |
+            mkdir -p load-test-results
+            echo "Load testing completed at $(date)" > load-test-results/summary.txt
+
+        - name: Upload load test results
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: load-test-results
+            path: load-test-results/
+            retention-days: 30
+
+        - name: Show logs on failure
+          if: failure()
+          run: |
+            echo "::group::Service Logs"
+            docker compose -f docker/compose.p2.cpu.yml logs
+            echo "::endgroup::"
+
+        - name: Teardown
+          if: always()
+          run: |
+            docker compose -f docker/compose.p2.cpu.yml down -v
+
     build-check:
       name: Docker Build Check
       runs-on: ubuntu-latest
@@ -237,21 +457,30 @@
     summary:
       name: CI Summary
       runs-on: ubuntu-latest
-      needs: [lint, security-scan, unit-tests, integration-tests, build-check]
+      needs: [lint, security-scan, unit-tests, integration-tests, rag-integration-tests, e2e-tests, build-check]
       if: always()
       steps:
         - name: Check CI status
           run: |
             echo "::notice::CI Pipeline completed"
+            echo "::group::Core Tests"
             echo "::notice::Lint: ${{ needs.lint.result }}"
             echo "::notice::Security: ${{ needs.security-scan.result }}"
             echo "::notice::Unit Tests: ${{ needs.unit-tests.result }}"
             echo "::notice::Integration Tests: ${{ needs.integration-tests.result }}"
             echo "::notice::Build: ${{ needs.build-check.result }}"
+            echo "::endgroup::"
+
+            echo "::group::Issue #24 Tests"
+            echo "::notice::RAG Integration (Phase 1): ${{ needs.rag-integration-tests.result }}"
+            echo "::notice::E2E Tests (Phase 2): ${{ needs.e2e-tests.result }}"
+            echo "::endgroup::"
 
             if [[ "${{ needs.lint.result }}" == "failure" ]] || \
                [[ "${{ needs.unit-tests.result }}" == "failure" ]] || \
-               [[ "${{ needs.integration-tests.result }}" == "failure" ]]; then
+               [[ "${{ needs.integration-tests.result }}" == "failure" ]] || \
+               [[ "${{ needs.rag-integration-tests.result }}" == "failure" ]] || \
+               [[ "${{ needs.e2e-tests.result }}" == "failure" ]]; then
               echo "::error::CI failed - check logs above"
               exit 1
             fi
