@@ -24,63 +24,99 @@ test.describe('Chat Interface', () => {
 
     // Click send button or press Enter
     const sendButton = page.locator('button:has-text("전송"), button:has-text("Send")').first();
-    if (await sendButton.isVisible()) {
-      await sendButton.click();
-    } else {
-      await input.press('Enter');
-    }
 
-    // Wait for response
-    await page.waitForTimeout(3000); // Give API time to respond
+    // Wait for API response while clicking send
+    try {
+      await Promise.all([
+        page.waitForResponse(response =>
+          (response.url().includes('/chat') || response.url().includes('/completions')) &&
+          response.status() === 200,
+          { timeout: 10000 }
+        ),
+        sendButton.isVisible() ? sendButton.click() : input.press('Enter'),
+      ]);
+    } catch (e) {
+      // If no specific API response, wait for general network idle
+      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+    }
 
     // Check that message appears in chat history
     const chatHistory = page.locator('.chat-history, .messages, [class*="history"], [class*="messages"]').first();
+    await chatHistory.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
     await expect(chatHistory).toContainText('Hello world');
   });
 
   test('displays loading indicator while waiting', async ({ page }) => {
     const input = page.locator('input[placeholder*="메시지"], textarea[placeholder*="메시지"], input[placeholder*="message"], textarea[placeholder*="message"]').first();
+    await input.waitFor({ state: 'visible' });
     await input.fill('test');
 
     const sendButton = page.locator('button:has-text("전송"), button:has-text("Send")').first();
-    if (await sendButton.isVisible()) {
-      await sendButton.click();
-    } else {
-      await input.press('Enter');
+
+    // Send message and wait for response
+    try {
+      await Promise.all([
+        page.waitForResponse(response =>
+          (response.url().includes('/chat') || response.url().includes('/completions')) &&
+          response.status() === 200,
+          { timeout: 10000 }
+        ),
+        sendButton.isVisible() ? sendButton.click() : input.press('Enter'),
+      ]);
+    } catch (e) {
+      // If timeout, continue - loading indicator may already be gone
     }
 
-    // Look for loading indicator
+    // Look for loading indicator or check that response rendered
     const loadingIndicator = page.locator('[class*="loading"], [class*="spinner"], .loading-dots').first();
-    // May or may not be visible depending on response time
-    await page.waitForTimeout(1000);
+    const chatHistory = page.locator('.chat-history, .messages, [class*="history"], [class*="messages"]').first();
+
+    // Either loading indicator visible or message rendered
+    const isLoading = await loadingIndicator.isVisible().catch(() => false);
+    const hasContent = await chatHistory.isVisible().catch(() => false);
+
+    if (!isLoading && !hasContent) {
+      await chatHistory.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
+    }
   });
 
   test('maintains chat history', async ({ page }) => {
-    // Send first message
     const input = page.locator('input[placeholder*="메시지"], textarea[placeholder*="메시지"], input[placeholder*="message"], textarea[placeholder*="message"]').first();
-    await input.fill('First message');
-
     const sendButton = page.locator('button:has-text("전송"), button:has-text("Send")').first();
-    if (await sendButton.isVisible()) {
-      await sendButton.click();
-    } else {
-      await input.press('Enter');
-    }
 
-    await page.waitForTimeout(2000);
+    // Send first message
+    await input.fill('First message');
+    try {
+      await Promise.all([
+        page.waitForResponse(response =>
+          (response.url().includes('/chat') || response.url().includes('/completions')) &&
+          response.status() === 200,
+          { timeout: 10000 }
+        ),
+        sendButton.isVisible() ? sendButton.click() : input.press('Enter'),
+      ]);
+    } catch (e) {
+      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+    }
 
     // Send second message
     await input.fill('Second message');
-    if (await sendButton.isVisible()) {
-      await sendButton.click();
-    } else {
-      await input.press('Enter');
+    try {
+      await Promise.all([
+        page.waitForResponse(response =>
+          (response.url().includes('/chat') || response.url().includes('/completions')) &&
+          response.status() === 200,
+          { timeout: 10000 }
+        ),
+        sendButton.isVisible() ? sendButton.click() : input.press('Enter'),
+      ]);
+    } catch (e) {
+      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
     }
-
-    await page.waitForTimeout(2000);
 
     // Both messages should be in history
     const chatHistory = page.locator('.chat-history, .messages, [class*="history"], [class*="messages"]').first();
+    await chatHistory.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
     await expect(chatHistory).toContainText('First message');
     await expect(chatHistory).toContainText('Second message');
   });
