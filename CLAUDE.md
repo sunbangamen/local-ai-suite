@@ -529,6 +529,74 @@ ai --interactive
     - 계획: `docs/progress/v1/RAG_INTEGRATION_PLAN.md` (~21KB)
     - 추적: `docs/progress/v1/ISSUE_23_TRACKING.md` (~17KB), `docs/progress/v1/ISSUE_23_RESULTS.md` (~3.6KB)
 
+#### **Testing & QA Enhancement (🚀 Phases 1-2 Complete, Phase 3-4 In Progress - Issue #24)**
+
+**완료 상태 (2025-10-17):**
+- ✅ **Phase 1**: RAG Integration Tests - 21개 테스트 작성 및 100% 통과 (6.06초)
+  - 통합 테스트: `services/rag/tests/integration/test_extended_coverage.py` (487 lines)
+  - 커버리지: `docs/rag_extended_coverage.json` (36KB)
+  - Makefile: `make test-rag-integration-extended` target
+- ✅ **Phase 2**: E2E Playwright Tests - 22개 테스트 작성 (5개 파일, 456 lines)
+  - 프레임워크: Playwright v1.45.0 (Chromium, Firefox, WebKit)
+  - 설정: `desktop-app/playwright.config.js` (61 lines)
+  - npm 스크립트: `test:e2e`, `test:e2e:debug`, `test:e2e:ui`, `test:e2e:headed`
+- ✅ **Phase 3**: Load Testing Infrastructure (완료 30%)
+  - 시나리오 설계: 3개 (API Gateway, RAG, MCP) 전체 정의
+  - Locust 스크립트: `tests/load/locustfile.py` (337 lines, 3개 User Class, 10개 Task)
+  - Makefile: 5개 타겟 (`test-load*`)
+  - 문서: `docs/ops/LOAD_TESTING_GUIDE.md` (500+ lines)
+- 🚀 **Phase 4**: CI/CD Integration & 프로덕션 준비 (구현 진행 중)
+  - GitHub Actions 확장: 3개 새로운 테스트 job 추가 (RAG Phase 1, E2E Phase 2, Load Phase 3)
+  - 테스트 선택 전략: PR (23min) + Main (36min) + Nightly (76min), 월예산 829min (41.5%)
+  - 성능 회귀 감지: 자동 비교 및 GitHub issue 생성 (기준선 대비 임계값 설정)
+  - 문서 업데이트: CLAUDE.md, README.md (진행 중)
+
+**테스트 수량 정리 (정확한 카운팅, 2025-10-17):**
+- Unit Tests (기존): ~103개 (RAG + Embedding + Integration)
+- Phase 1 Integration: 21개 (전부 통과 ✅)
+- Phase 2 E2E: 22개 (생성 완료, 실행 대기 ⏳)
+- Phase 3 Load Scenarios: 3개 (인프라 완료, 실행 대기 ⏳)
+- **총 테스트**: 149+ 개
+
+**CI/CD 자동화 (Issue #24 Phase 4):**
+- GitHub Actions 확장: 3개 job 추가 (`.github/workflows/ci.yml` +210 lines)
+- 예산 최적화: 월 829분 (2,000분 중 41.5% 사용)
+- 회귀 감지: 주간 성능 baseline 자동 비교
+- 통합 문서: PHASE_4.2_TEST_SELECTION_STRATEGY.md, PHASE_4.3_REGRESSION_DETECTION.md
+
+**구현 가이드:**
+```bash
+# Phase 1: RAG Integration Tests 실행
+make test-rag-integration-extended  # 21/21 통과 (6.06초)
+
+# Phase 2: E2E Playwright Tests 실행
+cd desktop-app && npm run test:e2e  # 22개 테스트
+
+# Phase 3: 부하 테스트 실행
+make test-load-baseline             # 기준선 (1user, 2min)
+make test-load-api                  # API (10→50→100, 15min)
+make test-load-rag                  # RAG (5→25→50, 15min)
+make test-load-mcp                  # MCP (5→20, 10min)
+make test-load                      # 전체 (40min)
+
+# Phase 4: 성능 회귀 감지 확인
+# 주간 일요일 2am UTC에 자동 실행
+# 또는 수동: gh workflow run ci.yml -f run_load_tests=true
+```
+
+**프로덕션 준비도:**
+- Phase 1-2: 100% 완료 ✅
+- Phase 3: 30% 완료 (인프라 구축, 실행 대기)
+- Phase 4: 80% 완료 (CI 확장, 문서 업데이트 진행 중)
+- **전체 목표**: 100% (Phase 4 완료 시 도달)
+
+**참고 문서:**
+- 최종 상태: `docs/ISSUE_24_FINAL_STATUS.md`
+- Phase 계획: `docs/progress/v1/PHASE_3_LOAD_TESTING_PLAN.md` (392 lines)
+- 부하 테스트: `docs/ops/LOAD_TESTING_GUIDE.md` (500+ lines)
+- 테스트 전략: `docs/progress/v1/PHASE_4.2_TEST_SELECTION_STRATEGY.md` (385+ lines)
+- 회귀 감지: `docs/progress/v1/PHASE_4.3_REGRESSION_DETECTION.md` (570+ lines)
+
 ### 🎯 Improvement Roadmap
 
 #### **Security & Stability (✅ 100% 완료 - Issues #8, #16, #18)**
