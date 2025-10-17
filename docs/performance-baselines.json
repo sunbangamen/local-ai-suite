@@ -1,0 +1,44 @@
+{
+  "api_gateway": {
+    "baseline_users": 1,
+    "avg_latency_ms": 150.0,
+    "median_latency_ms": 120.0,
+    "min_latency_ms": 50.0,
+    "max_latency_ms": 500.0,
+    "p95_latency_ms": 210,
+    "p99_latency_ms": 255,
+    "error_rate_pct": 0.33,
+    "rps": 50.0,
+    "total_requests": 300,
+    "total_failures": 1,
+    "timestamp": "2025-10-17T05:15:19.646324Z"
+  },
+  "rag_service": {
+    "baseline_users": 1,
+    "avg_latency_ms": 2500.0,
+    "median_latency_ms": 2000.0,
+    "min_latency_ms": 1000.0,
+    "max_latency_ms": 8000.0,
+    "p95_latency_ms": 3500,
+    "p99_latency_ms": 4250,
+    "error_rate_pct": 0.0,
+    "rps": 25.0,
+    "total_requests": 150,
+    "total_failures": 0,
+    "timestamp": "2025-10-17T05:15:19.646359Z"
+  },
+  "mcp_server": {
+    "baseline_users": 1,
+    "avg_latency_ms": 3500.0,
+    "median_latency_ms": 3000.0,
+    "min_latency_ms": 500.0,
+    "max_latency_ms": 12000.0,
+    "p95_latency_ms": 4900,
+    "p99_latency_ms": 5950,
+    "error_rate_pct": 0.0,
+    "rps": 15.0,
+    "total_requests": 90,
+    "total_failures": 0,
+    "timestamp": "2025-10-17T05:15:19.646368Z"
+  }
+}
