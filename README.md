@@ -157,11 +157,12 @@ make down-p2
 - ⏱️ 실행 시간: 6.06초
 - 📊 커버리지: `docs/rag_extended_coverage.json`
 
-#### Phase 2: E2E Playwright 테스트 (22개 테스트)
+#### Phase 2: E2E Playwright 테스트 (22개 테스트, 준비 완료/실행 대기)
 ```bash
 # Desktop 앱 E2E 테스트 (3개 브라우저 × 여러 시나리오)
+# 주의: 테스트는 생성되었지만 아직 실행되지 않음
 cd desktop-app
-npm run test:e2e         # Chromium, Firefox, WebKit 자동 실행
+npm run test:e2e         # Chromium, Firefox, WebKit 자동 실행 (준비 완료)
 
 # 디버그 모드
 npm run test:e2e:debug   # Playwright Inspector 사용
@@ -170,80 +171,89 @@ npm run test:e2e:debug   # Playwright Inspector 사용
 npm run test:e2e:ui      # Playwright Test UI 실행
 ```
 
-**테스트 항목:**
-- ✅ 22개 테스트 (로그인, 대화, 모델 선택 등)
-- 🌐 다중 브라우저: Chromium, Firefox, WebKit
-- 📱 반응형 UI 검증
-- ⏱️ 예상 시간: 10분
+**테스트 상태:**
+- ⏳ 22개 테스트 구현 완료 (로그인, 대화, 모델 선택 등)
+- ⏳ 다중 브라우저 설정: Chromium, Firefox, WebKit
+- ⏳ 반응형 UI 검증 준비 완료
+- ⏱️ 예상 실행 시간: 10분 (아직 실행되지 않음)
 
-#### Phase 3: 부하 테스트 (3개 시나리오)
+#### Phase 3: 부하 테스트 (3개 시나리오, 인프라 준비 완료/실행 대기)
 ```bash
+# 주의: 인프라는 준비되었지만 아직 부하 테스트는 실행되지 않음
 # Phase 2 스택 시작
 make up-p2
 
-# 기준선 테스트 (1 사용자, 2분)
+# 기준선 테스트 (1 사용자, 2분) - 준비 완료
 make test-load-baseline
 
-# API 게이트웨이 부하 테스트 (10→50→100 사용자, 15분)
+# API 게이트웨이 부하 테스트 (10→50→100 사용자, 15분) - 준비 완료
 make test-load-api
 
-# RAG 서비스 부하 테스트 (5→25→50 사용자, 15분)
+# RAG 서비스 부하 테스트 (5→25→50 사용자, 15분) - 준비 완료
 make test-load-rag
 
-# MCP 서버 부하 테스트 (5→20 사용자, 10분)
+# MCP 서버 부하 테스트 (5→20 사용자, 10분) - 준비 완료
 make test-load-mcp
 
-# 전체 부하 테스트 (모든 시나리오 순차 실행, 40분)
+# 전체 부하 테스트 (모든 시나리오 순차 실행, 40분) - 준비 완료
 make test-load
 
 # 종료
 make down-p2
 ```
 
-**성능 목표:**
+**성능 목표 (설정됨, 아직 검증 대기):**
 - API Gateway: p95 < 2.0초, 오류율 < 1%
 - RAG Service: 쿼리 p95 < 3.0초, 오류율 < 1%
 - MCP Server: 도구 p95 < 5.0초, 샌드박스 위반 0건
 
+**상태:** 인프라 준비 완료, 실행 및 기준선 수립 대기
 **세부 정보:** `docs/ops/LOAD_TESTING_GUIDE.md` 참조
 
-#### Phase 4: CI/CD 자동화
+#### Phase 4: CI/CD 자동화 (설정 완료/스크립트 추후 구현)
 
-GitHub Actions에서 자동으로 실행되는 테스트:
+GitHub Actions 워크플로우 설정 완료 (실제 CI 테스트 미실행):
 
 ```bash
-# PR 확인 (23분)
+# PR 확인 (예상 23분, 아직 미테스트)
 - Lint, Security, Unit Tests
-- RAG Integration Tests
-- E2E Playwright Tests (브라우저 3개)
+- RAG Integration Tests (Phase 1)
+- E2E Playwright Tests (Phase 2, 브라우저 3개)
 
-# 주 병합 (36분)
+# 주 병합 (예상 36분, 아직 미테스트)
 - 모든 PR 체크
 - 추가 통합 테스트
 
-# 주간 부하 테스트 (일요일 2am UTC, 76분)
-- 전체 부하 테스트 스위트
-- 성능 회귀 감지
-- 자동 GitHub issue 생성 (회귀 발견 시)
+# 주간 부하 테스트 (예상 일요일 2am UTC, 76분, 아직 미테스트)
+- 전체 부하 테스트 스위트 (예정)
+- 성능 회귀 감지 (스크립트 추후 구현)
+- 자동 GitHub issue 생성 (회귀 발견 시, 추후 구현)
 ```
 
-**수동 실행:**
+**수동 실행 (설정됨):**
 ```bash
 # 특정 테스트 수동 트리거
 gh workflow run ci.yml -f run_load_tests=true
 ```
 
-**예산:** 월 829분 (2,000분 중 41.5%)
+**예산 계획** (PHASE_4_CI_CD_PLAN.md 기반, 아직 미검증):
+- 월 829분 (계획상, 2,000분 중 41.5%)
+- ⚠️ 주의: 위 예산은 예상치이며, 실제 워크플로우 실행 로그가 없습니다.
 
-### 테스트 정보 요약
+**추후 구현 예정:**
+- `scripts/compare_performance.py`: 성능 회귀 감지 스크립트
+- `scripts/extract_baselines.py`: 기준선 추출 스크립트
+- `scripts/extract_metrics.py`: 메트릭 추출 스크립트
 
-| 테스트 유형 | 수량 | 상태 | 시간 |
-|----------|-----|------|------|
-| Unit Tests | ~103개 | ✅ 통과 | <5분 |
-| Phase 1 (RAG Integration) | 21개 | ✅ 통과 | 6초 |
-| Phase 2 (E2E Playwright) | 22개 | ⏳ 준비 완료 | 10분 |
-| Phase 3 (부하 테스트) | 3 시나리오 | ⏳ 준비 완료 | 40분 |
-| **합계** | **149+** | - | - |
+### 테스트 정보 요약 (정확한 카운팅)
+
+| 테스트 유형 | 수량 | 상태 | 시간 | 비고 |
+|----------|-----|------|------|------|
+| 단위/통합 테스트 | **144개** | ✅ 통과 | <5분 | docs/test_count_report.json 참고 |
+| Phase 1 (RAG 통합) | 21개 | ✅ 실행 완료 | 6초 | 21/21 통과 |
+| Phase 2 (E2E) | 22개 | ⏳ 구현 완료, 실행 대기 | 10분 | 3개 브라우저 지원 |
+| Phase 3 (부하) | 3 시나리오 | ⏳ 인프라 준비, 실행 대기 | 40분 | Locust 준비 완료 |
+| **합계** | **144+22+3 = 169+** | - | - | 구성: Unit(144) + E2E(22) + Load(3) |
 
 **세부 문서:**
 - 테스트 계획: `docs/progress/v1/PHASE_3_LOAD_TESTING_PLAN.md`
