@@ -339,7 +339,7 @@
           working-directory: desktop-app
           run: |
             echo "::group::E2E Tests - ${{ matrix.browser }} browser"
-            npm run test:e2e -- --headed=false --project=${{ matrix.browser }} || {
+            npm run test:e2e -- --project=${{ matrix.browser }} || {
               echo "::warning::E2E tests failed for ${{ matrix.browser }}"
               exit 1
             }
@@ -380,7 +380,7 @@
 
         - name: Install Locust and dependencies
           run: |
-            pip install locust fasthttp
+            pip install locust
 
         - name: Start services with CPU profile
           run: |
