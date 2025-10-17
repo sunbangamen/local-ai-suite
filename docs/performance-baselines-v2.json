@@ -1,0 +1,47 @@
+{
+  "_comment": "⚠️ SAMPLE DATA - NOT ACTUAL LOAD TEST RESULTS ⚠️",
+  "_description": "이 파일은 simple_load_test.py 시뮬레이터로 생성한 샘플 데이터입니다. 실제 Locust 부하 테스트 결과가 아닙니다. Phase 3 회귀 감지 파이프라인 검증용 예시 데이터입니다.",
+  "_actual_baseline_location": "Phase 3 실제 부하 테스트 실행 후 여기에 저장됩니다",
+  "api_gateway": {
+    "baseline_users": 1,
+    "avg_latency_ms": 150.0,
+    "median_latency_ms": 120.0,
+    "min_latency_ms": 50.0,
+    "max_latency_ms": 500.0,
+    "p95_latency_ms": 210,
+    "p99_latency_ms": 255,
+    "error_rate_pct": 0.33,
+    "rps": 50.0,
+    "total_requests": 300,
+    "total_failures": 1,
+    "timestamp": "2025-10-17T05:30:23.795008Z"
+  },
+  "rag_service": {
+    "baseline_users": 1,
+    "avg_latency_ms": 2500.0,
+    "median_latency_ms": 2000.0,
+    "min_latency_ms": 1000.0,
+    "max_latency_ms": 8000.0,
+    "p95_latency_ms": 3500,
+    "p99_latency_ms": 4250,
+    "error_rate_pct": 0.0,
+    "rps": 25.0,
+    "total_requests": 150,
+    "total_failures": 0,
+    "timestamp": "2025-10-17T05:30:23.795042Z"
+  },
+  "mcp_server": {
+    "baseline_users": 1,
+    "avg_latency_ms": 3500.0,
+    "median_latency_ms": 3000.0,
+    "min_latency_ms": 500.0,
+    "max_latency_ms": 12000.0,
+    "p95_latency_ms": 4900,
+    "p99_latency_ms": 5950,
+    "error_rate_pct": 0.0,
+    "rps": 15.0,
+    "total_requests": 90,
+    "total_failures": 0,
+    "timestamp": "2025-10-17T05:30:23.795050Z"
+  }
+}
