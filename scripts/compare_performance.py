@@ -21,6 +21,7 @@ from dataclasses import dataclass
 @dataclass
 class RegressionResult:
     """Represents a single regression comparison result."""
+
     service: str
     metric: str
     baseline: float
@@ -32,13 +33,13 @@ class RegressionResult:
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization."""
         return {
-            'service': self.service,
-            'metric': self.metric,
-            'baseline': self.baseline,
-            'current': self.current,
-            'change_pct': self.change_pct,
-            'threshold': self.threshold,
-            'status': self.status
+            "service": self.service,
+            "metric": self.metric,
+            "baseline": self.baseline,
+            "current": self.current,
+            "change_pct": self.change_pct,
+            "threshold": self.threshold,
+            "status": self.status,
         }
 
 
@@ -47,21 +48,21 @@ class PerformanceComparator:
 
     # Alert thresholds per service
     THRESHOLDS = {
-        'api_gateway': [
-            ('p95_latency_ms', 0.50),      # Fail if > 50% increase
-            ('error_rate_pct', 0.005),      # Fail if > 0.5% increase
-            ('rps', -0.30),                 # Fail if > 30% decrease
+        "api_gateway": [
+            ("p95_latency_ms", 0.50),  # Fail if > 50% increase
+            ("error_rate_pct", 0.005),  # Fail if > 0.5% increase
+            ("rps", -0.30),  # Fail if > 30% decrease
         ],
-        'rag_service': [
-            ('query_p95_ms', 0.50),
-            ('error_rate_pct', 0.005),
-            ('qdrant_timeout_rate_pct', 0.001),
+        "rag_service": [
+            ("query_p95_ms", 0.50),
+            ("error_rate_pct", 0.005),
+            ("qdrant_timeout_rate_pct", 0.001),
         ],
-        'mcp_server': [
-            ('tool_p95_ms', 0.50),
-            ('error_rate_pct', 0.005),
-            ('sandbox_violations', 0),      # Must stay at 0 (absolute threshold)
-        ]
+        "mcp_server": [
+            ("tool_p95_ms", 0.50),
+            ("error_rate_pct", 0.005),
+            ("sandbox_violations", 0),  # Must stay at 0 (absolute threshold)
+        ],
     }
 
     def __init__(self, baseline_file: str, current_file: str):
@@ -76,7 +77,7 @@ class PerformanceComparator:
     def _load_json(filepath: str) -> Dict:
         """Load JSON file with error handling."""
         try:
-            with open(filepath, 'r') as f:
+            with open(filepath, "r") as f:
                 return json.load(f)
         except FileNotFoundError:
             print(f"❌ File not found: {filepath}")
@@ -112,7 +113,7 @@ class PerformanceComparator:
 
                 # Calculate change percentage
                 if baseline_val == 0:
-                    change_pct = float('inf') if current_val > 0 else 0
+                    change_pct = float("inf") if current_val > 0 else 0
                 else:
                     change_pct = (current_val - baseline_val) / baseline_val
 
@@ -126,7 +127,7 @@ class PerformanceComparator:
                     current=current_val,
                     change_pct=change_pct,
                     threshold=threshold,
-                    status=status
+                    status=status,
                 )
                 self.regressions.append(result)
 
@@ -141,34 +142,34 @@ class PerformanceComparator:
         """
         # Handle absolute threshold (e.g., sandbox_violations must be 0)
         if isinstance(threshold, int):
-            return 'fail' if current_val > threshold else 'pass'
+            return "fail" if current_val > threshold else "pass"
 
         # Handle percentage thresholds
         if threshold < 0:
             # Negative threshold: fail if change is worse (more negative) than threshold
             # E.g., for rps with threshold -0.30, fail only if change < -0.30 (30%+ decrease)
             if change_pct < threshold:
-                return 'fail'
+                return "fail"
             # Add small tolerance for measurement noise (±1%)
             elif change_pct < threshold * 1.5 and change_pct < -0.01:
-                return 'warning'
+                return "warning"
         else:
             # Positive threshold: fail if change is worse (more positive) than threshold
             # E.g., for latency with threshold 0.50, fail only if change > 0.50 (50%+ increase)
             if change_pct > threshold:
                 # Warning if between threshold and 1.5x threshold
                 if change_pct < threshold * 1.5:
-                    return 'warning'
+                    return "warning"
                 else:
-                    return 'fail'
+                    return "fail"
 
-        return 'pass'
+        return "pass"
 
     def generate_report(self) -> str:
         """Generate markdown report of regression analysis."""
-        failures = [r for r in self.regressions if r.status == 'fail']
-        warnings = [r for r in self.regressions if r.status == 'warning']
-        passes = [r for r in self.regressions if r.status == 'pass']
+        failures = [r for r in self.regressions if r.status == "fail"]
+        warnings = [r for r in self.regressions if r.status == "warning"]
+        passes = [r for r in self.regressions if r.status == "pass"]
 
         report = "## Performance Regression Analysis\n\n"
 
@@ -177,7 +178,7 @@ class PerformanceComparator:
             report += "| Service | Metric | Expected | Current | Change | Impact |\n"
             report += "|---------|--------|----------|---------|--------|--------|\n"
             for r in failures:
-                pct = f"{r.change_pct*100:+.1f}%" if r.change_pct != float('inf') else "∞"
+                pct = f"{r.change_pct*100:+.1f}%" if r.change_pct != float("inf") else "∞"
                 report += f"| {r.service} | {r.metric} | {r.baseline} | {r.current} | {pct} | ❌ Critical |\n"
             report += "\n"
 
@@ -207,13 +208,13 @@ class PerformanceComparator:
     def save_report(self, output_file: str) -> None:
         """Save regression report to file."""
         report = self.generate_report()
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             f.write(report)
         print(f"✅ Report saved to: {output_file}")
 
     def has_failures(self) -> bool:
         """Check if there are any critical failures."""
-        return any(r.status == 'fail' for r in self.regressions)
+        return any(r.status == "fail" for r in self.regressions)
 
 
 def main():
@@ -221,7 +222,9 @@ def main():
     if len(sys.argv) != 3:
         print("Usage: python scripts/compare_performance.py <baseline_file> <current_results_file>")
         print("\nExample:")
-        print("  python scripts/compare_performance.py docs/performance-baselines.json load-results.json")
+        print(
+            "  python scripts/compare_performance.py docs/performance-baselines.json load-results.json"
+        )
         sys.exit(1)
 
     baseline_file = sys.argv[1]
@@ -251,5 +254,5 @@ def main():
         sys.exit(0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

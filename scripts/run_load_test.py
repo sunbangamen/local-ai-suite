@@ -19,7 +19,7 @@ def run_locust_test(
     users: int,
     spawn_rate: int,
     run_time: str,
-    csv_prefix: str = "load_results"
+    csv_prefix: str = "load_results",
 ) -> dict:
     """
     Run a Locust load test and return results
@@ -50,16 +50,24 @@ def run_locust_test(
     print(f"  Results: {csv_file}.csv")
 
     cmd = [
-        "python3", "-m", "locust",
-        "-f", "tests/load/locustfile.py",
+        "python3",
+        "-m",
+        "locust",
+        "-f",
+        "tests/load/locustfile.py",
         user_class,
-        "--host", host,
-        "--users", str(users),
-        "--spawn-rate", str(spawn_rate),
-        "--run-time", run_time,
-        "--csv", csv_file,
+        "--host",
+        host,
+        "--users",
+        str(users),
+        "--spawn-rate",
+        str(spawn_rate),
+        "--run-time",
+        run_time,
+        "--csv",
+        csv_file,
         "--headless",
-        "--csv-full-history"
+        "--csv-full-history",
     ]
 
     try:
@@ -75,7 +83,7 @@ def run_locust_test(
             "csv_file": f"{csv_file}_stats.csv",
             "users": users,
             "spawn_rate": spawn_rate,
-            "run_time": run_time
+            "run_time": run_time,
         }
 
     except subprocess.CalledProcessError as e:
@@ -85,16 +93,16 @@ def run_locust_test(
             "scenario": scenario_name,
             "status": "failed",
             "timestamp": timestamp,
-            "error": str(e)
+            "error": str(e),
         }
 
 
 def main():
     """Run Phase 3 load test suite"""
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Phase 3 Load Test Execution - Issue #24")
-    print("="*70)
+    print("=" * 70)
 
     results = []
 
@@ -106,7 +114,7 @@ def main():
         user_class="APIGatewayUser",
         users=1,
         spawn_rate=1,
-        run_time="2m"
+        run_time="2m",
     )
     results.append(baseline)
 
@@ -126,7 +134,7 @@ def main():
         user_class="APIGatewayUser",
         users=100,  # Final target
         spawn_rate=10,  # Progressive ramping
-        run_time="15m"
+        run_time="15m",
     )
     results.append(api_test)
 
@@ -144,7 +152,7 @@ def main():
         user_class="RAGServiceUser",
         users=50,  # Final target
         spawn_rate=5,  # Progressive ramping
-        run_time="15m"
+        run_time="15m",
     )
     results.append(rag_test)
 
@@ -162,14 +170,14 @@ def main():
         user_class="MCPServerUser",
         users=20,  # Final target
         spawn_rate=5,  # Progressive ramping
-        run_time="10m"
+        run_time="10m",
     )
     results.append(mcp_test)
 
     # Summary
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Phase 3 Load Test Summary")
-    print("="*70)
+    print("=" * 70)
 
     completed = sum(1 for r in results if r["status"] == "completed")
     failed = sum(1 for r in results if r["status"] == "failed")
@@ -185,14 +193,18 @@ def main():
 
     # Save results metadata
     metadata_file = "tests/load/test_execution_metadata.json"
-    with open(metadata_file, 'w') as f:
-        json.dump({
-            "execution_time": datetime.now().isoformat(),
-            "total_tests": len(results),
-            "completed": completed,
-            "failed": failed,
-            "results": results
-        }, f, indent=2)
+    with open(metadata_file, "w") as f:
+        json.dump(
+            {
+                "execution_time": datetime.now().isoformat(),
+                "total_tests": len(results),
+                "completed": completed,
+                "failed": failed,
+                "results": results,
+            },
+            f,
+            indent=2,
+        )
 
     print(f"\n📊 Metadata saved: {metadata_file}")
 

@@ -19,12 +19,7 @@ def ensure_results_dir():
 
 
 def run_locust_in_docker(
-    scenario_name: str,
-    host: str,
-    user_class: str,
-    users: int,
-    spawn_rate: int,
-    run_time: str
+    scenario_name: str, host: str, user_class: str, users: int, spawn_rate: int, run_time: str
 ) -> dict:
     """
     Run a Locust load test in Docker and return results
@@ -56,20 +51,31 @@ def run_locust_in_docker(
 
     # Run Locust in a temporary Docker container
     cmd = [
-        "docker", "run", "--rm",
-        "--network", "docker_default",  # Use the same network as Phase 2 stack
-        "-v", f"{output_dir}:/results",
-        "-v", f"/mnt/e/worktree/issue-24/tests/load:/locust",
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "docker_default",  # Use the same network as Phase 2 stack
+        "-v",
+        f"{output_dir}:/results",
+        "-v",
+        f"/mnt/e/worktree/issue-24/tests/load:/locust",
         "locustio/locust:latest",
-        "-f", "/locust/locustfile.py",
+        "-f",
+        "/locust/locustfile.py",
         user_class,
-        "--host", host,
-        "--users", str(users),
-        "--spawn-rate", str(spawn_rate),
-        "--run-time", run_time,
-        "--csv", f"/results/{csv_file}",
+        "--host",
+        host,
+        "--users",
+        str(users),
+        "--spawn-rate",
+        str(spawn_rate),
+        "--run-time",
+        run_time,
+        "--csv",
+        f"/results/{csv_file}",
         "--headless",
-        "--csv-full-history"
+        "--csv-full-history",
     ]
 
     try:
@@ -88,7 +94,7 @@ def run_locust_in_docker(
                 "csv_file": f"{csv_file}_stats.csv",
                 "users": users,
                 "spawn_rate": spawn_rate,
-                "run_time": run_time
+                "run_time": run_time,
             }
         else:
             print(f"\n⚠️  {scenario_name} test may have issues - CSV file not created")
@@ -98,7 +104,7 @@ def run_locust_in_docker(
                 "scenario": scenario_name,
                 "status": "partial",
                 "timestamp": timestamp,
-                "error": "CSV file not created"
+                "error": "CSV file not created",
             }
 
     except subprocess.CalledProcessError as e:
@@ -109,7 +115,7 @@ def run_locust_in_docker(
             "scenario": scenario_name,
             "status": "failed",
             "timestamp": timestamp,
-            "error": str(e)
+            "error": str(e),
         }
     except Exception as e:
         print(f"\n❌ {scenario_name} test failed with exception:")
@@ -118,16 +124,16 @@ def run_locust_in_docker(
             "scenario": scenario_name,
             "status": "failed",
             "timestamp": timestamp,
-            "error": str(e)
+            "error": str(e),
         }
 
 
 def main():
     """Run Phase 3 load test suite"""
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Phase 3 Load Test Execution (Docker) - Issue #24")
-    print("="*70)
+    print("=" * 70)
 
     ensure_results_dir()
 
@@ -141,7 +147,7 @@ def main():
         user_class="APIGatewayUser",
         users=1,
         spawn_rate=1,
-        run_time="2m"
+        run_time="2m",
     )
     results.append(baseline)
 
@@ -160,7 +166,7 @@ def main():
         user_class="APIGatewayUser",
         users=100,
         spawn_rate=10,
-        run_time="15m"
+        run_time="15m",
     )
     results.append(api_test)
 
@@ -176,7 +182,7 @@ def main():
         user_class="RAGServiceUser",
         users=50,
         spawn_rate=5,
-        run_time="15m"
+        run_time="15m",
     )
     results.append(rag_test)
 
@@ -192,14 +198,14 @@ def main():
         user_class="MCPServerUser",
         users=20,
         spawn_rate=5,
-        run_time="10m"
+        run_time="10m",
     )
     results.append(mcp_test)
 
     # Summary
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Phase 3 Load Test Summary")
-    print("="*70)
+    print("=" * 70)
 
     completed = sum(1 for r in results if r["status"] == "completed")
     partial = sum(1 for r in results if r["status"] == "partial")
@@ -223,15 +229,19 @@ def main():
 
     # Save results metadata
     metadata_file = "tests/load/test_execution_metadata.json"
-    with open(metadata_file, 'w') as f:
-        json.dump({
-            "execution_time": datetime.now().isoformat(),
-            "total_tests": len(results),
-            "completed": completed,
-            "partial": partial,
-            "failed": failed,
-            "results": results
-        }, f, indent=2)
+    with open(metadata_file, "w") as f:
+        json.dump(
+            {
+                "execution_time": datetime.now().isoformat(),
+                "total_tests": len(results),
+                "completed": completed,
+                "partial": partial,
+                "failed": failed,
+                "results": results,
+            },
+            f,
+            indent=2,
+        )
 
     print(f"\n📊 Metadata saved: {metadata_file}")
 

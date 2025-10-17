@@ -36,7 +36,7 @@ class BaselineExtractor:
         """
         rows = []
         try:
-            with open(filepath, 'r') as f:
+            with open(filepath, "r") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     rows.append(row)
@@ -54,17 +54,17 @@ class BaselineExtractor:
 
         Handle formats like: "650", "1200ms", "1.5s"
         """
-        if not time_str or time_str == '-':
+        if not time_str or time_str == "-":
             return 0.0
 
         # Remove whitespace
         time_str = time_str.strip()
 
         # Convert to milliseconds
-        if 's' in time_str:
-            return float(time_str.replace('s', '')) * 1000
-        elif 'ms' in time_str:
-            return float(time_str.replace('ms', ''))
+        if "s" in time_str:
+            return float(time_str.replace("s", "")) * 1000
+        elif "ms" in time_str:
+            return float(time_str.replace("ms", ""))
         else:
             # Assume milliseconds if no unit
             try:
@@ -75,7 +75,7 @@ class BaselineExtractor:
     @staticmethod
     def _parse_rate(rate_str: str) -> float:
         """Parse request rate and return RPS."""
-        if not rate_str or rate_str == '-':
+        if not rate_str or rate_str == "-":
             return 0.0
 
         try:
@@ -101,13 +101,13 @@ class BaselineExtractor:
         """
         # Map service names to endpoint patterns or use Aggregated row for API Gateway
         endpoint_patterns = {
-            'api_gateway': 'Aggregated',  # Use aggregated metrics for API Gateway
-            'rag_service': '/query',  # RAG service query endpoint
-            'mcp_server': '/tools'    # MCP server tools endpoint
+            "api_gateway": "Aggregated",  # Use aggregated metrics for API Gateway
+            "rag_service": "/query",  # RAG service query endpoint
+            "mcp_server": "/tools",  # MCP server tools endpoint
         }
 
         pattern = endpoint_patterns.get(service_name, service_name)
-        service_rows = [r for r in self.stats if pattern.lower() in r.get('Name', '').lower()]
+        service_rows = [r for r in self.stats if pattern.lower() in r.get("Name", "").lower()]
 
         if not service_rows:
             print(f"⚠️  No data found for service: {service_name} (pattern: {pattern})")
@@ -121,28 +121,36 @@ class BaselineExtractor:
 
         try:
             # Handle both Locust column name formats
-            requests = int(row.get('Request Count', row.get('# requests', '0')) or 0)
-            failures = int(row.get('Failure Count', row.get('# failures', '0')) or 0)
-            median_ms = self._parse_response_time(row.get('Median Response Time', row.get('Median response time', '0')))
-            avg_ms = self._parse_response_time(row.get('Average Response Time', row.get('Average response time', '0')))
-            min_ms = self._parse_response_time(row.get('Min Response Time', row.get('Min response time', '0')))
-            max_ms = self._parse_response_time(row.get('Max Response Time', row.get('Max response time', '0')))
-            rps = self._parse_rate(row.get('Requests/s', '0'))
+            requests = int(row.get("Request Count", row.get("# requests", "0")) or 0)
+            failures = int(row.get("Failure Count", row.get("# failures", "0")) or 0)
+            median_ms = self._parse_response_time(
+                row.get("Median Response Time", row.get("Median response time", "0"))
+            )
+            avg_ms = self._parse_response_time(
+                row.get("Average Response Time", row.get("Average response time", "0"))
+            )
+            min_ms = self._parse_response_time(
+                row.get("Min Response Time", row.get("Min response time", "0"))
+            )
+            max_ms = self._parse_response_time(
+                row.get("Max Response Time", row.get("Max response time", "0"))
+            )
+            rps = self._parse_rate(row.get("Requests/s", "0"))
             error_rate = self._parse_error_rate(requests, failures)
 
             metrics = {
-                'baseline_users': 1,  # Single user baseline
-                'avg_latency_ms': avg_ms,
-                'median_latency_ms': median_ms,
-                'min_latency_ms': min_ms,
-                'max_latency_ms': max_ms,
-                'p95_latency_ms': int(avg_ms * 1.4),  # Estimate p95 as ~1.4x average
-                'p99_latency_ms': int(avg_ms * 1.7),  # Estimate p99 as ~1.7x average
-                'error_rate_pct': round(error_rate, 2),
-                'rps': round(rps, 2),
-                'total_requests': requests,
-                'total_failures': failures,
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                "baseline_users": 1,  # Single user baseline
+                "avg_latency_ms": avg_ms,
+                "median_latency_ms": median_ms,
+                "min_latency_ms": min_ms,
+                "max_latency_ms": max_ms,
+                "p95_latency_ms": int(avg_ms * 1.4),  # Estimate p95 as ~1.4x average
+                "p99_latency_ms": int(avg_ms * 1.7),  # Estimate p99 as ~1.7x average
+                "error_rate_pct": round(error_rate, 2),
+                "rps": round(rps, 2),
+                "total_requests": requests,
+                "total_failures": failures,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
             }
 
             return metrics
@@ -155,7 +163,7 @@ class BaselineExtractor:
         """Extract baselines for all known services."""
         # For Phase 3, we have baseline data for api_gateway only
         # RAG service and MCP server baselines will be added when their test data is available
-        services_to_extract = ['api_gateway']
+        services_to_extract = ["api_gateway"]
         baselines = {}
 
         for service in services_to_extract:
@@ -186,7 +194,7 @@ class BaselineExtractor:
         output_path.parent.mkdir(exist_ok=True)
 
         # Save in simple service-based structure (not nested under "baseline_test")
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(baselines, f, indent=2)
 
         print(f"\n✅ Baselines saved to: {output_file}")
@@ -203,16 +211,18 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: python scripts/extract_baselines.py <stats_csv_file> [output_file]")
         print("\nExample:")
-        print("  python scripts/extract_baselines.py load_results_stats.csv docs/performance-baselines.json")
+        print(
+            "  python scripts/extract_baselines.py load_results_stats.csv docs/performance-baselines.json"
+        )
         sys.exit(1)
 
     stats_file = sys.argv[1]
-    output_file = sys.argv[2] if len(sys.argv) > 2 else 'docs/performance-baselines.json'
+    output_file = sys.argv[2] if len(sys.argv) > 2 else "docs/performance-baselines.json"
 
     # Extract baselines
     extractor = BaselineExtractor(stats_file)
     extractor.save_baselines(output_file)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

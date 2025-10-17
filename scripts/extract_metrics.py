@@ -40,22 +40,22 @@ class MetricsExtractor:
         path = Path(filepath)
         ext = path.suffix.lower()
 
-        if ext == '.csv':
-            return 'csv'
-        elif ext == '.json':
-            return 'json'
-        elif ext == '.txt':
-            return 'text'
+        if ext == ".csv":
+            return "csv"
+        elif ext == ".json":
+            return "json"
+        elif ext == ".txt":
+            return "text"
         else:
             # Try to detect by content
-            return 'auto'
+            return "auto"
 
     def _load_input(self) -> Union[list, dict]:
         """Load input file based on detected type."""
         try:
-            if self.file_type == 'csv':
+            if self.file_type == "csv":
                 return self._load_csv()
-            elif self.file_type == 'json':
+            elif self.file_type == "json":
                 return self._load_json()
             else:
                 # Try JSON first, then CSV
@@ -72,7 +72,7 @@ class MetricsExtractor:
     def _load_csv() -> list:
         """Load Locust CSV stats file."""
         rows = []
-        with open(sys.argv[1], 'r') as f:
+        with open(sys.argv[1], "r") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 rows.append(row)
@@ -81,7 +81,7 @@ class MetricsExtractor:
     @staticmethod
     def _load_json() -> dict:
         """Load Locust JSON export."""
-        with open(sys.argv[1], 'r') as f:
+        with open(sys.argv[1], "r") as f:
             return json.load(f)
 
     def extract_from_csv(self) -> Dict:
@@ -89,10 +89,10 @@ class MetricsExtractor:
         metrics = {}
 
         for row in self.raw_data:
-            name = row.get('Name', '').lower()
+            name = row.get("Name", "").lower()
 
             # Skip "Total" row
-            if 'total' in name:
+            if "total" in name:
                 continue
 
             # Map Locust names to service names
@@ -102,24 +102,24 @@ class MetricsExtractor:
 
             try:
                 # Handle both Locust CSV column formats (CamelCase and lowercase with #)
-                requests = int(row.get('Request Count', row.get('# requests', 0)) or 0)
-                failures = int(row.get('Failure Count', row.get('# failures', 0)) or 0)
-                avg_time = row.get('Average Response Time', row.get('Average response time', '0'))
-                median_time = row.get('Median Response Time', row.get('Median response time', '0'))
-                min_time = row.get('Min Response Time', row.get('Min response time', '0'))
-                max_time = row.get('Max Response Time', row.get('Max response time', '0'))
+                requests = int(row.get("Request Count", row.get("# requests", 0)) or 0)
+                failures = int(row.get("Failure Count", row.get("# failures", 0)) or 0)
+                avg_time = row.get("Average Response Time", row.get("Average response time", "0"))
+                median_time = row.get("Median Response Time", row.get("Median response time", "0"))
+                min_time = row.get("Min Response Time", row.get("Min response time", "0"))
+                max_time = row.get("Max Response Time", row.get("Max response time", "0"))
 
                 metrics[service_key] = {
-                    'avg_latency_ms': self._parse_time(avg_time),
-                    'median_latency_ms': self._parse_time(median_time),
-                    'p95_latency_ms': self._parse_time(row.get('95%', '0')),
-                    'p99_latency_ms': self._parse_time(row.get('99%', '0')),
-                    'min_latency_ms': self._parse_time(min_time),
-                    'max_latency_ms': self._parse_time(max_time),
-                    'error_rate_pct': self._parse_error_rate(requests, failures),
-                    'rps': float(row.get('Requests/s', 0) or 0),
-                    'total_requests': requests,
-                    'total_failures': failures,
+                    "avg_latency_ms": self._parse_time(avg_time),
+                    "median_latency_ms": self._parse_time(median_time),
+                    "p95_latency_ms": self._parse_time(row.get("95%", "0")),
+                    "p99_latency_ms": self._parse_time(row.get("99%", "0")),
+                    "min_latency_ms": self._parse_time(min_time),
+                    "max_latency_ms": self._parse_time(max_time),
+                    "error_rate_pct": self._parse_error_rate(requests, failures),
+                    "rps": float(row.get("Requests/s", 0) or 0),
+                    "total_requests": requests,
+                    "total_failures": failures,
                 }
             except (ValueError, KeyError):
                 continue
@@ -131,33 +131,38 @@ class MetricsExtractor:
         metrics = {}
 
         # Handle Locust JSON format
-        if 'stats' in self.raw_data:
-            for stat in self.raw_data['stats']:
-                name = stat.get('name', '').lower()
+        if "stats" in self.raw_data:
+            for stat in self.raw_data["stats"]:
+                name = stat.get("name", "").lower()
 
                 # Skip "Total" row
-                if 'total' in name:
+                if "total" in name:
                     continue
 
                 service_key = self._map_service_name(name)
                 if not service_key:
                     continue
 
-                response_times = stat.get('response_times', {})
+                response_times = stat.get("response_times", {})
                 metrics[service_key] = {
-                    'avg_latency_ms': stat.get('avg_response_time', 0),
-                    'median_latency_ms': response_times.get(0.50, 0) if isinstance(response_times, dict) else 0,
-                    'p95_latency_ms': response_times.get(0.95, 0) if isinstance(response_times, dict) else 0,
-                    'p99_latency_ms': response_times.get(0.99, 0) if isinstance(response_times, dict) else 0,
-                    'min_latency_ms': stat.get('min_response_time', 0),
-                    'max_latency_ms': stat.get('max_response_time', 0),
-                    'error_rate_pct': self._parse_error_rate(
-                        stat.get('num_requests', 0),
-                        stat.get('num_failures', 0)
+                    "avg_latency_ms": stat.get("avg_response_time", 0),
+                    "median_latency_ms": (
+                        response_times.get(0.50, 0) if isinstance(response_times, dict) else 0
                     ),
-                    'rps': stat.get('requests_per_second', 0),
-                    'total_requests': stat.get('num_requests', 0),
-                    'total_failures': stat.get('num_failures', 0),
+                    "p95_latency_ms": (
+                        response_times.get(0.95, 0) if isinstance(response_times, dict) else 0
+                    ),
+                    "p99_latency_ms": (
+                        response_times.get(0.99, 0) if isinstance(response_times, dict) else 0
+                    ),
+                    "min_latency_ms": stat.get("min_response_time", 0),
+                    "max_latency_ms": stat.get("max_response_time", 0),
+                    "error_rate_pct": self._parse_error_rate(
+                        stat.get("num_requests", 0), stat.get("num_failures", 0)
+                    ),
+                    "rps": stat.get("requests_per_second", 0),
+                    "total_requests": stat.get("num_requests", 0),
+                    "total_failures": stat.get("num_failures", 0),
                 }
         else:
             # Handle custom JSON format (already in normalized form)
@@ -170,28 +175,28 @@ class MetricsExtractor:
         """Map test name to service key."""
         name = name.lower()
 
-        if 'api' in name or 'gateway' in name or 'chat' in name or 'models' in name:
-            return 'api_gateway'
-        elif 'rag' in name or 'query' in name or 'index' in name:
-            return 'rag_service'
-        elif 'mcp' in name or 'tool' in name:
-            return 'mcp_server'
+        if "api" in name or "gateway" in name or "chat" in name or "models" in name:
+            return "api_gateway"
+        elif "rag" in name or "query" in name or "index" in name:
+            return "rag_service"
+        elif "mcp" in name or "tool" in name:
+            return "mcp_server"
 
         return None
 
     @staticmethod
     def _parse_time(time_str: str) -> float:
         """Parse time string and return milliseconds."""
-        if not time_str or time_str == '-':
+        if not time_str or time_str == "-":
             return 0.0
 
         time_str = str(time_str).strip()
 
         try:
-            if 's' in time_str:
-                return float(time_str.replace('s', '')) * 1000
-            elif 'ms' in time_str:
-                return float(time_str.replace('ms', ''))
+            if "s" in time_str:
+                return float(time_str.replace("s", "")) * 1000
+            elif "ms" in time_str:
+                return float(time_str.replace("ms", ""))
             else:
                 return float(time_str)
         except ValueError:
@@ -206,7 +211,9 @@ class MetricsExtractor:
 
     def extract(self) -> Dict:
         """Extract metrics based on input file type."""
-        if self.file_type == 'csv' or (self.file_type == 'auto' and isinstance(self.raw_data, list)):
+        if self.file_type == "csv" or (
+            self.file_type == "auto" and isinstance(self.raw_data, list)
+        ):
             return self.extract_from_csv()
         else:
             return self.extract_from_json()
@@ -218,14 +225,16 @@ class MetricsExtractor:
         output_path = Path(output_file)
         output_path.parent.mkdir(exist_ok=True)
 
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(metrics, f, indent=2)
 
         print(f"✅ Metrics extracted and saved to: {output_file}")
         print(f"\n📊 Extracted metrics for {len(metrics)} services:")
         for service, data in metrics.items():
-            print(f"  - {service}: {data.get('total_requests', 0)} requests, "
-                  f"{data.get('error_rate_pct', 0)}% errors")
+            print(
+                f"  - {service}: {data.get('total_requests', 0)} requests, "
+                f"{data.get('error_rate_pct', 0)}% errors"
+            )
 
 
 def main():
@@ -238,12 +247,12 @@ def main():
         sys.exit(1)
 
     input_file = sys.argv[1]
-    output_file = sys.argv[2] if len(sys.argv) > 2 else 'load-results.json'
+    output_file = sys.argv[2] if len(sys.argv) > 2 else "load-results.json"
 
     # Extract metrics
     extractor = MetricsExtractor(input_file)
     extractor.save_metrics(output_file)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
