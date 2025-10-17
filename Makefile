@@ -52,7 +52,7 @@ logs-p2-gpu:
 logs-p3:
 	docker compose -f docker/compose.p3.yml logs -f
 
-.PHONY: test-rag-integration test-rag-integration-coverage
+.PHONY: test-rag-integration test-rag-integration-coverage test-rag-integration-extended
 
 test-rag-integration:
 	@echo "Running RAG integration tests in Docker container..."
@@ -75,3 +75,15 @@ test-rag-integration-coverage:
 		--cov=app --cov=services/rag/tests --cov-report=term-missing --cov-report=json"
 	docker compose -f docker/compose.p2.cpu.yml cp rag:/app/coverage.json docs/rag_integration_coverage.json
 	@echo "✅ Coverage saved to docs/rag_integration_coverage.json."
+
+test-rag-integration-extended:
+	@echo "Running extended RAG integration tests (Phase 1 - Issue #24)..."
+	@docker compose -f docker/compose.p2.cpu.yml ps | grep -q "Up" || \
+		(echo "❌ Phase 2 stack not running. Start with: make up-p2" && exit 1)
+	docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc "rm -rf /app/services/rag/tests && mkdir -p /app/services/rag"
+	docker compose -f docker/compose.p2.cpu.yml cp services/rag/tests rag:/app/services/rag
+	docker compose -f docker/compose.p2.cpu.yml exec rag bash -lc \
+		"cd /app && RUN_RAG_INTEGRATION_TESTS=1 pytest services/rag/tests/integration/test_extended_coverage.py \
+		-v --tb=short --cov=app --cov=services/rag/tests --cov-report=term-missing --cov-report=json"
+	docker compose -f docker/compose.p2.cpu.yml cp rag:/app/coverage.json docs/rag_extended_coverage.json
+	@echo "✅ Extended tests complete. Coverage saved to docs/rag_extended_coverage.json."
