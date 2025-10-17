@@ -380,7 +380,7 @@
 
         - name: Install Locust and dependencies
           run: |
-            pip install locust fasthttp
+            pip install locust
 
         - name: Start services with CPU profile
           run: |
