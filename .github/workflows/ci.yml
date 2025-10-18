@@ -319,20 +319,38 @@
             curl -f http://localhost:8003/health || echo "::warning::Embedding service health check failed"
             echo "::endgroup::"
 
-        - name: Run E2E tests in Docker container
+        - name: Setup Node.js
+          uses: actions/setup-node@v4
+          with:
+            node-version: '22'
+
+        - name: Install desktop app dependencies (npm ci)
+          working-directory: desktop-app
+          run: npm ci
+
+        - name: Install Playwright browsers
+          working-directory: desktop-app
+          run: npx playwright install ${{ matrix.browser }}
+
+        - name: Start Desktop App web server
+          working-directory: desktop-app/src
+          run: |
+            python3 -m http.server 3000 > /tmp/web.log 2>&1 &
+            sleep 3
+            curl -f http://localhost:3000 > /dev/null || {
+              echo "::error::Web server health check failed"
+              cat /tmp/web.log
+              exit 1
+            }
+            echo "✓ Web server started successfully"
+
+        - name: Run E2E tests
+          working-directory: desktop-app
           run: |
             echo "::group::E2E Tests - ${{ matrix.browser }} browser"
-            docker run --rm \
-              --network docker_default \
-              -v $PWD/desktop-app:/app \
-              -w /app \
-              -e PLAYWRIGHT_TEST_BASE_URL=http://localhost:3000 \
-              mcr.microsoft.com/playwright:v1.45.0-focal \
-              bash -lc "
-                npm install &&
-                npx playwright install ${{ matrix.browser }} &&
-                npx playwright test --project=${{ matrix.browser }}
-              " || {
+            export PLAYWRIGHT_TEST_BASE_URL=http://localhost:3000
+            export API_GATEWAY_URL=http://localhost:8000
+            npx playwright test --project=${{ matrix.browser }} --reporter=html,list || {
               echo "::warning::E2E tests failed for ${{ matrix.browser }}"
               exit 1
             }
@@ -346,12 +364,31 @@
             path: desktop-app/playwright-report/
             retention-days: 30
 
+        - name: Upload Playwright test results
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: playwright-test-results-${{ matrix.browser }}
+            path: desktop-app/test-results/
+            retention-days: 30
+
+        - name: Show web server logs on failure
+          if: failure()
+          run: |
+            echo "::group::Web Server Logs"
+            cat /tmp/web.log || echo "No web server logs available"
+            echo "::endgroup::"
+
         - name: Show backend service logs on failure
           if: failure()
           run: |
             echo "::group::Backend Service Logs"
-            docker compose -f docker/compose.p2.cpu.yml logs
+            docker compose -f docker/compose.p2.cpu.yml logs || echo "Could not retrieve docker logs"
             echo "::endgroup::"
+
+        - name: Stop web server
+          if: always()
+          run: pkill -f "http.server 3000" || true
 
         - name: Teardown backend services
           if: always()
