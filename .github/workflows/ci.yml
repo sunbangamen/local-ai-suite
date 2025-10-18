@@ -289,10 +289,6 @@
       name: E2E Tests - Desktop App (Phase 2)
       runs-on: ubuntu-latest
       needs: [lint]
-      strategy:
-        fail-fast: false
-        matrix:
-          browser: [chromium, firefox, webkit]
 
       steps:
         - uses: actions/checkout@v4
@@ -330,37 +326,49 @@
 
         - name: Install Playwright browsers
           working-directory: desktop-app
-          run: npx playwright install ${{ matrix.browser }}
+          run: npx playwright install
 
         - name: Start Desktop App web server
           working-directory: desktop-app/src
           run: |
+            lsof -ti:3000 | xargs kill -9 2>/dev/null || true
             python3 -m http.server 3000 > /tmp/web.log 2>&1 &
-            sleep 3
-            curl -f http://localhost:3000 > /dev/null || {
-              echo "::error::Web server health check failed"
-              cat /tmp/web.log
-              exit 1
-            }
-            echo "✓ Web server started successfully"
+            WEB_PID=$!
+            echo "WEB_PID=$WEB_PID" >> $GITHUB_ENV
 
-        - name: Run E2E tests
+            echo "Waiting for web server to be ready..."
+            for i in {1..30}; do
+              if curl -s http://localhost:3000 > /dev/null 2>&1; then
+                echo "✓ Web server started successfully (PID: $WEB_PID)"
+                break
+              fi
+              if [ $i -eq 30 ]; then
+                echo "::error::Web server health check failed"
+                cat /tmp/web.log
+                exit 1
+              fi
+              echo "Attempt $i/30..."
+              sleep 1
+            done
+
+        - name: Run E2E tests (all browsers)
           working-directory: desktop-app
           run: |
-            echo "::group::E2E Tests - ${{ matrix.browser }} browser"
             export PLAYWRIGHT_TEST_BASE_URL=http://localhost:3000
             export API_GATEWAY_URL=http://localhost:8000
-            npx playwright test --project=${{ matrix.browser }} --reporter=html,list || {
-              echo "::warning::E2E tests failed for ${{ matrix.browser }}"
-              exit 1
-            }
+            export CI=true
+
+            echo "::group::E2E Tests - All Browsers"
+            npx playwright test --reporter=html,list || TEST_FAILED=1
             echo "::endgroup::"
+
+            [[ -z "$TEST_FAILED" ]] || exit 1
 
         - name: Upload Playwright report
           if: always()
           uses: actions/upload-artifact@v4
           with:
-            name: playwright-report-${{ matrix.browser }}
+            name: playwright-report
             path: desktop-app/playwright-report/
             retention-days: 30
 
@@ -368,7 +376,7 @@
           if: always()
           uses: actions/upload-artifact@v4
           with:
-            name: playwright-test-results-${{ matrix.browser }}
+            name: playwright-test-results
             path: desktop-app/test-results/
             retention-days: 30
 
@@ -388,7 +396,9 @@
 
         - name: Stop web server
           if: always()
-          run: pkill -f "http.server 3000" || true
+          run: |
+            lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+            sleep 1
 
         - name: Teardown backend services
           if: always()
