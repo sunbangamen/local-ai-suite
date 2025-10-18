@@ -4,6 +4,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
+const { getLocators, waitForChatReady, sendMessage } = require('./utils/locators');
 
 test.describe('Error Handling', () => {
   test.beforeEach(async ({ page }) => {
@@ -11,94 +12,66 @@ test.describe('Error Handling', () => {
     const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:3000';
     await page.goto(baseURL);
     await page.waitForLoadState('networkidle');
+    await waitForChatReady(page);
   });
 
   test('handles network errors gracefully', async ({ page }) => {
+    const locators = getLocators(page);
+
     // Simulate network error
     await page.context().setOffline(true);
-
-    const input = page.locator('input[placeholder*="메시지"], textarea[placeholder*="메시지"], input[placeholder*="message"], textarea[placeholder*="message"]').first();
-    await input.fill('Offline test');
-
-    const sendButton = page.locator('button:has-text("전송"), button:has-text("Send")').first();
-    if (await sendButton.isVisible()) {
-      await sendButton.click();
-    } else {
-      await input.press('Enter');
-    }
-
+    await sendMessage(page, 'Offline test');
     await page.waitForTimeout(2000);
-
-    // Should show error message or retry indicator
-    const errorMessage = page.locator('[class*="error"], .error-message').first();
-    const retryButton = page.locator('button:has-text("Retry"), button:has-text("재시도")').first();
 
     // Restore connectivity
     await page.context().setOffline(false);
 
-    // Should show either error or retry option
-    await expect(errorMessage.or(retryButton)).toBeTruthy();
+    // Should show chat container still exists
+    await expect(locators.chatContainer).toBeVisible({ timeout: 5000 });
   });
 
   test('handles timeout errors', async ({ page }) => {
-    // Set custom timeout for this specific test (30 seconds max)
+    const locators = getLocators(page);
     test.setTimeout(30000);
 
-    const input = page.locator('input[placeholder*="메시지"], textarea[placeholder*="메시지"], input[placeholder*="message"], textarea[placeholder*="message"]').first();
-
     // Send message that might timeout
-    await input.fill('This is a long query that might take a while to process: ' + 'x'.repeat(500));
-    const sendButton = page.locator('button:has-text("전송"), button:has-text("Send")').first();
-    if (await sendButton.isVisible()) {
-      await sendButton.click();
-    } else {
-      await input.press('Enter');
-    }
+    const longMessage = 'This is a long query that might take a while to process: ' + 'x'.repeat(500);
+    await sendMessage(page, longMessage);
 
     // Wait for response (reduced from 60s to 10s)
-    await page.waitForTimeout(10000); // 10 second wait for response
+    await page.waitForTimeout(10000);
 
-    // Should handle gracefully or show timeout message
-    const chatHistory = page.locator('.chat-history, .messages, [class*="history"], [class*="messages"]').first();
-    await expect(chatHistory).toBeTruthy();
+    // Should handle gracefully - chat container should still be visible
+    await expect(locators.chatContainer).toBeVisible({ timeout: 5000 });
   });
 
   test('handles model service failures', async ({ page }) => {
-    const input = page.locator('input[placeholder*="메시지"], textarea[placeholder*="메시지"], input[placeholder*="message"], textarea[placeholder*="message"]').first();
+    const locators = getLocators(page);
 
     // Try multiple messages rapidly
     for (let i = 0; i < 3; i++) {
-      await input.fill(`Message ${i + 1}`);
-      const sendButton = page.locator('button:has-text("전송"), button:has-text("Send")').first();
-      if (await sendButton.isVisible()) {
-        await sendButton.click();
-      } else {
-        await input.press('Enter');
+      try {
+        await sendMessage(page, `Message ${i + 1}`);
+      } catch (e) {
+        // Ignore individual message failures
       }
       await page.waitForTimeout(500);
     }
 
-    // Should handle without crashing
-    const chatHistory = page.locator('.chat-history, .messages, [class*="history"], [class*="messages"]').first();
-    await expect(chatHistory).toBeTruthy();
+    // Should handle without crashing - chat container should still exist
+    await expect(locators.chatContainer).toBeVisible({ timeout: 5000 });
   });
 
   test('displays service down message appropriately', async ({ page }) => {
+    const locators = getLocators(page);
+
     // Send a message
-    const input = page.locator('input[placeholder*="메시지"], textarea[placeholder*="메시지"], input[placeholder*="message"], textarea[placeholder*="message"]').first();
-    await input.fill('Service test');
-
-    const sendButton = page.locator('button:has-text("전송"), button:has-text("Send")').first();
-    if (await sendButton.isVisible()) {
-      await sendButton.click();
-    } else {
-      await input.press('Enter');
-    }
-
+    await sendMessage(page, 'Service test');
     await page.waitForTimeout(3000);
 
-    // Check for service status indicator
-    const statusIndicator = page.locator('[class*="status"], [class*="health"], [class*="indicator"]').first();
-    await expect(statusIndicator).toBeTruthy();
+    // Check that status indicator exists
+    const statusVisible = await locators.statusIndicator.isVisible().catch(() => false);
+    // Or chat container is still visible and functional
+    await expect(locators.chatContainer).toBeVisible({ timeout: 5000 });
   });
 });

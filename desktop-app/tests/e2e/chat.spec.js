@@ -4,16 +4,7 @@
  */
 
 const { test, expect } = require('@playwright/test');
-
-// Common locators helper
-const getLocators = (page) => ({
-  chatContainer: page.locator('#chat-container'),
-  messageInput: page.locator('textarea#message-input'),
-  sendButton: page.locator('button#send-button'),
-  loadingIndicator: page.locator('#loading-indicator.loading'),
-  userMessages: page.locator('.user-message'),
-  aiMessages: page.locator('.ai-message'),
-});
+const { getLocators, waitForChatReady, sendMessage, isLoading, getMessageCount } = require('./utils/locators');
 
 test.describe('Chat Interface', () => {
   test.beforeEach(async ({ page }) => {
@@ -23,36 +14,14 @@ test.describe('Chat Interface', () => {
     // Wait for app to load
     await page.waitForLoadState('networkidle');
     // Wait for chat container to be ready
-    const locators = getLocators(page);
-    await locators.chatContainer.waitFor({ state: 'attached', timeout: 5000 });
+    await waitForChatReady(page);
   });
 
   // Desktop App Chat UI is now fully implemented (Issue #24)
   // This test verifies the chat interface works end-to-end
   test('sends message and receives response', async ({ page }) => {
     const locators = getLocators(page);
-
-    // Wait for input to be visible
-    await locators.messageInput.waitFor({ state: 'visible', timeout: 5000 });
-    await locators.messageInput.fill('Hello world');
-
-    // Click send button
-    await locators.sendButton.waitFor({ state: 'visible', timeout: 5000 });
-    try {
-      await Promise.all([
-        page.waitForResponse(response =>
-          (response.url().includes('/chat') || response.url().includes('/completions')) &&
-          response.status() === 200,
-          { timeout: 10000 }
-        ),
-        locators.sendButton.click(),
-      ]);
-    } catch (e) {
-      // If no specific API response, wait for general network idle
-      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
-    }
-
-    // Check that message appears in chat container
+    await sendMessage(page, 'Hello world');
     await expect(locators.chatContainer).toContainText('Hello world', { timeout: 5000 });
   });
 
@@ -60,30 +29,12 @@ test.describe('Chat Interface', () => {
   // This test verifies loading indicators work correctly
   test('displays loading indicator while waiting', async ({ page }) => {
     const locators = getLocators(page);
-
-    await locators.messageInput.waitFor({ state: 'visible', timeout: 5000 });
-    await locators.messageInput.fill('test');
-
-    await locators.sendButton.waitFor({ state: 'visible', timeout: 5000 });
-    try {
-      await Promise.all([
-        page.waitForResponse(response =>
-          (response.url().includes('/chat') || response.url().includes('/completions')) &&
-          response.status() === 200,
-          { timeout: 10000 }
-        ),
-        locators.sendButton.click(),
-      ]);
-    } catch (e) {
-      // If timeout, continue - loading indicator may already be gone
-    }
+    await sendMessage(page, 'test');
 
     // Check that either loading indicator is visible or response has rendered
-    const isLoading = await locators.loadingIndicator.evaluate(el =>
-      el.classList.contains('visible')
-    ).catch(() => false);
+    const loadingFlag = await isLoading(page);
 
-    if (!isLoading) {
+    if (!loadingFlag) {
       // Wait for chat content to appear
       await expect(locators.chatContainer).toContainText('test', { timeout: 3000 }).catch(() => {});
     }
@@ -95,36 +46,10 @@ test.describe('Chat Interface', () => {
     const locators = getLocators(page);
 
     // Send first message
-    await locators.messageInput.waitFor({ state: 'visible', timeout: 5000 });
-    await locators.messageInput.fill('First message');
-    await locators.sendButton.waitFor({ state: 'visible', timeout: 5000 });
-    try {
-      await Promise.all([
-        page.waitForResponse(response =>
-          (response.url().includes('/chat') || response.url().includes('/completions')) &&
-          response.status() === 200,
-          { timeout: 10000 }
-        ),
-        locators.sendButton.click(),
-      ]);
-    } catch (e) {
-      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
-    }
+    await sendMessage(page, 'First message');
 
     // Send second message
-    await locators.messageInput.fill('Second message');
-    try {
-      await Promise.all([
-        page.waitForResponse(response =>
-          (response.url().includes('/chat') || response.url().includes('/completions')) &&
-          response.status() === 200,
-          { timeout: 10000 }
-        ),
-        locators.sendButton.click(),
-      ]);
-    } catch (e) {
-      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
-    }
+    await sendMessage(page, 'Second message');
 
     // Both messages should be in chat container
     await expect(locators.chatContainer).toContainText('First message', { timeout: 5000 });
@@ -135,16 +60,11 @@ test.describe('Chat Interface', () => {
     const locators = getLocators(page);
 
     // Send first message
-    await locators.messageInput.waitFor({ state: 'visible', timeout: 5000 });
-    await locators.messageInput.fill('Reconnection test');
-    await locators.sendButton.waitFor({ state: 'visible', timeout: 5000 });
-    await locators.sendButton.click();
+    await sendMessage(page, 'Reconnection test');
 
     // Wait and try to send another message
     await page.waitForTimeout(3000);
-
-    await locators.messageInput.fill('Another message');
-    await locators.sendButton.click();
+    await sendMessage(page, 'Another message');
 
     // Should be able to send without error
     await page.waitForTimeout(2000);
@@ -153,18 +73,13 @@ test.describe('Chat Interface', () => {
 
   test('displays response with markdown formatting', async ({ page }) => {
     const locators = getLocators(page);
-
-    await locators.messageInput.waitFor({ state: 'visible', timeout: 5000 });
-    await locators.messageInput.fill('Format test with **bold** text');
-    await locators.sendButton.waitFor({ state: 'visible', timeout: 5000 });
-    await locators.sendButton.click();
-
+    await sendMessage(page, 'Format test with **bold** text');
     await page.waitForTimeout(3000);
 
     // Check for rendered content in chat container
     await expect(locators.chatContainer).toBeVisible({ timeout: 5000 });
     // Verify message was added (at minimum)
-    const messageCount = await locators.chatContainer.locator('.message').count();
+    const messageCount = await getMessageCount(page);
     expect(messageCount).toBeGreaterThan(0);
   });
 });
