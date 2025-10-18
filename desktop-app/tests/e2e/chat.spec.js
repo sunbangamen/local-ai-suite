@@ -5,6 +5,16 @@
 
 const { test, expect } = require('@playwright/test');
 
+// Common locators helper
+const getLocators = (page) => ({
+  chatContainer: page.locator('#chat-container'),
+  messageInput: page.locator('textarea#message-input'),
+  sendButton: page.locator('button#send-button'),
+  loadingIndicator: page.locator('#loading-indicator.loading'),
+  userMessages: page.locator('.user-message'),
+  aiMessages: page.locator('.ai-message'),
+});
+
 test.describe('Chat Interface', () => {
   test.beforeEach(async ({ page }) => {
     // Use absolute URL from environment or default to localhost
@@ -12,22 +22,22 @@ test.describe('Chat Interface', () => {
     await page.goto(baseURL);
     // Wait for app to load
     await page.waitForLoadState('networkidle');
+    // Wait for chat container to be ready
+    const locators = getLocators(page);
+    await locators.chatContainer.waitFor({ state: 'attached', timeout: 5000 });
   });
 
   // Desktop App Chat UI is now fully implemented (Issue #24)
   // This test verifies the chat interface works end-to-end
   test('sends message and receives response', async ({ page }) => {
-    // Find and fill input
-    const input = page.locator('input[placeholder*="메시지"], textarea[placeholder*="메시지"], input[placeholder*="message"], textarea[placeholder*="message"]').first();
+    const locators = getLocators(page);
 
     // Wait for input to be visible
-    await input.waitFor({ state: 'visible' });
-    await input.fill('Hello world');
+    await locators.messageInput.waitFor({ state: 'visible', timeout: 5000 });
+    await locators.messageInput.fill('Hello world');
 
-    // Click send button or press Enter
-    const sendButton = page.locator('button:has-text("전송"), button:has-text("Send")').first();
-
-    // Wait for API response while clicking send
+    // Click send button
+    await locators.sendButton.waitFor({ state: 'visible', timeout: 5000 });
     try {
       await Promise.all([
         page.waitForResponse(response =>
@@ -35,29 +45,26 @@ test.describe('Chat Interface', () => {
           response.status() === 200,
           { timeout: 10000 }
         ),
-        sendButton.isVisible() ? sendButton.click() : input.press('Enter'),
+        locators.sendButton.click(),
       ]);
     } catch (e) {
       // If no specific API response, wait for general network idle
       await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
     }
 
-    // Check that message appears in chat history
-    const chatHistory = page.locator('.chat-history, .messages, [class*="history"], [class*="messages"]').first();
-    await chatHistory.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-    await expect(chatHistory).toContainText('Hello world');
+    // Check that message appears in chat container
+    await expect(locators.chatContainer).toContainText('Hello world', { timeout: 5000 });
   });
 
   // Desktop App Chat UI is now fully implemented (Issue #24)
   // This test verifies loading indicators work correctly
   test('displays loading indicator while waiting', async ({ page }) => {
-    const input = page.locator('input[placeholder*="메시지"], textarea[placeholder*="메시지"], input[placeholder*="message"], textarea[placeholder*="message"]').first();
-    await input.waitFor({ state: 'visible' });
-    await input.fill('test');
+    const locators = getLocators(page);
 
-    const sendButton = page.locator('button:has-text("전송"), button:has-text("Send")').first();
+    await locators.messageInput.waitFor({ state: 'visible', timeout: 5000 });
+    await locators.messageInput.fill('test');
 
-    // Send message and wait for response
+    await locators.sendButton.waitFor({ state: 'visible', timeout: 5000 });
     try {
       await Promise.all([
         page.waitForResponse(response =>
@@ -65,33 +72,32 @@ test.describe('Chat Interface', () => {
           response.status() === 200,
           { timeout: 10000 }
         ),
-        sendButton.isVisible() ? sendButton.click() : input.press('Enter'),
+        locators.sendButton.click(),
       ]);
     } catch (e) {
       // If timeout, continue - loading indicator may already be gone
     }
 
-    // Look for loading indicator or check that response rendered
-    const loadingIndicator = page.locator('[class*="loading"], [class*="spinner"], .loading-dots').first();
-    const chatHistory = page.locator('.chat-history, .messages, [class*="history"], [class*="messages"]').first();
+    // Check that either loading indicator is visible or response has rendered
+    const isLoading = await locators.loadingIndicator.evaluate(el =>
+      el.classList.contains('visible')
+    ).catch(() => false);
 
-    // Either loading indicator visible or message rendered
-    const isLoading = await loadingIndicator.isVisible().catch(() => false);
-    const hasContent = await chatHistory.isVisible().catch(() => false);
-
-    if (!isLoading && !hasContent) {
-      await chatHistory.waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
+    if (!isLoading) {
+      // Wait for chat content to appear
+      await expect(locators.chatContainer).toContainText('test', { timeout: 3000 }).catch(() => {});
     }
   });
 
   // Desktop App Chat UI is now fully implemented (Issue #24)
   // This test verifies chat history is maintained across messages
   test('maintains chat history', async ({ page }) => {
-    const input = page.locator('input[placeholder*="메시지"], textarea[placeholder*="메시지"], input[placeholder*="message"], textarea[placeholder*="message"]').first();
-    const sendButton = page.locator('button:has-text("전송"), button:has-text("Send")').first();
+    const locators = getLocators(page);
 
     // Send first message
-    await input.fill('First message');
+    await locators.messageInput.waitFor({ state: 'visible', timeout: 5000 });
+    await locators.messageInput.fill('First message');
+    await locators.sendButton.waitFor({ state: 'visible', timeout: 5000 });
     try {
       await Promise.all([
         page.waitForResponse(response =>
@@ -99,14 +105,14 @@ test.describe('Chat Interface', () => {
           response.status() === 200,
           { timeout: 10000 }
         ),
-        sendButton.isVisible() ? sendButton.click() : input.press('Enter'),
+        locators.sendButton.click(),
       ]);
     } catch (e) {
       await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
     }
 
     // Send second message
-    await input.fill('Second message');
+    await locators.messageInput.fill('Second message');
     try {
       await Promise.all([
         page.waitForResponse(response =>
@@ -114,62 +120,51 @@ test.describe('Chat Interface', () => {
           response.status() === 200,
           { timeout: 10000 }
         ),
-        sendButton.isVisible() ? sendButton.click() : input.press('Enter'),
+        locators.sendButton.click(),
       ]);
     } catch (e) {
       await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
     }
 
-    // Both messages should be in history
-    const chatHistory = page.locator('.chat-history, .messages, [class*="history"], [class*="messages"]').first();
-    await chatHistory.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-    await expect(chatHistory).toContainText('First message');
-    await expect(chatHistory).toContainText('Second message');
+    // Both messages should be in chat container
+    await expect(locators.chatContainer).toContainText('First message', { timeout: 5000 });
+    await expect(locators.chatContainer).toContainText('Second message', { timeout: 5000 });
   });
 
   test('handles reconnection after timeout', async ({ page }) => {
-    const input = page.locator('input[placeholder*="메시지"], textarea[placeholder*="메시지"], input[placeholder*="message"], textarea[placeholder*="message"]').first();
+    const locators = getLocators(page);
 
-    // Send message
-    await input.fill('Reconnection test');
-    const sendButton = page.locator('button:has-text("전송"), button:has-text("Send")').first();
-    if (await sendButton.isVisible()) {
-      await sendButton.click();
-    } else {
-      await input.press('Enter');
-    }
+    // Send first message
+    await locators.messageInput.waitFor({ state: 'visible', timeout: 5000 });
+    await locators.messageInput.fill('Reconnection test');
+    await locators.sendButton.waitFor({ state: 'visible', timeout: 5000 });
+    await locators.sendButton.click();
 
-    // Wait and try to send another
+    // Wait and try to send another message
     await page.waitForTimeout(3000);
 
-    await input.fill('Another message');
-    if (await sendButton.isVisible()) {
-      await sendButton.click();
-    } else {
-      await input.press('Enter');
-    }
+    await locators.messageInput.fill('Another message');
+    await locators.sendButton.click();
 
     // Should be able to send without error
     await page.waitForTimeout(2000);
-    const chatHistory = page.locator('.chat-history, .messages, [class*="history"], [class*="messages"]').first();
-    await expect(chatHistory).toContainText('Another message');
+    await expect(locators.chatContainer).toContainText('Another message', { timeout: 5000 });
   });
 
   test('displays response with markdown formatting', async ({ page }) => {
-    const input = page.locator('input[placeholder*="메시지"], textarea[placeholder*="메시지"], input[placeholder*="message"], textarea[placeholder*="message"]').first();
+    const locators = getLocators(page);
 
-    await input.fill('Format test with **bold** text');
-    const sendButton = page.locator('button:has-text("전송"), button:has-text("Send")').first();
-    if (await sendButton.isVisible()) {
-      await sendButton.click();
-    } else {
-      await input.press('Enter');
-    }
+    await locators.messageInput.waitFor({ state: 'visible', timeout: 5000 });
+    await locators.messageInput.fill('Format test with **bold** text');
+    await locators.sendButton.waitFor({ state: 'visible', timeout: 5000 });
+    await locators.sendButton.click();
 
     await page.waitForTimeout(3000);
 
-    // Check for rendered content
-    const chatHistory = page.locator('.chat-history, .messages, [class*="history"], [class*="messages"]').first();
-    await expect(chatHistory).toBeTruthy();
+    // Check for rendered content in chat container
+    await expect(locators.chatContainer).toBeVisible({ timeout: 5000 });
+    // Verify message was added (at minimum)
+    const messageCount = await locators.chatContainer.locator('.message').count();
+    expect(messageCount).toBeGreaterThan(0);
   });
 });
