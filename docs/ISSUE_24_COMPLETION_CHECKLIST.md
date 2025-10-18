@@ -139,17 +139,21 @@ make test-load             # Full suite (40 min total)
 | Item | Status | Evidence | Notes |
 |------|--------|----------|-------|
 | GitHub Actions workflow extended | ✅ | .github/workflows/ci.yml | E2E + Load test jobs added |
-| E2E tests in CI | ✅ | CI green ✅ | Runs on every PR + schedule |
-| Load tests in CI | ✅ | CI green ✅ | Scheduled weekly (Sunday 2am UTC) |
+| E2E tests in CI | ✅ | Running on every PR push | Executes 22 tests across 3 browsers sequentially |
+| Load tests in CI | ✅ | Scheduled job configured | Sunday 2am UTC or manual workflow_dispatch trigger |
 | Artifact upload: Test results | ✅ | hasFiles condition prevents empty uploads | Binary + HTML reports |
 | Artifact upload: Coverage JSON | ✅ | docs/rag_extended_coverage.json | Versioned in repo |
-| Performance regression detection | ✅ | 4 scripts (extract_metrics, compare_performance) | Automated alert generation |
+| Performance regression detection | ✅ | 4 scripts (extract_metrics, compare_performance) | Ready for automated alert generation |
 | Test selection strategy doc | ✅ | docs/progress/v1/PHASE_4.2_TEST_SELECTION_STRATEGY.md | CI budget optimization |
 | CLAUDE.md updated | ✅ | CLAUDE.md lines 93-96 | Production Readiness: 100% |
 | Operational documentation | ✅ | docs/ops/ complete | Monitoring, CI/CD, Deployment guides |
 | Load testing guide | ✅ | docs/ops/LOAD_TESTING_GUIDE.md (500+ lines) | Scenarios, baseline, troubleshooting |
 | E2E testing guide | ✅ | docs/ops/ | Playwright setup, test execution |
 | **Total Test Suite** | ✅ | **144+ tests** | RAG:30, Embedding:18, API:15, MCP:47, E2E:22, Load:2 |
+
+**CI Execution Status**:
+- E2E tests: ✅ Running on every push (verified through multiple CI runs)
+- Load tests: ✅ Scheduled to run weekly (awaiting first scheduled execution on next Sunday 2am UTC)
 
 **Test Execution Status**:
 - RAG Integration: 21/21 passing ✅
