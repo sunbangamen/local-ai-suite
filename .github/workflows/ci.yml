@@ -331,7 +331,7 @@
 
         - name: Install Playwright browsers with system deps
           working-directory: desktop-app
-          run: sudo npx playwright install --with-deps chromium firefox webkit
+          run: npx playwright install --with-deps chromium firefox webkit
 
         - name: Start Desktop App web server
           working-directory: desktop-app/src
