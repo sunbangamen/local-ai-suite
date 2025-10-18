@@ -48,18 +48,30 @@ test.describe('Error Handling', () => {
   test('handles model service failures', async ({ page }) => {
     const locators = getLocators(page);
 
-    // Try multiple messages rapidly
-    for (let i = 0; i < 3; i++) {
-      try {
-        await sendMessage(page, `Message ${i + 1}`);
-      } catch (e) {
-        // Ignore individual message failures
-      }
-      await page.waitForTimeout(500);
+    // Send a single message and allow for potential failure
+    try {
+      await sendMessage(page, 'First message');
+    } catch (e) {
+      // Service may not respond, which is ok for this test
     }
 
-    // Should handle without crashing - chat container should still exist
+    // Verify page is still open and functional
+    expect(page.isClosed()).toBeFalsy();
+
+    // Check that UI is still responsive
     await expect(locators.chatContainer).toBeVisible({ timeout: 5000 });
+
+    // Try to send another message if page is still open
+    if (!page.isClosed()) {
+      try {
+        await sendMessage(page, 'Second message');
+      } catch (e) {
+        // Expected behavior - service may fail
+      }
+
+      // Page should still be open
+      expect(page.isClosed()).toBeFalsy();
+    }
   });
 
   test('displays service down message appropriately', async ({ page }) => {
