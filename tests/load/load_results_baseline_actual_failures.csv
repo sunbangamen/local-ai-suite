@@ -1,0 +1,2 @@
+Method,Name,Error,Occurrences
+POST,/v1/chat/completions,"CatchResponseError('Status 400: {""error"":{""message"":""{\'error\': \'/chat/completions: Invalid model name passed in model=qwen2.5-14b-in')",24

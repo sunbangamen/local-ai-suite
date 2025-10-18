@@ -1,0 +1,32 @@
+{
+  "api_gateway": {
+    "name": "api_gateway",
+    "requests": 300,
+    "failures": 1,
+    "median": 120,
+    "average": 150,
+    "min": 50,
+    "max": 500,
+    "rps": 50.0
+  },
+  "rag_service": {
+    "name": "rag_service",
+    "requests": 150,
+    "failures": 0,
+    "median": 2000,
+    "average": 2500,
+    "min": 1000,
+    "max": 8000,
+    "rps": 25.0
+  },
+  "mcp_server": {
+    "name": "mcp_server",
+    "requests": 90,
+    "failures": 0,
+    "median": 3000,
+    "average": 3500,
+    "min": 500,
+    "max": 12000,
+    "rps": 15.0
+  }
+}

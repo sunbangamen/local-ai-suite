@@ -46,6 +46,8 @@ volumes/
 desktop-app/node_modules/
 desktop-app/dist/
 desktop-app/.electron/
+desktop-app/playwright-report/
+desktop-app/test-results/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

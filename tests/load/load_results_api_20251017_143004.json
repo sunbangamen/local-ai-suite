@@ -1,0 +1,27 @@
+{
+  "api_gateway": {
+    "name": "api_gateway",
+    "requests": 1500,
+    "failures": 15,
+    "median": 150,
+    "average": 180,
+    "min": 50,
+    "max": 750,
+    "rps": 35.0
+  },
+  "rag_service": {
+    "name": "rag_service",
+    "requests": 300,
+    "failures": 1,
+    "median": 2100,
+    "average": 2600,
+    "min": 1000,
+    "max": 8500,
+    "rps": 24.0
+  },
+  "total": {
+    "name": "Total",
+    "requests": 1800,
+    "failures": 16
+  }
+}

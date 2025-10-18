@@ -1,0 +1,26 @@
+{
+  "api_gateway": {
+    "avg_latency_ms": 180.0,
+    "median_latency_ms": 150.0,
+    "p95_latency_ms": 0.0,
+    "p99_latency_ms": 0.0,
+    "min_latency_ms": 50.0,
+    "max_latency_ms": 750.0,
+    "error_rate_pct": 1.0,
+    "rps": 35.0,
+    "total_requests": 1500,
+    "total_failures": 15
+  },
+  "rag_service": {
+    "avg_latency_ms": 2600.0,
+    "median_latency_ms": 2100.0,
+    "p95_latency_ms": 0.0,
+    "p99_latency_ms": 0.0,
+    "min_latency_ms": 1000.0,
+    "max_latency_ms": 8500.0,
+    "error_rate_pct": 0.33,
+    "rps": 24.0,
+    "total_requests": 300,
+    "total_failures": 1
+  }
+}

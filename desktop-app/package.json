@@ -7,7 +7,11 @@
     "start": "./node_modules/electron/dist/electron .",
     "dev": "./node_modules/electron/dist/electron . --dev",
     "web": "cd src && python3 -m http.server 3000",
-    "rebuild": "npm rebuild --runtime=electron"
+    "rebuild": "npm rebuild --runtime=electron",
+    "test:e2e": "playwright test",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
   },
   "keywords": [
     "electron",
@@ -24,5 +28,9 @@
     "marked": "^9.1.2",
     "dompurify": "^3.0.5",
     "highlight.js": "^11.9.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "playwright": "^1.56.1"
   }
 }

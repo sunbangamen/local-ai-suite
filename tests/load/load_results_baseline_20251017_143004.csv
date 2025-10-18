@@ -1,0 +1,4 @@
+Name,# requests,# failures,Median response time,Average response time,Min response time,Max response time,Average Content Length,Requests/s
+api_gateway,300,1,120,150,50,500,1024,50.0
+rag_service,150,0,2000,2500,1000,8000,1024,25.0
+mcp_server,90,0,3000,3500,500,12000,1024,15.0
