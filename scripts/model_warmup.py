@@ -61,7 +61,9 @@ class ModelWarmer:
                 model_priority[query_type] = usage_count
 
             # Sort by usage and return top models
-            sorted_models = sorted(model_priority.items(), key=lambda x: x[1], reverse=True)
+            sorted_models = sorted(
+                model_priority.items(), key=lambda x: x[1], reverse=True
+            )
             return [model[0] for model in sorted_models[:2]] or ["chat", "code"]
 
         except Exception:
@@ -159,7 +161,9 @@ class ModelWarmer:
             return {
                 "recommendations": recommendations,
                 "total_count": len(recommendations),
-                "high_priority": len([r for r in recommendations if r["severity"] == "high"]),
+                "high_priority": len(
+                    [r for r in recommendations if r["severity"] == "high"]
+                ),
                 "generated_at": datetime.now().isoformat(),
             }
 
@@ -213,7 +217,9 @@ def main():
     parser.add_argument(
         "--auto-optimize", action="store_true", help="Run full automatic optimization"
     )
-    parser.add_argument("--models", nargs="+", help="Specific models to warmup (chat, code, rag)")
+    parser.add_argument(
+        "--models", nargs="+", help="Specific models to warmup (chat, code, rag)"
+    )
 
     args = parser.parse_args()
 
@@ -259,7 +265,9 @@ def main():
         high_priority = results["recommendations"].get("high_priority", 0)
 
         if rec_count > 0:
-            print(f"💡 {rec_count} recommendations generated ({high_priority} high priority)")
+            print(
+                f"💡 {rec_count} recommendations generated ({high_priority} high priority)"
+            )
         else:
             print("✅ System performance optimal!")
 

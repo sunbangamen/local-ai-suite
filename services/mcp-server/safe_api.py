@@ -73,7 +73,9 @@ class SecurePathValidator:
             "C:\\ProgramData\\Microsoft\\Crypto",
         }
 
-    def validate_and_resolve_path(self, path: str, working_dir: Optional[str] = None) -> Path:
+    def validate_and_resolve_path(
+        self, path: str, working_dir: Optional[str] = None
+    ) -> Path:
         """
         경로 검증 및 안전한 해석
 
@@ -117,7 +119,9 @@ class SecurePathValidator:
                 except (ValueError, OSError):
                     continue
             if not is_safe:
-                raise SecurityError(f"Final boundary check failed: {path} -> {real_path}")
+                raise SecurityError(
+                    f"Final boundary check failed: {path} -> {real_path}"
+                )
 
         return real_path
 
@@ -162,7 +166,9 @@ class SecurePathValidator:
                 continue
 
         if not is_within_workspace:
-            raise SecurityError(f"Path traversal blocked: {original_path} -> {resolved_path}")
+            raise SecurityError(
+                f"Path traversal blocked: {original_path} -> {resolved_path}"
+            )
 
     def _validate_system_path_access(self, resolved_path: Path, original_path: str):
         """시스템 경로 접근 검증 (경로 구분자 정규화 지원)"""
@@ -180,7 +186,9 @@ class SecurePathValidator:
                     try:
                         # Windows 경로로 정규화 시도
                         win_path = PureWindowsPath(path)
-                        paths_to_check.append(str(win_path.as_posix()))  # POSIX 스타일 (/)
+                        paths_to_check.append(
+                            str(win_path.as_posix())
+                        )  # POSIX 스타일 (/)
                         paths_to_check.append(str(win_path))  # Windows 스타일 (\\)
 
                         # POSIX 경로로 정규화 시도
@@ -203,7 +211,9 @@ class SecurePathValidator:
 
             for dangerous_path in self.dangerous_system_paths:
                 # 위험 경로도 양방향 정규화
-                normalized_dangerous = dangerous_path.replace("\\", "/").replace("//", "/")
+                normalized_dangerous = dangerous_path.replace("\\", "/").replace(
+                    "//", "/"
+                )
                 dangerous_lower = normalized_dangerous.lower()
 
                 # 정확한 매치 또는 하위 경로 검사
@@ -223,7 +233,9 @@ class SecurePathValidator:
                     original_check_lower == original_dangerous_lower
                     or original_check_lower.startswith(original_dangerous_lower + "/")
                     or original_check_lower.startswith(original_dangerous_lower + "\\")
-                    or original_check_lower.startswith(original_dangerous_lower + os.sep)
+                    or original_check_lower.startswith(
+                        original_dangerous_lower + os.sep
+                    )
                 ):
                     raise SecurityError(
                         f"System path access blocked: {original_path} -> {resolved_path}"
@@ -259,7 +271,9 @@ class SecurePathValidator:
                     try:
                         # Windows 경로로 정규화 시도
                         win_path = PureWindowsPath(path)
-                        paths_to_check.append(str(win_path.as_posix()))  # POSIX 스타일 (/)
+                        paths_to_check.append(
+                            str(win_path.as_posix())
+                        )  # POSIX 스타일 (/)
                         paths_to_check.append(str(win_path))  # Windows 스타일 (\\)
 
                         # POSIX 경로로 정규화 시도
@@ -282,7 +296,9 @@ class SecurePathValidator:
 
             for sensitive_file in self.sensitive_files:
                 # 민감 파일 경로도 양방향 정규화
-                normalized_sensitive = sensitive_file.replace("\\", "/").replace("//", "/")
+                normalized_sensitive = sensitive_file.replace("\\", "/").replace(
+                    "//", "/"
+                )
                 sensitive_lower = normalized_sensitive.lower()
 
                 # 정확한 매치 또는 하위 경로 검사
@@ -303,7 +319,9 @@ class SecurePathValidator:
                     original_check_lower == original_sensitive_lower
                     or original_check_lower.startswith(original_sensitive_lower + "/")
                     or original_check_lower.startswith(original_sensitive_lower + "\\")
-                    or original_check_lower.startswith(original_sensitive_lower + os.sep)
+                    or original_check_lower.startswith(
+                        original_sensitive_lower + os.sep
+                    )
                     or original_sensitive_lower in original_check_lower
                 ):
                     raise SecurityError(
@@ -397,7 +415,9 @@ class SafeFileAPI:
         except (OSError, PermissionError) as e:
             raise IOError(f"Failed to list directory: {str(e)}")
 
-    def get_file_info(self, path: str, working_dir: Optional[str] = None) -> Dict[str, Any]:
+    def get_file_info(
+        self, path: str, working_dir: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         안전한 파일 정보 조회
 
@@ -493,7 +513,9 @@ class SafeCommandExecutor:
 
         # 작업 디렉토리 검증
         if working_dir:
-            safe_cwd = str(self.path_validator.validate_and_resolve_path(".", working_dir))
+            safe_cwd = str(
+                self.path_validator.validate_and_resolve_path(".", working_dir)
+            )
         else:
             safe_cwd = os.getenv("PROJECT_ROOT", "/mnt/workspace")
 

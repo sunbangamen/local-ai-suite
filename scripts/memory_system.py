@@ -460,8 +460,12 @@ class MemorySystem:
         ]
 
         # 키워드 기반 점수 조정
-        high_count = sum(1 for keyword in high_importance_keywords if keyword in combined_text)
-        low_count = sum(1 for keyword in low_importance_keywords if keyword in combined_text)
+        high_count = sum(
+            1 for keyword in high_importance_keywords if keyword in combined_text
+        )
+        low_count = sum(
+            1 for keyword in low_importance_keywords if keyword in combined_text
+        )
 
         score += min(high_count, 3)  # 최대 +3
         score -= min(low_count, 2)  # 최대 -2
@@ -644,7 +648,9 @@ class MemorySystem:
                 for row in cursor.fetchall():
                     result = dict(row)
                     result["tags"] = json.loads(result["tags"] or "[]")
-                    result["project_context"] = json.loads(result["project_context"] or "{}")
+                    result["project_context"] = json.loads(
+                        result["project_context"] or "{}"
+                    )
                     # 검색 점수 정보 포함
                     if "relevance_score" in result:
                         result["search_metadata"] = {
@@ -766,7 +772,9 @@ class MemorySystem:
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(f"{self.embedding_url}/embed", json={"texts": texts})
+                response = await client.post(
+                    f"{self.embedding_url}/embed", json={"texts": texts}
+                )
                 response.raise_for_status()
                 data = response.json()
 
@@ -936,7 +944,9 @@ class MemorySystem:
                     )
                     processed += 1
                 except Exception as e:
-                    print(f"⚠️ Failed to process conversation {conv['conversation_id']}: {e}")
+                    print(
+                        f"⚠️ Failed to process conversation {conv['conversation_id']}: {e}"
+                    )
                     # 개별 실패 시 해당 대화만 failed 상태로 마킹
                     try:
                         with self.transaction(project_id) as conn:
@@ -994,7 +1004,9 @@ class MemorySystem:
                     result["similarity_score"],
                 )
                 combined_results[conv_id]["search_method"] = "hybrid"
-                combined_results[conv_id]["similarity_score"] = result["similarity_score"]
+                combined_results[conv_id]["similarity_score"] = result[
+                    "similarity_score"
+                ]
             else:
                 # 새로 추가
                 combined_results[conv_id] = {
@@ -1082,7 +1094,9 @@ class MemorySystem:
             print(f"⚠️ 벡터 기능 복구 실패: {e}")
             return False
 
-    def export_memory_backup(self, project_id: str, output_path: Path = None) -> Optional[Path]:
+    def export_memory_backup(
+        self, project_id: str, output_path: Path = None
+    ) -> Optional[Path]:
         """메모리 DB를 JSON으로 백업"""
         if not self._storage_available:
             return None
@@ -1090,7 +1104,9 @@ class MemorySystem:
         try:
             if output_path is None:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                output_path = self.data_dir / "backups" / f"memory_{project_id}_{timestamp}.json"
+                output_path = (
+                    self.data_dir / "backups" / f"memory_{project_id}_{timestamp}.json"
+                )
                 output_path.parent.mkdir(parents=True, exist_ok=True)
 
             with self.transaction(project_id) as conn:
@@ -1274,7 +1290,9 @@ class MemorySystem:
             print(f"⚠️ 동기화 큐 조회 실패: {e}")
             return []
 
-    def batch_sync_to_qdrant(self, project_id: str, batch_size: int = 64) -> Dict[str, int]:
+    def batch_sync_to_qdrant(
+        self, project_id: str, batch_size: int = 64
+    ) -> Dict[str, int]:
         """Qdrant 배치 동기화 (개선된 처리)"""
         sync_stats = {"synced": 0, "failed": 0, "skipped": 0}
 
@@ -1288,7 +1306,9 @@ class MemorySystem:
                 return sync_stats
 
             # 대기열 조회
-            sync_queue = self.get_qdrant_sync_queue(project_id, batch_size, include_failed=True)
+            sync_queue = self.get_qdrant_sync_queue(
+                project_id, batch_size, include_failed=True
+            )
             if not sync_queue:
                 return sync_stats
 
@@ -1403,7 +1423,9 @@ class MemorySystem:
         except Exception as e:
             print(f"⚠️ 실패 상태 마킹 실패: {e}")
 
-    def retry_failed_syncs(self, project_id: str, max_retries: int = 3) -> Dict[str, int]:
+    def retry_failed_syncs(
+        self, project_id: str, max_retries: int = 3
+    ) -> Dict[str, int]:
         """실패한 동기화 재시도"""
         stats = {"retried": 0, "succeeded": 0, "still_failed": 0}
 

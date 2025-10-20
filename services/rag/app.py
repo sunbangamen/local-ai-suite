@@ -161,7 +161,9 @@ async def _probe_embedding_dim(client: httpx.AsyncClient) -> int:
     return len(emb)
 
 
-async def _embed_texts(client: httpx.AsyncClient, texts: List[str]) -> List[List[float]]:
+async def _embed_texts(
+    client: httpx.AsyncClient, texts: List[str]
+) -> List[List[float]]:
     r = await client.post(f"{EMBEDDING_URL}/embed", json={"texts": texts}, timeout=60.0)
     r.raise_for_status()
     data = r.json()
@@ -241,7 +243,9 @@ async def _llm_answer(
             {"role": "user", "content": user},
         ],
     }
-    r = await client.post(OPENAI_CHAT_COMPLETIONS, json=payload, timeout=RAG_LLM_TIMEOUT)
+    r = await client.post(
+        OPENAI_CHAT_COMPLETIONS, json=payload, timeout=RAG_LLM_TIMEOUT
+    )
     r.raise_for_status()
     data = r.json()
     content = data["choices"][0]["message"]["content"]
@@ -262,11 +266,15 @@ def _ensure_collection(collection: str, dim: int):
 
 @retry(
     stop=stop_after_attempt(QDRANT_MAX_RETRIES),
-    wait=wait_exponential(multiplier=1, min=QDRANT_RETRY_MIN_WAIT, max=QDRANT_RETRY_MAX_WAIT),
+    wait=wait_exponential(
+        multiplier=1, min=QDRANT_RETRY_MIN_WAIT, max=QDRANT_RETRY_MAX_WAIT
+    ),
     retry=retry_if_exception_type((ConnectionError, TimeoutError, Exception)),
     reraise=True,
 )
-def _upsert_points(collection: str, embeddings: List[List[float]], payloads: List[Dict[str, Any]]):
+def _upsert_points(
+    collection: str, embeddings: List[List[float]], payloads: List[Dict[str, Any]]
+):
     """
     Qdrant upsert with automatic retry on connection/timeout errors
     """
@@ -279,7 +287,9 @@ def _upsert_points(collection: str, embeddings: List[List[float]], payloads: Lis
 
 @retry(
     stop=stop_after_attempt(QDRANT_MAX_RETRIES),
-    wait=wait_exponential(multiplier=1, min=QDRANT_RETRY_MIN_WAIT, max=QDRANT_RETRY_MAX_WAIT),
+    wait=wait_exponential(
+        multiplier=1, min=QDRANT_RETRY_MIN_WAIT, max=QDRANT_RETRY_MAX_WAIT
+    ),
     retry=retry_if_exception_type((ConnectionError, TimeoutError, Exception)),
     reraise=True,
 )
@@ -387,7 +397,9 @@ async def health(llm: bool = Query(False, description="LLM까지 점검하려면
     if llm:
         try:
             async with httpx.AsyncClient() as client:
-                ans, _ = await _llm_answer(client, "You are a health checker.", "Reply with 'ok'.")
+                ans, _ = await _llm_answer(
+                    client, "You are a health checker.", "Reply with 'ok'."
+                )
                 l_ok = ans.strip().lower().startswith("ok")
         except Exception as e:
             l_ok = False
@@ -416,7 +428,9 @@ async def health(llm: bool = Query(False, description="LLM까지 점검하려면
             },
             "llm": {
                 "status": (
-                    "healthy" if l_ok else ("unhealthy" if l_ok is False else "not_checked")
+                    "healthy"
+                    if l_ok
+                    else ("unhealthy" if l_ok is False else "not_checked")
                 ),
                 "error": l_error,
             },
@@ -444,7 +458,9 @@ async def health(llm: bool = Query(False, description="LLM까지 점검하려면
 @app.post("/index", response_model=IndexResponse)
 async def index(
     collection: Optional[str] = Query(None, description="컬렉션 이름"),
-    path: Optional[str] = Query(None, description="인덱싱할 경로 (절대경로 또는 상대경로)"),
+    path: Optional[str] = Query(
+        None, description="인덱싱할 경로 (절대경로 또는 상대경로)"
+    ),
 ):
     """
     지정된 경로의 문서들을 인덱싱 - 전역 파일시스템 지원
@@ -735,6 +751,8 @@ if __name__ == "__main__":
 
     uvicorn.run(
         app,
-        host=os.getenv("RAG_HOST", "0.0.0.0"),  # nosec B104 - default binding for containers
+        host=os.getenv(
+            "RAG_HOST", "0.0.0.0"
+        ),  # nosec B104 - default binding for containers
         port=int(os.getenv("RAG_PORT", "8002")),
     )

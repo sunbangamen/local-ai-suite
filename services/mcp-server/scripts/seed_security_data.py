@@ -349,7 +349,9 @@ async def seed_users(db, role_map: Dict[str, int]) -> None:
         for user in TEST_USERS:
             role_id = role_map.get(user["role_name"])
             if not role_id:
-                print(f"  ⚠️  Unknown role for user {user['user_id']}: {user['role_name']}")
+                print(
+                    f"  ⚠️  Unknown role for user {user['user_id']}: {user['role_name']}"
+                )
                 continue
 
             # INSERT OR REPLACE (upsert)
@@ -402,7 +404,9 @@ async def verify_seeding(db) -> None:
             user_count = (await cursor.fetchone())[0]
 
         # Count role-permission mappings
-        async with conn.execute("SELECT COUNT(*) FROM security_role_permissions") as cursor:
+        async with conn.execute(
+            "SELECT COUNT(*) FROM security_role_permissions"
+        ) as cursor:
             mapping_count = (await cursor.fetchone())[0]
 
     print(f"  Roles: {role_count}")
@@ -422,7 +426,9 @@ async def verify_seeding(db) -> None:
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Seed security database with default data")
+    parser = argparse.ArgumentParser(
+        description="Seed security database with default data"
+    )
     parser.add_argument(
         "--reset",
         action="store_true",

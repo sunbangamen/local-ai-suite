@@ -84,7 +84,9 @@ async def apply_schema(db_path: Path, schema_path: Path):
 
 async def main():
     parser = argparse.ArgumentParser(description="Apply Approval Workflow Schema")
-    parser.add_argument("--db-path", type=str, default=str(DEFAULT_DB_PATH), help="Database path")
+    parser.add_argument(
+        "--db-path", type=str, default=str(DEFAULT_DB_PATH), help="Database path"
+    )
     parser.add_argument(
         "--schema-path", type=str, default=str(SCHEMA_PATH), help="Schema file path"
     )

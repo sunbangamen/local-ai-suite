@@ -48,7 +48,9 @@ async def test_db(tmp_path):
     await db.initialize()  # Correct method name
 
     # Apply approval schema
-    approval_schema_path = Path(__file__).parent.parent / "scripts" / "approval_schema.sql"
+    approval_schema_path = (
+        Path(__file__).parent.parent / "scripts" / "approval_schema.sql"
+    )
     if approval_schema_path.exists():
         async with db.get_connection() as conn:
             with open(approval_schema_path, "r") as f:
@@ -380,11 +382,15 @@ async def test_permission_validation_flow(test_db, rbac_manager):
 
     # Step 1: MEDIUM tool - no approval required (sensitivity level check)
     perm = await test_db.get_permission_by_name("test_medium_tool")
-    assert perm is not None and perm["sensitivity_level"] == "MEDIUM", "MEDIUM tool should exist"
+    assert (
+        perm is not None and perm["sensitivity_level"] == "MEDIUM"
+    ), "MEDIUM tool should exist"
 
     # Step 2: HIGH tool - approval required
     perm = await test_db.get_permission_by_name("test_high_tool")
-    assert perm is not None and perm["sensitivity_level"] == "HIGH", "HIGH tool should exist"
+    assert (
+        perm is not None and perm["sensitivity_level"] == "HIGH"
+    ), "HIGH tool should exist"
 
     # Step 3: CRITICAL tool - approval required
     perm = await test_db.get_permission_by_name("test_critical_tool")
@@ -545,7 +551,9 @@ async def test_performance_bulk_approvals(test_db):
     print(f"   Average: {elapsed_time/10:.3f}s per request")
     print(f"   Throughput: {10/elapsed_time:.2f} req/s")
 
-    assert elapsed_time < 5.0, f"Should process 10 requests in < 5s (took {elapsed_time:.3f}s)"
+    assert (
+        elapsed_time < 5.0
+    ), f"Should process 10 requests in < 5s (took {elapsed_time:.3f}s)"
 
 
 # ============================================================================

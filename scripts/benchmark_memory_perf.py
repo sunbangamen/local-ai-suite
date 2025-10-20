@@ -152,7 +152,9 @@ class MemoryBenchmark:
         print(f"   P95 검색 시간: {p95_time:.2f}ms")
         print(f"   P99 검색 시간: {p99_time:.2f}ms")
         print(f"   평균 결과 수: {total_results / num_queries:.1f}개")
-        print(f"   목표 달성 여부: {'✅ PASS' if p95_time < 1000 else '❌ FAIL'} (목표: < 1000ms)")
+        print(
+            f"   목표 달성 여부: {'✅ PASS' if p95_time < 1000 else '❌ FAIL'} (목표: < 1000ms)"
+        )
 
         self.results["fts_search"] = {
             "num_queries": num_queries,
@@ -176,7 +178,9 @@ class MemoryBenchmark:
         # 먼저 임베딩 생성
         print("  임베딩 생성 중...")
         start_embed = time.time()
-        processed = await self.memory.process_pending_embeddings(self.project_id, batch_size=64)
+        processed = await self.memory.process_pending_embeddings(
+            self.project_id, batch_size=64
+        )
         embed_time = time.time() - start_embed
         print(f"  ✅ {processed}개 임베딩 생성 완료 ({embed_time:.2f}초)")
 
@@ -297,7 +301,8 @@ class MemoryBenchmark:
     def save_results(self):
         """벤치마크 결과 저장"""
         output_file = (
-            Path("/tmp") / f"memory_benchmark_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            Path("/tmp")
+            / f"memory_benchmark_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         )
 
         with open(output_file, "w", encoding="utf-8") as f:
@@ -327,17 +332,23 @@ class MemoryBenchmark:
             print("\n🔍 FTS5 검색 성능:")
             print(f"   평균: {fts['avg_time_ms']:.2f}ms")
             print(f"   P95: {fts['p95_time_ms']:.2f}ms")
-            print(f"   목표 달성: {'✅ PASS' if fts['target_met'] else '❌ FAIL'} (목표: < 1000ms)")
+            print(
+                f"   목표 달성: {'✅ PASS' if fts['target_met'] else '❌ FAIL'} (목표: < 1000ms)"
+            )
 
         # 벡터 검색
-        if "vector_search" in self.results and not self.results["vector_search"].get("skipped"):
+        if "vector_search" in self.results and not self.results["vector_search"].get(
+            "skipped"
+        ):
             vec = self.results["vector_search"]
             print("\n🧠 벡터 검색 성능:")
             print(f"   평균: {vec['avg_search_time_ms']:.2f}ms")
             print(f"   P95: {vec['p95_search_time_ms']:.2f}ms")
 
         # 하이브리드 검색
-        if "hybrid_search" in self.results and not self.results["hybrid_search"].get("skipped"):
+        if "hybrid_search" in self.results and not self.results["hybrid_search"].get(
+            "skipped"
+        ):
             hyb = self.results["hybrid_search"]
             print("\n🔀 하이브리드 검색 성능:")
             print(f"   평균: {hyb['avg_time_ms']:.2f}ms")

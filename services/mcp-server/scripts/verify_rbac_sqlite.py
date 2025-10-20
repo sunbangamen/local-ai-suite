@@ -21,7 +21,9 @@ async def verify_rbac_system(db_path: str, output_file: str, iterations: int = 1
         f.write("=" * 80 + "\n")
         f.write("Issue #8 RBAC System - Complete Verification Report\n")
         f.write("=" * 80 + "\n\n")
-        f.write(f"Execution Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n")
+        f.write(
+            f"Execution Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
+        )
         f.write(f"Database Path: {db_path}\n\n")
 
         async with aiosqlite.connect(db_path) as db:
@@ -33,7 +35,9 @@ async def verify_rbac_system(db_path: str, output_file: str, iterations: int = 1
                 roles_count = (await cursor.fetchone())[0]
                 f.write(f"✓ Roles: {roles_count}\n")
 
-            async with db.execute("SELECT COUNT(*) FROM security_permissions") as cursor:
+            async with db.execute(
+                "SELECT COUNT(*) FROM security_permissions"
+            ) as cursor:
                 perms_count = (await cursor.fetchone())[0]
                 f.write(f"✓ Permissions: {perms_count}\n")
 
@@ -41,7 +45,9 @@ async def verify_rbac_system(db_path: str, output_file: str, iterations: int = 1
                 users_count = (await cursor.fetchone())[0]
                 f.write(f"✓ Users: {users_count}\n")
 
-            async with db.execute("SELECT COUNT(*) FROM security_role_permissions") as cursor:
+            async with db.execute(
+                "SELECT COUNT(*) FROM security_role_permissions"
+            ) as cursor:
                 mappings_count = (await cursor.fetchone())[0]
                 f.write(f"✓ Role-Permission Mappings: {mappings_count}\n\n")
 
@@ -172,7 +178,9 @@ async def verify_rbac_system(db_path: str, output_file: str, iterations: int = 1
             f.write(f"✓ Audit Logs: {total_logs} total records\n")
             f.write(f"✓ Integrity: {integrity}\n")
             f.write(f"✓ Journal Mode: {journal_mode} (WAL enabled)\n")
-            f.write(f"✓ Performance: {avg_time_ms:.3f}ms average per permission check\n\n")
+            f.write(
+                f"✓ Performance: {avg_time_ms:.3f}ms average per permission check\n\n"
+            )
             f.write("✅ All verification checks passed successfully!\n")
             f.write("=" * 80 + "\n")
 
@@ -180,7 +188,9 @@ async def verify_rbac_system(db_path: str, output_file: str, iterations: int = 1
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Verify Issue #8 RBAC system implementation")
+    parser = argparse.ArgumentParser(
+        description="Verify Issue #8 RBAC system implementation"
+    )
     parser.add_argument(
         "--db",
         default="/mnt/e/ai-data/sqlite/security.db",

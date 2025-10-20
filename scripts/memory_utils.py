@@ -72,7 +72,9 @@ def get_current_project_info() -> Dict:
                 "project_name": project_data["project_name"],
                 "project_path": project_data["project_path"],
                 "created_at": project_data["created_at"],
-                "updated_at": project_data.get("updated_at", project_data["created_at"]),
+                "updated_at": project_data.get(
+                    "updated_at", project_data["created_at"]
+                ),
             }
     except (json.JSONDecodeError, KeyError):
         return {
@@ -188,7 +190,9 @@ def cleanup_expired_conversations(project_id: str = None, dry_run: bool = True) 
         if dry_run:
             print(f"🧹 정리 예정 대화: {len(expired_conversations)}개")
             for conv in expired_conversations[:5]:  # 처음 5개만 미리보기
-                print(f"  - [{conv['importance_score']}/10] {conv['user_query'][:50]}...")
+                print(
+                    f"  - [{conv['importance_score']}/10] {conv['user_query'][:50]}..."
+                )
             if len(expired_conversations) > 5:
                 print(f"  ... 외 {len(expired_conversations) - 5}개")
 
@@ -202,7 +206,9 @@ def cleanup_expired_conversations(project_id: str = None, dry_run: bool = True) 
         deleted_ids = [conv["id"] for conv in expired_conversations]
         if deleted_ids:
             placeholders = ",".join("?" * len(deleted_ids))
-            conn.execute(f"DELETE FROM conversations WHERE id IN ({placeholders})", deleted_ids)
+            conn.execute(
+                f"DELETE FROM conversations WHERE id IN ({placeholders})", deleted_ids
+            )
 
             # 관련 임베딩도 삭제
             conn.execute(
@@ -245,7 +251,9 @@ def export_memory_backup(project_id: str = None, output_path: str = None) -> str
         facts = [dict(row) for row in cursor.fetchall()]
 
         # 요약 조회
-        cursor = conn.execute("SELECT * FROM conversation_summaries ORDER BY created_at")
+        cursor = conn.execute(
+            "SELECT * FROM conversation_summaries ORDER BY created_at"
+        )
         summaries = [dict(row) for row in cursor.fetchall()]
 
     backup_data = {
@@ -265,7 +273,9 @@ def export_memory_backup(project_id: str = None, output_path: str = None) -> str
         json.dump(backup_data, f, indent=2, ensure_ascii=False, default=str)
 
     print(f"💾 메모리 백업 완료: {output_path}")
-    print(f"📊 대화 {len(conversations)}개, 사실 {len(facts)}개, 요약 {len(summaries)}개")
+    print(
+        f"📊 대화 {len(conversations)}개, 사실 {len(facts)}개, 요약 {len(summaries)}개"
+    )
 
     return output_path
 
@@ -309,7 +319,9 @@ def ensure_qdrant_collection(
 
     try:
         # 컬렉션 존재 확인
-        response = requests.get(f"{qdrant_url}/collections/{collection_name}", timeout=10)
+        response = requests.get(
+            f"{qdrant_url}/collections/{collection_name}", timeout=10
+        )
 
         if response.status_code == 404:
             # 컬렉션 생성
@@ -341,7 +353,9 @@ def ensure_qdrant_collection(
         return False
 
 
-def upsert_to_qdrant(project_id: str, points: List[Dict], qdrant_url: str = None) -> bool:
+def upsert_to_qdrant(
+    project_id: str, points: List[Dict], qdrant_url: str = None
+) -> bool:
     """
     Qdrant에 포인트 업로드 (배치)
 

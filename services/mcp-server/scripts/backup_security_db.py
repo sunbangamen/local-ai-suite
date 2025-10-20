@@ -125,7 +125,9 @@ async def cleanup_old_backups(backup_dir: Path, keep_days: int = 7) -> None:
     for backup_file in backup_dir.glob("security_backup_*.db"):
         # Extract timestamp from filename
         try:
-            timestamp_str = backup_file.stem.split("_", 2)[2]  # security_backup_YYYYMMDD_HHMMSS
+            timestamp_str = backup_file.stem.split("_", 2)[
+                2
+            ]  # security_backup_YYYYMMDD_HHMMSS
             file_time = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
 
             if file_time < cutoff_time:
@@ -146,7 +148,9 @@ async def main():
         default=Path("/mnt/e/ai-data/sqlite/backups"),
         help="Backup output directory",
     )
-    parser.add_argument("--restore", type=Path, help="Restore database from backup file")
+    parser.add_argument(
+        "--restore", type=Path, help="Restore database from backup file"
+    )
     parser.add_argument(
         "--cleanup", type=int, metavar="DAYS", help="Cleanup backups older than N days"
     )

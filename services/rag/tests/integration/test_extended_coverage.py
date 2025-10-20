@@ -26,7 +26,11 @@ async def test_document_metadata_storage(rag_client, seeded_environment):  # typ
     """Test document metadata is properly stored during indexing."""
     # Index a test document (with explicit path to ensure documents exist)
     response = await rag_client.post(
-        "/index", params={"collection": "test-db-1", "path": "/app/documents"}  # Use explicit path
+        "/index",
+        params={
+            "collection": "test-db-1",
+            "path": "/app/documents",
+        },  # Use explicit path
     )
     assert response.status_code == 200
     data = response.json()
@@ -67,7 +71,8 @@ async def test_search_analytics_logging(rag_client, seeded_environment):  # type
     query_text = "Machine learning models"
 
     response = await rag_client.post(
-        "/query", json={"query": query_text, "collection": "test-analytics-1", "topk": 4}
+        "/query",
+        json={"query": query_text, "collection": "test-analytics-1", "topk": 4},
     )
     assert response.status_code in (200, 503)
 
@@ -78,7 +83,11 @@ async def test_empty_collection_handling(rag_client, seeded_environment):  # typ
     """Test querying a non-existent collection returns valid response."""
     response = await rag_client.post(
         "/query",
-        json={"query": "test query", "collection": "non-existent-collection-xyz", "topk": 3},
+        json={
+            "query": "test query",
+            "collection": "non-existent-collection-xyz",
+            "topk": 3,
+        },
     )
     # Should either return empty results or service unavailable
     assert response.status_code in (200, 503)
@@ -110,7 +119,10 @@ async def test_chunk_overlap_handling(rag_client, seeded_environment):  # type: 
     """Test that chunking with overlap preserves context."""
     response = await rag_client.post(
         "/index",
-        params={"collection": "test-overlap-1", "path": "/app/documents"},  # Use explicit path
+        params={
+            "collection": "test-overlap-1",
+            "path": "/app/documents",
+        },  # Use explicit path
     )
     assert response.status_code == 200
     data = response.json()
@@ -145,12 +157,15 @@ async def test_korean_document_processing(rag_client, seeded_environment):  # ty
 async def test_vector_similarity_search(rag_client, seeded_environment):  # type: ignore[func-arg]
     """Test vector similarity search returns relevant results."""
     # First index
-    index_resp = await rag_client.post("/index", params={"collection": "test-similarity-1"})
+    index_resp = await rag_client.post(
+        "/index", params={"collection": "test-similarity-1"}
+    )
     assert index_resp.status_code == 200
 
     # Then query
     query_resp = await rag_client.post(
-        "/query", json={"query": "test query", "collection": "test-similarity-1", "topk": 5}
+        "/query",
+        json={"query": "test query", "collection": "test-similarity-1", "topk": 5},
     )
     assert query_resp.status_code in (200, 503)
     if query_resp.status_code == 200:
@@ -228,7 +243,8 @@ async def test_cosine_similarity_calculation(rag_client, seeded_environment):  #
 
     # Query should return results with similarity scores
     query_resp = await rag_client.post(
-        "/query", json={"query": "similarity test", "collection": "test-cosine-1", "topk": 3}
+        "/query",
+        json={"query": "similarity test", "collection": "test-cosine-1", "topk": 3},
     )
     assert query_resp.status_code in (200, 503)
     if query_resp.status_code == 200:
@@ -248,7 +264,11 @@ async def test_llm_context_injection(rag_client, seeded_environment):  # type: i
     """Test LLM receives proper context from vector search."""
     response = await rag_client.post(
         "/query",
-        json={"query": "How does context help?", "collection": "test-llm-context-1", "topk": 4},
+        json={
+            "query": "How does context help?",
+            "collection": "test-llm-context-1",
+            "topk": 4,
+        },
     )
     assert response.status_code in (200, 503)
     if response.status_code == 200:
@@ -264,7 +284,11 @@ async def test_llm_timeout_handling(rag_client, seeded_environment):  # type: ig
     """Test LLM request timeout is properly handled."""
     response = await rag_client.post(
         "/query",
-        json={"query": "test timeout handling", "collection": "test-llm-timeout-1", "topk": 3},
+        json={
+            "query": "test timeout handling",
+            "collection": "test-llm-timeout-1",
+            "topk": 3,
+        },
     )
     # Should complete or return service unavailable
     assert response.status_code in (200, 503)
@@ -293,7 +317,12 @@ async def test_llm_temperature_consistency(rag_client, seeded_environment):  # t
     responses = []
     for _ in range(2):
         response = await rag_client.post(
-            "/query", json={"query": "test temperature", "collection": "test-llm-temp-1", "topk": 3}
+            "/query",
+            json={
+                "query": "test temperature",
+                "collection": "test-llm-temp-1",
+                "topk": 3,
+            },
         )
         if response.status_code == 200:
             responses.append(response.json().get("answer", ""))
@@ -314,7 +343,9 @@ async def test_full_rag_workflow_index_then_query(rag_client, seeded_environment
     collection_name = "test-e2e-workflow-1"
 
     # Step 1: Index documents
-    index_response = await rag_client.post("/index", params={"collection": collection_name})
+    index_response = await rag_client.post(
+        "/index", params={"collection": collection_name}
+    )
     assert index_response.status_code == 200
     index_data = index_response.json()
     assert index_data["chunks"] >= 0
@@ -322,7 +353,11 @@ async def test_full_rag_workflow_index_then_query(rag_client, seeded_environment
     # Step 2: Query indexed documents
     query_response = await rag_client.post(
         "/query",
-        json={"query": "What is in the documents?", "collection": collection_name, "topk": 4},
+        json={
+            "query": "What is in the documents?",
+            "collection": collection_name,
+            "topk": 4,
+        },
     )
     assert query_response.status_code in (200, 503)
     if query_response.status_code == 200:
@@ -373,12 +408,14 @@ async def test_collection_usage_persistence(rag_client, seeded_environment):  # 
 
     # Query the indexed data
     query_resp = await rag_client.post(
-        "/query", json={"query": "persistent test", "collection": collection_name, "topk": 3}
+        "/query",
+        json={"query": "persistent test", "collection": collection_name, "topk": 3},
     )
     assert query_resp.status_code in (200, 503)
 
     # Second query should work on same collection
     query_resp2 = await rag_client.post(
-        "/query", json={"query": "another query", "collection": collection_name, "topk": 3}
+        "/query",
+        json={"query": "another query", "collection": collection_name, "topk": 3},
     )
     assert query_resp2.status_code in (200, 503)

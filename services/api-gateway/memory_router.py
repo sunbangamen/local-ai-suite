@@ -47,7 +47,9 @@ try:
         "Number of active conversations",
         ["project_id"],
     )
-    VECTOR_SEARCH_ENABLED = Gauge("memory_api_vector_search_enabled", "Vector search availability")
+    VECTOR_SEARCH_ENABLED = Gauge(
+        "memory_api_vector_search_enabled", "Vector search availability"
+    )
 
 except ImportError:
     PROMETHEUS_AVAILABLE = False
@@ -169,7 +171,9 @@ async def logging_middleware(request: Request, call_next):
                 endpoint=str(request.url.path),
                 status=response.status_code,
             ).inc()
-            REQUEST_DURATION.labels(method=request.method, endpoint=str(request.url.path)).observe(
+            REQUEST_DURATION.labels(
+                method=request.method, endpoint=str(request.url.path)
+            ).observe(
                 duration_ms / 1000
             )  # seconds
 
@@ -288,7 +292,9 @@ async def search_conversations(search: ConversationSearch):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error searching conversations: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error searching conversations: {e}"
+        )
 
 
 @memory_app.get("/v1/memory/projects/{project_id}/stats")
@@ -460,7 +466,9 @@ async def recover_vector_functionality():
             }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error recovering vector functionality: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error recovering vector functionality: {e}"
+        )
 
 
 # Prometheus 메트릭 엔드포인트
@@ -480,7 +488,9 @@ async def metrics():
             project_id = memory_system.get_project_id()
             stats = memory_system.get_conversation_stats(project_id)
             if stats and "total_conversations" in stats:
-                ACTIVE_CONVERSATIONS.labels(project_id=project_id).set(stats["total_conversations"])
+                ACTIVE_CONVERSATIONS.labels(project_id=project_id).set(
+                    stats["total_conversations"]
+                )
         except Exception:
             pass  # 메트릭 업데이트 실패는 무시
 
@@ -531,7 +541,9 @@ async def list_projects():
                             {
                                 "project_id": project_id,
                                 "database_path": str(memory_db),
-                                "total_conversations": stats.get("total_conversations", 0),
+                                "total_conversations": stats.get(
+                                    "total_conversations", 0
+                                ),
                                 "avg_importance": stats.get("avg_importance", 0),
                                 "latest_conversation": stats.get("latest_conversation"),
                             }
@@ -572,6 +584,8 @@ if __name__ == "__main__":
 
     uvicorn.run(
         memory_app,
-        host=os.getenv("MEMORY_ROUTER_HOST", "0.0.0.0"),  # nosec B104 - default container binding
+        host=os.getenv(
+            "MEMORY_ROUTER_HOST", "0.0.0.0"
+        ),  # nosec B104 - default container binding
         port=int(os.getenv("MEMORY_ROUTER_PORT", "8005")),
     )

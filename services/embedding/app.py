@@ -64,7 +64,9 @@ def _ensure_model() -> None:
         if _model is None:
             _model = _load_model(_model_name)
             # 차원 파악: 짧은 텍스트 한 개 임베딩
-            sample = list(_model.embed(["dimension probe"], batch_size=1, normalize=NORMALIZE))
+            sample = list(
+                _model.embed(["dimension probe"], batch_size=1, normalize=NORMALIZE)
+            )
             _model_dim = len(sample[0])
 
 
@@ -118,7 +120,9 @@ def embed(req: EmbedRequest = Body(...)):
         req.texts = req.texts[:MAX_TEXTS]
 
     # 항목별 길이 제한 (초과분 컷)
-    safe_texts = [t[:MAX_CHARS] if t and len(t) > MAX_CHARS else (t or "") for t in req.texts]
+    safe_texts = [
+        t[:MAX_CHARS] if t and len(t) > MAX_CHARS else (t or "") for t in req.texts
+    ]
 
     _ensure_model()
     assert _model is not None
@@ -150,7 +154,9 @@ def reload_model(req: ReloadRequest):
     with _model_lock:
         new_model = _load_model(req.model)
         # 차원 미리 확인
-        sample = list(new_model.embed(["dimension probe"], batch_size=1, normalize=NORMALIZE))
+        sample = list(
+            new_model.embed(["dimension probe"], batch_size=1, normalize=NORMALIZE)
+        )
         new_dim = len(sample[0])
         _model = new_model
         _model_name = req.model
@@ -171,6 +177,8 @@ if __name__ == "__main__":
 
     uvicorn.run(
         app,
-        host=os.getenv("EMBEDDING_HOST", "0.0.0.0"),  # nosec B104 - container binding by default
+        host=os.getenv(
+            "EMBEDDING_HOST", "0.0.0.0"
+        ),  # nosec B104 - container binding by default
         port=int(os.getenv("EMBEDDING_PORT", "8003")),
     )

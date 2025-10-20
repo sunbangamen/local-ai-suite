@@ -107,7 +107,9 @@ class BaselineExtractor:
         }
 
         pattern = endpoint_patterns.get(service_name, service_name)
-        service_rows = [r for r in self.stats if pattern.lower() in r.get("Name", "").lower()]
+        service_rows = [
+            r for r in self.stats if pattern.lower() in r.get("Name", "").lower()
+        ]
 
         if not service_rows:
             print(f"⚠️  No data found for service: {service_name} (pattern: {pattern})")
@@ -172,7 +174,9 @@ class BaselineExtractor:
                 baselines[service] = metrics
                 print(f"✅ Extracted baseline for {service}")
             else:
-                print(f"⏳ Baseline data not available for {service} (will add in future phases)")
+                print(
+                    f"⏳ Baseline data not available for {service} (will add in future phases)"
+                )
 
         return baselines
 
@@ -209,7 +213,9 @@ class BaselineExtractor:
 def main():
     """Main entry point."""
     if len(sys.argv) < 2:
-        print("Usage: python scripts/extract_baselines.py <stats_csv_file> [output_file]")
+        print(
+            "Usage: python scripts/extract_baselines.py <stats_csv_file> [output_file]"
+        )
         print("\nExample:")
         print(
             "  python scripts/extract_baselines.py load_results_stats.csv docs/performance-baselines.json"
@@ -217,7 +223,9 @@ def main():
         sys.exit(1)
 
     stats_file = sys.argv[1]
-    output_file = sys.argv[2] if len(sys.argv) > 2 else "docs/performance-baselines.json"
+    output_file = (
+        sys.argv[2] if len(sys.argv) > 2 else "docs/performance-baselines.json"
+    )
 
     # Extract baselines
     extractor = BaselineExtractor(stats_file)

@@ -55,7 +55,9 @@ async def get_pending_requests(db_path: Path, limit: int = 20):
         return [dict(row) for row in requests]
 
 
-async def approve_request(db_path: Path, request_id: str, responder_id: str, reason: str):
+async def approve_request(
+    db_path: Path, request_id: str, responder_id: str, reason: str
+):
     """승인 요청 승인 (with audit logging)"""
     async with aiosqlite.connect(db_path) as db:
         db.row_factory = aiosqlite.Row
@@ -118,7 +120,9 @@ async def approve_request(db_path: Path, request_id: str, responder_id: str, rea
         return True, "Approved successfully"
 
 
-async def reject_request(db_path: Path, request_id: str, responder_id: str, reason: str):
+async def reject_request(
+    db_path: Path, request_id: str, responder_id: str, reason: str
+):
     """승인 요청 거부 (with audit logging)"""
     async with aiosqlite.connect(db_path) as db:
         db.row_factory = aiosqlite.Row
@@ -165,7 +169,9 @@ async def reject_request(db_path: Path, request_id: str, responder_id: str, reas
                     "rejected",
                     reason,  # rejection reason as error_message
                     None,
-                    json.dumps({"request_id": request_id, "responder_id": responder_id}),
+                    json.dumps(
+                        {"request_id": request_id, "responder_id": responder_id}
+                    ),
                 ),
             )
             await db.commit()
@@ -241,7 +247,9 @@ async def interactive_mode(db_path: Path, responder_id: str):
         short_id_map, request_list = display_requests(requests)
 
         if not requests:
-            console.print("\n[yellow]No pending requests. Waiting for new requests...[/yellow]")
+            console.print(
+                "\n[yellow]No pending requests. Waiting for new requests...[/yellow]"
+            )
             if not Confirm.ask("Continue monitoring?", default=True):
                 break
             await asyncio.sleep(5)
@@ -270,7 +278,9 @@ async def interactive_mode(db_path: Path, responder_id: str):
             continue
 
         # 요청 상세 정보 표시
-        selected_req = next((r for r in request_list if r["request_id"] == full_request_id), None)
+        selected_req = next(
+            (r for r in request_list if r["request_id"] == full_request_id), None
+        )
         if selected_req:
             console.print(
                 Panel(
@@ -286,7 +296,9 @@ async def interactive_mode(db_path: Path, responder_id: str):
             )
 
         # 승인/거부 선택
-        action = Prompt.ask("Action", choices=["approve", "reject", "skip"], default="skip")
+        action = Prompt.ask(
+            "Action", choices=["approve", "reject", "skip"], default="skip"
+        )
 
         if action == "skip":
             continue
@@ -295,9 +307,13 @@ async def interactive_mode(db_path: Path, responder_id: str):
 
         # 처리 실행
         if action == "approve":
-            success, message = await approve_request(db_path, full_request_id, responder_id, reason)
+            success, message = await approve_request(
+                db_path, full_request_id, responder_id, reason
+            )
         else:
-            success, message = await reject_request(db_path, full_request_id, responder_id, reason)
+            success, message = await reject_request(
+                db_path, full_request_id, responder_id, reason
+            )
 
         if success:
             console.print(f"[green]✓ {message}[/green]")
@@ -315,10 +331,18 @@ async def single_run(db_path: Path):
 
 async def main():
     parser = argparse.ArgumentParser(description="Approval Workflow CLI")
-    parser.add_argument("--db", type=str, default=str(DEFAULT_DB_PATH), help="Database path")
-    parser.add_argument("--responder", type=str, default="cli_admin", help="Responder ID")
-    parser.add_argument("--continuous", action="store_true", help="Run in continuous mode")
-    parser.add_argument("--list-only", action="store_true", help="List requests and exit")
+    parser.add_argument(
+        "--db", type=str, default=str(DEFAULT_DB_PATH), help="Database path"
+    )
+    parser.add_argument(
+        "--responder", type=str, default="cli_admin", help="Responder ID"
+    )
+    parser.add_argument(
+        "--continuous", action="store_true", help="Run in continuous mode"
+    )
+    parser.add_argument(
+        "--list-only", action="store_true", help="List requests and exit"
+    )
 
     args = parser.parse_args()
     db_path = Path(args.db)

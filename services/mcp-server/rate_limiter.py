@@ -44,7 +44,9 @@ class RateLimiter:
 
     def __init__(self):
         # 도구별 요청 기록: {tool_name: {user_id: deque([timestamp, ...])}}
-        self.request_history: Dict[str, Dict[str, deque]] = defaultdict(lambda: defaultdict(deque))
+        self.request_history: Dict[str, Dict[str, deque]] = defaultdict(
+            lambda: defaultdict(deque)
+        )
 
         # 도구별 rate limit 설정
         self.rate_limits: Dict[str, RateLimit] = self._init_rate_limits()
@@ -78,12 +80,16 @@ class RateLimiter:
             "web_analyze_ui": RateLimit(max_requests=10, time_window=60, burst_size=2),
             "web_automate": RateLimit(max_requests=5, time_window=60, burst_size=1),
             # Notion 통합 (중간 제한)
-            "notion_create_page": RateLimit(max_requests=10, time_window=60, burst_size=2),
+            "notion_create_page": RateLimit(
+                max_requests=10, time_window=60, burst_size=2
+            ),
             "notion_search": RateLimit(max_requests=20, time_window=60, burst_size=5),
             "web_to_notion": RateLimit(max_requests=5, time_window=60, burst_size=1),
             # 모델 관리 (엄격한 제한)
             "switch_model": RateLimit(max_requests=5, time_window=300, burst_size=1),
-            "get_current_model": RateLimit(max_requests=30, time_window=60, burst_size=5),
+            "get_current_model": RateLimit(
+                max_requests=30, time_window=60, burst_size=5
+            ),
         }
 
     def check_rate_limit(
@@ -183,7 +189,9 @@ class RateLimiter:
             "burst_size": limit.burst_size,
             "time_window": limit.time_window,
             "concurrent_executions": self.concurrent_executions[tool_name][user_id],
-            "remaining": max(0, limit.max_requests + limit.burst_size - len(valid_requests)),
+            "remaining": max(
+                0, limit.max_requests + limit.burst_size - len(valid_requests)
+            ),
         }
 
 
@@ -192,7 +200,9 @@ class AccessControl:
 
     def __init__(self):
         self.rules: Dict[str, AccessControlRule] = self._init_rules()
-        self.tool_sensitivity: Dict[str, ToolSensitivityLevel] = self._init_sensitivity()
+        self.tool_sensitivity: Dict[str, ToolSensitivityLevel] = (
+            self._init_sensitivity()
+        )
 
     def _init_sensitivity(self) -> Dict[str, ToolSensitivityLevel]:
         """도구별 민감도 수준 초기화"""
@@ -291,7 +301,9 @@ class AccessControl:
                 ),
             }
 
-    def check_access(self, tool_name: str, user_id: str = "default") -> tuple[bool, Optional[str]]:
+    def check_access(
+        self, tool_name: str, user_id: str = "default"
+    ) -> tuple[bool, Optional[str]]:
         """
         접근 권한 체크
 

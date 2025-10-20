@@ -73,7 +73,9 @@ class TestRBACIntegration:
 
         # Verify audit log entry
         db = get_security_database()
-        logs = await db.get_audit_logs(user_id="guest_user", tool_name="execute_python", limit=1)
+        logs = await db.get_audit_logs(
+            user_id="guest_user", tool_name="execute_python", limit=1
+        )
 
         assert len(logs) > 0, "Audit log should be created"
         log = logs[0]
@@ -96,11 +98,15 @@ class TestRBACIntegration:
 
         # Should return 200 OK (or error from actual execution)
         # The important thing is NOT 403
-        assert response.status_code != 403, f"Developer should not be denied: {response.text}"
+        assert (
+            response.status_code != 403
+        ), f"Developer should not be denied: {response.text}"
 
         # Verify audit log entry
         db = get_security_database()
-        logs = await db.get_audit_logs(user_id="dev_user", tool_name="execute_python", limit=1)
+        logs = await db.get_audit_logs(
+            user_id="dev_user", tool_name="execute_python", limit=1
+        )
 
         assert len(logs) > 0, "Audit log should be created"
         log = logs[0]
@@ -223,7 +229,9 @@ class TestRBACIntegration:
 
         # Count logs created after start_time
         all_logs = await db.get_audit_logs(limit=1000)
-        new_logs = [log for log in all_logs if log.get("timestamp", "") >= str(start_time)]
+        new_logs = [
+            log for log in all_logs if log.get("timestamp", "") >= str(start_time)
+        ]
         new_count = len(new_logs)
 
         assert new_count >= 5, f"Expected at least 5 new audit logs, got {new_count}"
