@@ -174,6 +174,17 @@ def call_mcp_tool(tool_name: str, **kwargs) -> Optional[Dict[str, Any]]:
             headers=headers,
             timeout=60,
         )
+
+        # Handle approval workflow (Issue #26)
+        if response.status_code == 403:
+            try:
+                error_data = response.json()
+                if error_data.get("approval_required"):
+                    request_id = error_data.get("request_id")
+                    return handle_approval_workflow(request_id, tool_name, kwargs)
+            except Exception as e:
+                print(f"⚠️ Error handling approval response: {e}")
+
         response.raise_for_status()
 
         data = response.json()
@@ -189,6 +200,118 @@ def call_mcp_tool(tool_name: str, **kwargs) -> Optional[Dict[str, Any]]:
     except Exception as e:
         print(f"❌ MCP Error: {e}")
         return None
+
+
+def handle_approval_workflow(request_id: str, tool_name: str, args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Handle approval workflow for HIGH/CRITICAL tools (Issue #26, Phase 1)
+
+    Shows progress bar while waiting for admin approval, then re-executes the tool
+    """
+    try:
+        from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
+        from rich.console import Console as RichConsole
+
+        console = RichConsole()
+    except ImportError:
+        # Fallback if Rich is not installed
+        return wait_for_approval_simple(request_id, tool_name, args)
+
+    approval_timeout = int(os.getenv("APPROVAL_TIMEOUT", "300"))  # 5 minutes default
+    polling_interval = int(os.getenv("APPROVAL_POLLING_INTERVAL", "1"))  # 1 second default
+
+    console.print(
+        f"⏳ [yellow]Approval Required[/yellow]\n"
+        f"   Tool: [cyan]{tool_name}[/cyan]\n"
+        f"   Request ID: [magenta]{request_id[:8]}[/magenta]\n"
+        f"   Timeout: [red]{approval_timeout}s[/red]"
+    )
+
+    elapsed = 0
+    with Progress(
+        SpinnerColumn(),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:.0f}%"),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task(f"Waiting for approval...", total=approval_timeout)
+
+        while elapsed < approval_timeout:
+            # Poll approval status
+            try:
+                status_response = requests.get(
+                    f"{MCP_URL}/api/approvals/{request_id}/status",
+                    timeout=5,
+                )
+                status_data = status_response.json()
+                status = status_data.get("status", "pending")
+
+                if status == "approved":
+                    console.print("✅ [green]Approval Granted![/green]")
+                    # Re-execute the tool
+                    return call_mcp_tool(tool_name, **args)
+
+                elif status in ["rejected", "expired", "timeout"]:
+                    console.print(f"❌ [red]Approval {status}[/red]")
+                    if status_data.get("reason"):
+                        console.print(f"   Reason: {status_data['reason']}")
+                    return None
+
+            except Exception as e:
+                console.print(f"⚠️ Error polling approval status: {e}")
+
+            # Update progress
+            progress.update(task, advance=polling_interval)
+            elapsed += polling_interval
+            time.sleep(polling_interval)
+
+        # Timeout
+        console.print("❌ [red]Approval Timeout[/red]")
+        return None
+
+
+def wait_for_approval_simple(request_id: str, tool_name: str, args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Simple fallback approval handler (no Rich library)
+    """
+    approval_timeout = int(os.getenv("APPROVAL_TIMEOUT", "300"))
+    polling_interval = int(os.getenv("APPROVAL_POLLING_INTERVAL", "1"))
+
+    print(f"\n⏳ Approval Required for: {tool_name}")
+    print(f"   Request ID: {request_id[:8]}...")
+    print(f"   Timeout: {approval_timeout}s\n")
+
+    elapsed = 0
+    while elapsed < approval_timeout:
+        try:
+            status_response = requests.get(
+                f"{MCP_URL}/api/approvals/{request_id}/status",
+                timeout=5,
+            )
+            status_data = status_response.json()
+            status = status_data.get("status", "pending")
+
+            if status == "approved":
+                print("✅ Approval Granted!")
+                return call_mcp_tool(tool_name, **args)
+
+            elif status in ["rejected", "expired", "timeout"]:
+                print(f"❌ Approval {status}")
+                return None
+
+            # Show progress
+            remaining = approval_timeout - elapsed
+            print(f"   [{elapsed}s/{approval_timeout}s] Waiting for approval...", end="\r")
+
+        except Exception as e:
+            print(f"⚠️ Error: {e}")
+
+        elapsed += polling_interval
+        time.sleep(polling_interval)
+
+    print("❌ Approval Timeout")
+    return None
 
 
 def analyze_query_for_mcp_tools(query: str) -> List[Dict[str, Any]]:

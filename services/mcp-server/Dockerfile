@@ -53,6 +53,9 @@ COPY settings.py security_database.py rbac_manager.py audit_logger.py rbac_middl
 # 보안 스크립트 및 스키마 복사
 COPY scripts/ ./scripts/
 
+# 테스트 파일 복사 (벤치마크 포함)
+COPY tests/ ./tests/
+
 # Entrypoint 스크립트 복사 및 실행 권한 부여
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

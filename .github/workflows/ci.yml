@@ -496,6 +496,60 @@
           run: |
             docker compose -f docker/compose.p2.cpu.yml down -v
 
+    # Approval Workflow Tests (Issue #26, Phase 4)
+    approval-tests:
+      name: Approval Workflow Tests (Issue #26)
+      runs-on: ubuntu-latest
+      needs: [lint, unit-tests]
+      steps:
+        - uses: actions/checkout@v4
+
+        - uses: actions/setup-python@v5
+          with:
+            python-version: '3.11'
+            cache: 'pip'
+
+        - name: Install test dependencies
+          run: |
+            pip install pytest pytest-cov pytest-asyncio httpx aiosqlite
+
+        - name: Install MCP server dependencies
+          run: |
+            if [ -f services/mcp-server/requirements.txt ]; then
+              pip install -r services/mcp-server/requirements.txt
+            fi
+
+            # Install Rich for CLI approval workflow
+            pip install rich
+
+        - name: Run approval workflow tests
+          working-directory: services/mcp-server
+          run: |
+            echo "::group::Approval Workflow Tests (Issue #26)"
+            if [ ! -d "tests" ]; then
+              echo "::warning::No tests directory found for MCP server"
+              exit 0
+            fi
+
+            # Run only approval workflow tests
+            pytest tests/test_approval_workflow.py \
+              --cov=rbac_manager \
+              --cov=security_database \
+              --cov-report=term-missing \
+              -v || {
+              echo "::error::Approval workflow tests failed"
+              exit 1
+            }
+            echo "::endgroup::"
+
+        - name: Upload coverage reports
+          if: always()
+          uses: actions/upload-artifact@v4
+          with:
+            name: approval-tests-coverage
+            path: services/mcp-server/.coverage
+            retention-days: 30
+
     build-check:
       name: Docker Build Check
       runs-on: ubuntu-latest
@@ -524,7 +578,7 @@
     summary:
       name: CI Summary
       runs-on: ubuntu-latest
-      needs: [lint, security-scan, unit-tests, integration-tests, rag-integration-tests, e2e-tests, build-check]
+      needs: [lint, security-scan, unit-tests, integration-tests, rag-integration-tests, e2e-tests, approval-tests, build-check]
       if: always()
       steps:
         - name: Check CI status
@@ -543,11 +597,16 @@
             echo "::notice::E2E Tests (Phase 2): ${{ needs.e2e-tests.result }}"
             echo "::endgroup::"
 
+            echo "::group::Issue #26 Tests (Approval Workflow)"
+            echo "::notice::Approval Workflow Tests: ${{ needs.approval-tests.result }}"
+            echo "::endgroup::"
+
             if [[ "${{ needs.lint.result }}" == "failure" ]] || \
                [[ "${{ needs.unit-tests.result }}" == "failure" ]] || \
                [[ "${{ needs.integration-tests.result }}" == "failure" ]] || \
                [[ "${{ needs.rag-integration-tests.result }}" == "failure" ]] || \
-               [[ "${{ needs.e2e-tests.result }}" == "failure" ]]; then
+               [[ "${{ needs.e2e-tests.result }}" == "failure" ]] || \
+               [[ "${{ needs.approval-tests.result }}" == "failure" ]]; then
               echo "::error::CI failed - check logs above"
               exit 1
             fi
