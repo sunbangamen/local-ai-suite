@@ -71,8 +71,7 @@ async def benchmark_tool_call(client: httpx.AsyncClient, scenario: Dict) -> Dict
         latency = (time.perf_counter() - start) * 1000  # convert to ms
 
         return {
-            "success": response.status_code
-            < 500,  # 4xx are expected (permission denied)
+            "success": response.status_code < 500,  # 4xx are expected (permission denied)
             "latency": latency,
             "status": response.status_code,
             "error": None,
@@ -142,14 +141,8 @@ async def run_benchmark(duration: int, target_rps: int) -> List[Dict]:
             # Progress indicator
             elapsed = time.time() - start_time
             if int(elapsed) % 10 == 0 and len(results) > 0:
-                recent = (
-                    results[-target_rps * 10 :]
-                    if len(results) >= target_rps * 10
-                    else results
-                )
-                avg_latency = statistics.mean(
-                    [r["latency"] for r in recent if r["latency"] > 0]
-                )
+                recent = results[-target_rps * 10 :] if len(results) >= target_rps * 10 else results
+                avg_latency = statistics.mean([r["latency"] for r in recent if r["latency"] > 0])
                 print(
                     f"  {int(elapsed)}s: {len(results)} requests, avg latency: {avg_latency:.2f}ms"
                 )
@@ -204,9 +197,7 @@ def analyze_results(results: List[Dict], duration: int, output_csv: Path) -> Dic
             statistics.quantiles(latencies, n=20)[18]
             if len(latencies) >= 20
             else (
-                statistics.quantiles(latencies, n=len(latencies))[
-                    int(len(latencies) * 0.95)
-                ]
+                statistics.quantiles(latencies, n=len(latencies))[int(len(latencies) * 0.95)]
                 if len(latencies) > 1
                 else latencies[0]
             )
@@ -215,9 +206,7 @@ def analyze_results(results: List[Dict], duration: int, output_csv: Path) -> Dic
             statistics.quantiles(latencies, n=100)[98]
             if len(latencies) >= 100
             else (
-                statistics.quantiles(latencies, n=len(latencies))[
-                    int(len(latencies) * 0.99)
-                ]
+                statistics.quantiles(latencies, n=len(latencies))[int(len(latencies) * 0.99)]
                 if len(latencies) > 1
                 else latencies[0]
             )
@@ -281,9 +270,7 @@ async def main():
         default=DEFAULT_DURATION,
         help="Test duration in seconds",
     )
-    parser.add_argument(
-        "--rps", type=int, default=DEFAULT_RPS, help="Target requests per second"
-    )
+    parser.add_argument("--rps", type=int, default=DEFAULT_RPS, help="Target requests per second")
     parser.add_argument("--output", type=str, help="Output CSV file path")
 
     args = parser.parse_args()

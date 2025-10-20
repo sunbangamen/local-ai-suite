@@ -375,9 +375,7 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "docker: mark test as requiring Docker (skip if Docker unavailable)"
     )
-    config.addinivalue_line(
-        "markers", "slow: mark test as slow (deselect with '-m \"not slow\"')"
-    )
+    config.addinivalue_line("markers", "slow: mark test as slow (deselect with '-m \"not slow\"')")
 
 
 def pytest_collection_modifyitems(config, items):

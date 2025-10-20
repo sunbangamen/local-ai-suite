@@ -61,12 +61,8 @@ class ModelOptimizer:
         )
 
         # Create indexes
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_usage_timestamp ON model_usage(timestamp)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_usage_model ON model_usage(selected_model)"
-        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_timestamp ON model_usage(timestamp)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_model ON model_usage(selected_model)")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_performance_model ON model_performance(model_name)"
         )
@@ -146,9 +142,7 @@ class ModelOptimizer:
         if patterns:
             # Use historical patterns with good feedback
             best_type = patterns[0][0]  # detected_type from best pattern
-            confidence = min(
-                0.9, 0.6 + (patterns[0][3] * 0.1)
-            )  # count-based confidence
+            confidence = min(0.9, 0.6 + (patterns[0][3] * 0.1))  # count-based confidence
             return best_type, confidence
         else:
             # Fall back to basic detection
@@ -270,9 +264,7 @@ class ModelOptimizer:
             # Update existing record
             current_avg, current_count = row
             if response_time:
-                new_avg = ((current_avg * current_count) + response_time) / (
-                    current_count + 1
-                )
+                new_avg = ((current_avg * current_count) + response_time) / (current_count + 1)
                 new_count = current_count + 1
             else:
                 new_avg, new_count = current_avg, current_count
@@ -320,8 +312,7 @@ class ModelOptimizer:
         )
 
         usage_stats = [
-            dict(zip([col[0] for col in cursor.description], row))
-            for row in cursor.fetchall()
+            dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()
         ]
 
         # Recent performance
@@ -335,8 +326,7 @@ class ModelOptimizer:
         )
 
         performance_stats = [
-            dict(zip([col[0] for col in cursor.description], row))
-            for row in cursor.fetchall()
+            dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()
         ]
 
         # Model switching patterns
@@ -355,8 +345,7 @@ class ModelOptimizer:
         )
 
         switching_patterns = [
-            dict(zip([col[0] for col in cursor.description], row))
-            for row in cursor.fetchall()
+            dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()
         ]
 
         conn.close()

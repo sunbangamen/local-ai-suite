@@ -164,9 +164,7 @@ def main():
     time.sleep(30)
 
     # Test 2: API Gateway Progressive (10→50→100 users, 15 minutes total)
-    print(
-        "\n[PHASE 3.2] API Gateway Progressive Load (target: 100 users, duration: 15m)"
-    )
+    print("\n[PHASE 3.2] API Gateway Progressive Load (target: 100 users, duration: 15m)")
     api_test = run_locust_in_docker(
         scenario_name="api_gateway",
         host="http://api-gateway:8000",
@@ -182,9 +180,7 @@ def main():
         time.sleep(30)
 
     # Test 3: RAG Service Progressive (5→25→50 users, 15 minutes total)
-    print(
-        "\n[PHASE 3.3] RAG Service Progressive Load (target: 50 users, duration: 15m)"
-    )
+    print("\n[PHASE 3.3] RAG Service Progressive Load (target: 50 users, duration: 15m)")
     rag_test = run_locust_in_docker(
         scenario_name="rag_service",
         host="http://rag:8002",

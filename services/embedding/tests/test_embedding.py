@@ -184,9 +184,7 @@ async def test_reload_model_successfully(app_with_mocks):
             mock_model.embed = lambda texts, **kwargs: [[0.1] * 384 for _ in texts]
             mock_load.return_value = mock_model
 
-            response = await client.post(
-                "/reload", json={"model": "BAAI/bge-small-en-v1.5"}
-            )
+            response = await client.post("/reload", json={"model": "BAAI/bge-small-en-v1.5"})
 
             assert response.status_code == 200
             data = response.json()
@@ -274,9 +272,7 @@ async def test_reload_model_with_new_model(app_with_mocks):
             new_model.embed = lambda texts, **kwargs: [[0.2] * 384 for _ in texts]
             mock_load.return_value = new_model
 
-            response = await client.post(
-                "/reload", json={"model": "BAAI/bge-base-en-v1.5"}
-            )
+            response = await client.post("/reload", json={"model": "BAAI/bge-base-en-v1.5"})
 
             assert response.status_code == 200
             data = response.json()
@@ -394,9 +390,7 @@ async def test_startup_model_loading_path(app_with_mocks):
         assert data["dim"] == 384
 
         # Model should be ready for embedding
-        embed_response = await client.post(
-            "/embed", json={"texts": ["Test after startup"]}
-        )
+        embed_response = await client.post("/embed", json={"texts": ["Test after startup"]})
         assert embed_response.status_code == 200
 
 

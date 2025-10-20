@@ -157,9 +157,7 @@ async def test_korean_document_processing(rag_client, seeded_environment):  # ty
 async def test_vector_similarity_search(rag_client, seeded_environment):  # type: ignore[func-arg]
     """Test vector similarity search returns relevant results."""
     # First index
-    index_resp = await rag_client.post(
-        "/index", params={"collection": "test-similarity-1"}
-    )
+    index_resp = await rag_client.post("/index", params={"collection": "test-similarity-1"})
     assert index_resp.status_code == 200
 
     # Then query
@@ -343,9 +341,7 @@ async def test_full_rag_workflow_index_then_query(rag_client, seeded_environment
     collection_name = "test-e2e-workflow-1"
 
     # Step 1: Index documents
-    index_response = await rag_client.post(
-        "/index", params={"collection": collection_name}
-    )
+    index_response = await rag_client.post("/index", params={"collection": collection_name})
     assert index_response.status_code == 200
     index_data = index_response.json()
     assert index_data["chunks"] >= 0

@@ -135,9 +135,7 @@ secrets:
         description = case["description"]
 
         # 중요도 계산
-        score = memory_system.calculate_importance_score(
-            user_query, ai_response, context=context
-        )
+        score = memory_system.calculate_importance_score(user_query, ai_response, context=context)
 
         # 결과 검증
         is_passed = expected_range[0] <= score <= expected_range[1]
@@ -201,9 +199,7 @@ def test_memory_integration():
 
     # 검색 테스트
     print("\n🔍 검색 테스트:")
-    results = memory_system.search_conversations(
-        project_id=project_id, query="Python", limit=5
-    )
+    results = memory_system.search_conversations(project_id=project_id, query="Python", limit=5)
     print(f"'Python' 검색 결과: {len(results)}개")
 
     # 통계 확인

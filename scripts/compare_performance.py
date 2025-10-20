@@ -134,9 +134,7 @@ class PerformanceComparator:
         return self.regressions
 
     @staticmethod
-    def _determine_status(
-        change_pct: float, threshold: float, current_val: float
-    ) -> str:
+    def _determine_status(change_pct: float, threshold: float, current_val: float) -> str:
         """Determine regression status based on threshold.
 
         For positive thresholds (latency, error_rate): fail if change_pct > threshold
@@ -180,9 +178,7 @@ class PerformanceComparator:
             report += "| Service | Metric | Expected | Current | Change | Impact |\n"
             report += "|---------|--------|----------|---------|--------|--------|\n"
             for r in failures:
-                pct = (
-                    f"{r.change_pct*100:+.1f}%" if r.change_pct != float("inf") else "∞"
-                )
+                pct = f"{r.change_pct*100:+.1f}%" if r.change_pct != float("inf") else "∞"
                 report += f"| {r.service} | {r.metric} | {r.baseline} | {r.current} | {pct} | ❌ Critical |\n"
             report += "\n"
 
@@ -224,9 +220,7 @@ class PerformanceComparator:
 def main():
     """Main entry point."""
     if len(sys.argv) != 3:
-        print(
-            "Usage: python scripts/compare_performance.py <baseline_file> <current_results_file>"
-        )
+        print("Usage: python scripts/compare_performance.py <baseline_file> <current_results_file>")
         print("\nExample:")
         print(
             "  python scripts/compare_performance.py docs/performance-baselines.json load-results.json"

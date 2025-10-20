@@ -39,9 +39,7 @@ try:
     MEMORY_ENABLED = True
 except ImportError:
     MEMORY_ENABLED = False
-    print(
-        "⚠️ Memory system not available. Install memory_system.py for conversation memory."
-    )
+    print("⚠️ Memory system not available. Install memory_system.py for conversation memory.")
 
 # Memory API integration
 MEMORY_API_URL = "http://localhost:8005/v1/memory"
@@ -228,9 +226,7 @@ def handle_approval_workflow(
         return wait_for_approval_simple(request_id, tool_name, args)
 
     approval_timeout = int(os.getenv("APPROVAL_TIMEOUT", "300"))  # 5 minutes default
-    polling_interval = int(
-        os.getenv("APPROVAL_POLLING_INTERVAL", "1")
-    )  # 1 second default
+    polling_interval = int(os.getenv("APPROVAL_POLLING_INTERVAL", "1"))  # 1 second default
 
     console.print(
         f"⏳ [yellow]Approval Required[/yellow]\n"
@@ -316,9 +312,7 @@ def wait_for_approval_simple(
 
             # Show progress
             remaining = approval_timeout - elapsed
-            print(
-                f"   [{elapsed}s/{approval_timeout}s] Waiting for approval...", end="\r"
-            )
+            print(f"   [{elapsed}s/{approval_timeout}s] Waiting for approval...", end="\r")
 
         except Exception as e:
             print(f"⚠️ Error: {e}")
@@ -340,8 +334,7 @@ def analyze_query_for_mcp_tools(query: str) -> List[Dict[str, Any]]:
 
     # File operations
     if any(
-        keyword in query_lower
-        for keyword in ["파일", "읽어", "read file", "파일 내용", "텍스트"]
+        keyword in query_lower for keyword in ["파일", "읽어", "read file", "파일 내용", "텍스트"]
     ):
         if "읽" in query_lower or "read" in query_lower:
             suggestions.append(
@@ -352,10 +345,7 @@ def analyze_query_for_mcp_tools(query: str) -> List[Dict[str, Any]]:
                 }
             )
 
-    if any(
-        keyword in query_lower
-        for keyword in ["파일 생성", "파일 쓰기", "write file", "저장"]
-    ):
+    if any(keyword in query_lower for keyword in ["파일 생성", "파일 쓰기", "write file", "저장"]):
         suggestions.append(
             {
                 "tool": "write_file",
@@ -377,10 +367,7 @@ def analyze_query_for_mcp_tools(query: str) -> List[Dict[str, Any]]:
             }
         )
 
-    if any(
-        keyword in query_lower
-        for keyword in ["크롤링", "scrape", "웹 데이터", "web data"]
-    ):
+    if any(keyword in query_lower for keyword in ["크롤링", "scrape", "웹 데이터", "web data"]):
         suggestions.append(
             {
                 "tool": "web_scrape",
@@ -391,8 +378,7 @@ def analyze_query_for_mcp_tools(query: str) -> List[Dict[str, Any]]:
 
     # Code execution
     if any(
-        keyword in query_lower
-        for keyword in ["파이썬 실행", "python run", "코드 실행", "execute"]
+        keyword in query_lower for keyword in ["파이썬 실행", "python run", "코드 실행", "execute"]
     ):
         suggestions.append(
             {
@@ -402,9 +388,7 @@ def analyze_query_for_mcp_tools(query: str) -> List[Dict[str, Any]]:
             }
         )
 
-    if any(
-        keyword in query_lower for keyword in ["명령어", "command", "bash", "터미널"]
-    ):
+    if any(keyword in query_lower for keyword in ["명령어", "command", "bash", "터미널"]):
         suggestions.append(
             {
                 "tool": "execute_bash",
@@ -424,10 +408,7 @@ def analyze_query_for_mcp_tools(query: str) -> List[Dict[str, Any]]:
         )
 
     # RAG search
-    if any(
-        keyword in query_lower
-        for keyword in ["검색", "search", "문서", "document", "찾기"]
-    ):
+    if any(keyword in query_lower for keyword in ["검색", "search", "문서", "document", "찾기"]):
         suggestions.append(
             {
                 "tool": "rag_search",
@@ -526,7 +507,9 @@ def extract_tool_args_from_query(query: str, tool_name: str) -> Dict[str, Any]:
         # Try to extract URL from query
         import re
 
-        url_pattern = r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"
+        url_pattern = (
+            r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"
+        )
         urls = re.findall(url_pattern, query)
         if urls:
             args["url"] = urls[0]
@@ -606,9 +589,7 @@ def call_rag_api(
 
     try:
         print(f"🔍 Searching documents in '{collection}' collection...")
-        response = requests.post(
-            f"{RAG_URL}/query", json=payload, headers=headers, timeout=120
-        )
+        response = requests.post(f"{RAG_URL}/query", json=payload, headers=headers, timeout=120)
         response.raise_for_status()
 
         data = response.json()
@@ -619,9 +600,7 @@ def call_rag_api(
         if sources:
             source_info = "\n\n📚 Sources:"
             for i, source in enumerate(sources[:3], 1):  # Show top 3 sources
-                source_info += (
-                    f"\n{i}. {source['file_path']} (score: {source['score']:.2f})"
-                )
+                source_info += f"\n{i}. {source['file_path']} (score: {source['score']:.2f})"
             answer += source_info
 
         return answer
@@ -651,16 +630,12 @@ def index_documents(collection: str = "default", directory: str = None) -> bool:
         if directory:
             print(f"📁 From directory: {directory}")
 
-        response = requests.post(
-            f"{RAG_URL}/index", json=payload, headers=headers, timeout=300
-        )
+        response = requests.post(f"{RAG_URL}/index", json=payload, headers=headers, timeout=300)
         response.raise_for_status()
 
         data = response.json()
         print(f"✅ {data['message']}")
-        print(
-            f"📄 Indexed {len(data['indexed_files'])} files, {data['total_chunks']} chunks"
-        )
+        print(f"📄 Indexed {len(data['indexed_files'])} files, {data['total_chunks']} chunks")
 
         for file_info in data["indexed_files"]:
             print(f"   - {file_info['file']} ({file_info['chunks']} chunks)")
@@ -712,7 +687,9 @@ def call_api(
 
     # Prepare request with appropriate context
     if model_type == "code":
-        system_prompt = "You are a helpful coding assistant. Provide clear, well-commented code solutions."
+        system_prompt = (
+            "You are a helpful coding assistant. Provide clear, well-commented code solutions."
+        )
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": query},
@@ -747,9 +724,7 @@ def call_api(
         if mcp_suggestions:
             high_conf = [s for s in mcp_suggestions if s["confidence"] >= 0.8]
             if high_conf:
-                print(
-                    f"🔍 Detected {len(high_conf)} high-confidence MCP tool(s) for this query"
-                )
+                print(f"🔍 Detected {len(high_conf)} high-confidence MCP tool(s) for this query")
                 mcp_results = auto_execute_mcp_tools(query)
 
         print(f"🤖 Using {model_type} model ({model_name})...")
@@ -938,9 +913,7 @@ Examples:
     parser.add_argument("query", nargs="?", help="Your question or prompt")
     parser.add_argument("--code", action="store_true", help="Force use of code model")
     parser.add_argument("--chat", action="store_true", help="Force use of chat model")
-    parser.add_argument(
-        "--rag", action="store_true", help="Use RAG (document-based) search"
-    )
+    parser.add_argument("--rag", action="store_true", help="Use RAG (document-based) search")
     parser.add_argument(
         "--index",
         metavar="COLLECTION",
@@ -959,22 +932,12 @@ Examples:
         default=500,
         help="Maximum tokens in response (default: 500)",
     )
-    parser.add_argument(
-        "--interactive", "-i", action="store_true", help="Start interactive mode"
-    )
-    parser.add_argument(
-        "--analytics", action="store_true", help="Show analytics dashboard"
-    )
-    parser.add_argument(
-        "--optimize", action="store_true", help="Run database optimization"
-    )
+    parser.add_argument("--interactive", "-i", action="store_true", help="Start interactive mode")
+    parser.add_argument("--analytics", action="store_true", help="Show analytics dashboard")
+    parser.add_argument("--optimize", action="store_true", help="Run database optimization")
     parser.add_argument("--mcp", metavar="TOOL", help="Call MCP tool directly")
-    parser.add_argument(
-        "--mcp-args", metavar="ARGS", help="Arguments for MCP tool (JSON format)"
-    )
-    parser.add_argument(
-        "--mcp-list", action="store_true", help="List available MCP tools"
-    )
+    parser.add_argument("--mcp-args", metavar="ARGS", help="Arguments for MCP tool (JSON format)")
+    parser.add_argument("--mcp-list", action="store_true", help="List available MCP tools")
     parser.add_argument(
         "--tools", action="store_true", help="Enable AI to use MCP tools automatically"
     )
@@ -985,15 +948,9 @@ Examples:
     )
 
     # Memory system commands
-    parser.add_argument(
-        "--memory", action="store_true", help="Show memory system status"
-    )
-    parser.add_argument(
-        "--memory-init", action="store_true", help="Initialize project memory"
-    )
-    parser.add_argument(
-        "--memory-search", metavar="QUERY", help="Search conversations in memory"
-    )
+    parser.add_argument("--memory", action="store_true", help="Show memory system status")
+    parser.add_argument("--memory-init", action="store_true", help="Initialize project memory")
+    parser.add_argument("--memory-search", metavar="QUERY", help="Search conversations in memory")
     parser.add_argument(
         "--memory-cleanup", action="store_true", help="Clean up expired conversations"
     )
@@ -1007,9 +964,7 @@ Examples:
     parser.add_argument(
         "--memory-stats", action="store_true", help="Show detailed memory statistics"
     )
-    parser.add_argument(
-        "--memory-dir", metavar="DIR", help="Override memory storage directory"
-    )
+    parser.add_argument("--memory-dir", metavar="DIR", help="Override memory storage directory")
 
     args = parser.parse_args()
 
@@ -1123,15 +1078,11 @@ Examples:
                 if query.startswith(":code "):
                     query = query[6:]
                     model_type = "code"
-                    response = call_api(
-                        query, model_type, args.tokens, current_streaming
-                    )
+                    response = call_api(query, model_type, args.tokens, current_streaming)
                 elif query.startswith(":chat "):
                     query = query[6:]
                     model_type = "chat"
-                    response = call_api(
-                        query, model_type, args.tokens, current_streaming
-                    )
+                    response = call_api(query, model_type, args.tokens, current_streaming)
                 elif query.startswith(":rag "):
                     query = query[5:]
                     response = call_rag_api(query, args.collection)
@@ -1163,9 +1114,7 @@ Examples:
                     continue
                 else:
                     model_type = "auto"
-                    response = call_api(
-                        query, model_type, args.tokens, current_streaming
-                    )
+                    response = call_api(query, model_type, args.tokens, current_streaming)
 
                 # For non-streaming mode, show the response with AI prefix
                 if response and not current_streaming:
@@ -1220,9 +1169,7 @@ Examples:
             except Exception as e:
                 print(f"⚠️ Auto-indexing error: {e}")
 
-        response = call_rag_api(
-            args.query, args.collection or "current", working_dir=current_dir
-        )
+        response = call_rag_api(args.query, args.collection or "current", working_dir=current_dir)
     else:
         response = call_api(args.query, model_type, args.tokens, use_streaming)
 
@@ -1259,9 +1206,7 @@ def show_analytics_dashboard():
         days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         for peak in summary["peak_times"]:
             day_name = days[peak["day_of_week"]]
-            print(
-                f"  {day_name} {peak['hour_of_day']:02d}:00 - {peak['total_usage']} queries"
-            )
+            print(f"  {day_name} {peak['hour_of_day']:02d}:00 - {peak['total_usage']} queries")
 
         print("\n🏆 Model Performance Ranking")
         print("-" * 30)
@@ -1399,15 +1344,11 @@ def save_conversation_to_memory(
                 "project_path": os.getcwd(),
             }
 
-            response = requests.post(
-                f"{MEMORY_API_URL}/conversations", json=data, timeout=10
-            )
+            response = requests.post(f"{MEMORY_API_URL}/conversations", json=data, timeout=10)
 
             if response.status_code == 200:
                 result = response.json()
-                print(
-                    f"💾 Conversation saved to memory (ID: {result.get('conversation_id')})"
-                )
+                print(f"💾 Conversation saved to memory (ID: {result.get('conversation_id')})")
                 return True
             else:
                 print(f"⚠️ Memory API failed: {response.status_code}")
@@ -1485,9 +1426,7 @@ def show_memory_status():
                 health = response.json()
                 print("💾 Memory System Status (API)")
                 print(f"   Status: {health.get('status', 'unknown')}")
-                storage_status = (
-                    "Available" if health.get("storage_available") else "Unavailable"
-                )
+                storage_status = "Available" if health.get("storage_available") else "Unavailable"
                 print(f"   Storage: {storage_status}")
                 print(
                     f"   Vector Search: {'Enabled' if health.get('vector_enabled') else 'Disabled'}"
@@ -1556,9 +1495,7 @@ def handle_memory_search(query: str):
 
                 for i, conv in enumerate(results, 1):
                     importance = conv.get("importance_score", 5)
-                    timestamp = (
-                        conv.get("timestamp", "")[:16] if conv.get("timestamp") else ""
-                    )
+                    timestamp = conv.get("timestamp", "")[:16] if conv.get("timestamp") else ""
                     print(f"\n{i}. [{importance}] {timestamp}")
                     print(f"   Q: {conv.get('user_query', '')[:100]}...")
                     print(f"   A: {conv.get('ai_response', '')[:100]}...")
@@ -1571,9 +1508,7 @@ def handle_memory_search(query: str):
         memory_system = get_memory_system()
         project_id = memory_system.get_project_id()
 
-        results = memory_system.search_conversations(
-            project_id=project_id, query=query, limit=10
-        )
+        results = memory_system.search_conversations(project_id=project_id, query=query, limit=10)
 
         print(f"🔍 Found {len(results)} conversations:")
         for i, conv in enumerate(results, 1):
@@ -1595,9 +1530,7 @@ def handle_memory_cleanup() -> int:
             memory_system = get_memory_system()
             project_id = memory_system.get_project_id()
 
-            response = requests.post(
-                f"{MEMORY_API_URL}/projects/{project_id}/cleanup", timeout=30
-            )
+            response = requests.post(f"{MEMORY_API_URL}/projects/{project_id}/cleanup", timeout=30)
 
             if response.status_code == 200:
                 result = response.json()
@@ -1655,9 +1588,7 @@ def show_memory_stats():
 
         # API 우선 시도
         try:
-            response = requests.get(
-                f"{MEMORY_API_URL}/projects/{project_id}/stats", timeout=10
-            )
+            response = requests.get(f"{MEMORY_API_URL}/projects/{project_id}/stats", timeout=10)
 
             if response.status_code == 200:
                 result = response.json()

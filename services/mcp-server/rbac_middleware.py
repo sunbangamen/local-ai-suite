@@ -99,9 +99,7 @@ class RBACMiddleware(BaseHTTPMiddleware):
 
             if not approval_granted:
                 # Approval denied or timed out
-                logger.warning(
-                    f"Approval denied/timeout: user={user_id}, tool={tool_name}"
-                )
+                logger.warning(f"Approval denied/timeout: user={user_id}, tool={tool_name}")
 
                 # Audit logging
                 try:
@@ -125,9 +123,7 @@ class RBACMiddleware(BaseHTTPMiddleware):
 
         if not allowed:
             # Permission denied - log and return 403
-            logger.warning(
-                f"Permission denied: user={user_id}, tool={tool_name}, reason={reason}"
-            )
+            logger.warning(f"Permission denied: user={user_id}, tool={tool_name}, reason={reason}")
 
             # Audit logging (non-blocking)
             try:

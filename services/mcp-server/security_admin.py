@@ -406,9 +406,7 @@ async def get_pending_approvals(
         }
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error retrieving pending approvals: {e}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error retrieving pending approvals: {e}")
 
 
 @security_app.post("/api/approvals/{request_id}/approve")
@@ -444,9 +442,7 @@ async def approve_approval_request(
         # Find request (support short ID)
         request = await db.get_approval_request(request_id)
         if not request:
-            raise HTTPException(
-                status_code=404, detail=f"Approval request not found: {request_id}"
-            )
+            raise HTTPException(status_code=404, detail=f"Approval request not found: {request_id}")
 
         # Check if already processed
         if request["status"] != "pending":
@@ -464,9 +460,7 @@ async def approve_approval_request(
         )
 
         if not success:
-            raise HTTPException(
-                status_code=500, detail="Failed to update approval status"
-            )
+            raise HTTPException(status_code=500, detail="Failed to update approval status")
 
         return {
             "status": "approved",
@@ -514,9 +508,7 @@ async def reject_approval_request(
         # Find request (support short ID)
         request = await db.get_approval_request(request_id)
         if not request:
-            raise HTTPException(
-                status_code=404, detail=f"Approval request not found: {request_id}"
-            )
+            raise HTTPException(status_code=404, detail=f"Approval request not found: {request_id}")
 
         # Check if already processed
         if request["status"] != "pending":
@@ -534,9 +526,7 @@ async def reject_approval_request(
         )
 
         if not success:
-            raise HTTPException(
-                status_code=500, detail="Failed to update approval status"
-            )
+            raise HTTPException(status_code=500, detail="Failed to update approval status")
 
         return {
             "status": "rejected",
@@ -579,9 +569,7 @@ async def get_approval_status(request_id: str):
         # Find request (support short ID)
         request = await db.get_approval_request(request_id)
         if not request:
-            raise HTTPException(
-                status_code=404, detail=f"Approval request not found: {request_id}"
-            )
+            raise HTTPException(status_code=404, detail=f"Approval request not found: {request_id}")
 
         # Build response
         response = {
@@ -680,8 +668,6 @@ if __name__ == "__main__":
 
     uvicorn.run(
         security_app,
-        host=os.getenv(
-            "MCP_SECURITY_HOST", "0.0.0.0"
-        ),  # nosec B104 - container binding by default
+        host=os.getenv("MCP_SECURITY_HOST", "0.0.0.0"),  # nosec B104 - container binding by default
         port=int(os.getenv("MCP_SECURITY_PORT", "8021")),
     )

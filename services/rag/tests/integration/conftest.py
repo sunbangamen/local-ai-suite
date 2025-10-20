@@ -48,9 +48,7 @@ DEFAULT_BASE_URL = "http://localhost:8002"
 def rag_base_url() -> str:
     """Base URL for the running RAG service."""
     if os.getenv("RUN_RAG_INTEGRATION_TESTS") != "1":
-        pytest.skip(
-            "Skipping RAG integration tests (set RUN_RAG_INTEGRATION_TESTS=1 to enable)."
-        )
+        pytest.skip("Skipping RAG integration tests (set RUN_RAG_INTEGRATION_TESTS=1 to enable).")
     return os.getenv("RAG_BASE_URL", DEFAULT_BASE_URL)
 
 

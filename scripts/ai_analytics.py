@@ -54,16 +54,12 @@ class AIAnalytics:
                 stderr=subprocess.DEVNULL,
                 text=True,
             ).strip()
-            candidates.append(
-                os.path.join(git_root, ".ai-analytics-data", "analytics.db")
-            )
+            candidates.append(os.path.join(git_root, ".ai-analytics-data", "analytics.db"))
         except (subprocess.CalledProcessError, FileNotFoundError):
             pass
 
         # 4. 워킹 디렉터리 폴백
-        candidates.append(
-            os.path.join(os.getcwd(), ".ai-analytics-data", "analytics.db")
-        )
+        candidates.append(os.path.join(os.getcwd(), ".ai-analytics-data", "analytics.db"))
 
         # 5. 홈 디렉터리 폴백 (최종)
         candidates.append(os.path.expanduser("~/.local/share/ai-suite/ai_analytics.db"))
@@ -87,9 +83,7 @@ class AIAnalytics:
                         if candidate == candidates[-1]:  # 홈 디렉터리 폴백
                             print(f"💡 Using local analytics storage: {candidate_path}")
                         else:
-                            print(
-                                f"💡 Using fallback analytics storage: {candidate_path}"
-                            )
+                            print(f"💡 Using fallback analytics storage: {candidate_path}")
 
                     return str(candidate_path)
 
@@ -259,15 +253,11 @@ class AIAnalytics:
             )
 
             # Update model performance statistics
-            self._update_model_performance(
-                conn, model_used, query_type, response_time_ms, success
-            )
+            self._update_model_performance(conn, model_used, query_type, response_time_ms, success)
 
             # Update usage patterns
             now = datetime.now()
-            self._update_usage_patterns(
-                conn, now.hour, now.weekday(), query_type, response_time_ms
-            )
+            self._update_usage_patterns(conn, now.hour, now.weekday(), query_type, response_time_ms)
 
     def _update_model_performance(
         self, conn, model: str, query_type: str, response_time_ms: int, success: bool
@@ -292,9 +282,7 @@ class AIAnalytics:
 
             new_count = old_count + 1
             new_avg_time = ((old_avg_time * old_count) + response_time_ms) / new_count
-            new_success_rate = (
-                (old_success_rate * old_count) + (1 if success else 0)
-            ) / new_count
+            new_success_rate = ((old_success_rate * old_count) + (1 if success else 0)) / new_count
 
             conn.execute(
                 """
@@ -354,9 +342,7 @@ class AIAnalytics:
                 (hour, day_of_week, query_type, response_time_ms),
             )
 
-    def get_model_recommendation(
-        self, query: str, query_type: str = None
-    ) -> Dict[str, Any]:
+    def get_model_recommendation(self, query: str, query_type: str = None) -> Dict[str, Any]:
         """Get smart model recommendation based on usage patterns"""
         if self.db_path is None:
             # Fallback to default model when analytics disabled

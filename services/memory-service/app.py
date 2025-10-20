@@ -34,9 +34,7 @@ app.add_middleware(
 )
 
 # Initialize memory system
-memory_system = MemorySystem(
-    data_dir=os.getenv("MEMORY_DATA_DIR", "/mnt/e/ai-data/memory")
-)
+memory_system = MemorySystem(data_dir=os.getenv("MEMORY_DATA_DIR", "/mnt/e/ai-data/memory"))
 
 
 # Pydantic models
@@ -45,9 +43,7 @@ class ConversationCreate(BaseModel):
     ai_response: str = Field(..., description="AI's response")
     model_used: Optional[str] = Field(None, description="Model used for response")
     session_id: Optional[str] = Field(None, description="Session ID for grouping")
-    response_time_ms: Optional[int] = Field(
-        None, description="Response time in milliseconds"
-    )
+    response_time_ms: Optional[int] = Field(None, description="Response time in milliseconds")
     token_count: Optional[int] = Field(None, description="Token count")
     project_path: Optional[str] = Field(None, description="Project path for project ID")
     tags: Optional[List[str]] = Field(None, description="Tags for categorization")
@@ -64,9 +60,7 @@ class ConversationResponse(BaseModel):
 class SearchQuery(BaseModel):
     query: str = Field(..., description="Search query")
     project_path: Optional[str] = Field(None, description="Project path for project ID")
-    importance_min: Optional[int] = Field(
-        None, ge=1, le=10, description="Minimum importance score"
-    )
+    importance_min: Optional[int] = Field(None, ge=1, le=10, description="Minimum importance score")
     limit: int = Field(10, ge=1, le=100, description="Maximum results")
     offset: int = Field(0, ge=0, description="Result offset for pagination")
     use_vector: bool = Field(False, description="Use vector search (hybrid mode)")
@@ -95,9 +89,7 @@ class HealthResponse(BaseModel):
 async def process_embeddings_background(project_id: str):
     """Background task to process pending embeddings"""
     try:
-        processed = await memory_system.process_pending_embeddings(
-            project_id, batch_size=10
-        )
+        processed = await memory_system.process_pending_embeddings(project_id, batch_size=10)
         if processed > 0:
             print(f"✅ Processed {processed} embeddings for project {project_id}")
     except Exception as e:
@@ -123,9 +115,7 @@ async def health_check():
 
 
 @app.post("/v1/memory/conversations", response_model=ConversationResponse)
-async def create_conversation(
-    conversation: ConversationCreate, background_tasks: BackgroundTasks
-):
+async def create_conversation(conversation: ConversationCreate, background_tasks: BackgroundTasks):
     """
     Save a conversation to memory
     OpenAI-compatible endpoint
@@ -173,9 +163,7 @@ async def create_conversation(
         )
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error saving conversation: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error saving conversation: {str(e)}")
 
 
 @app.post("/v1/memory/search")
@@ -336,9 +324,7 @@ async def optimize_database(project_path: Optional[str] = Query(None)):
         return {
             "project_id": project_id,
             "success": success,
-            "message": (
-                "Database optimized successfully" if success else "Optimization failed"
-            ),
+            "message": ("Database optimized successfully" if success else "Optimization failed"),
         }
 
     except Exception as e:
@@ -346,9 +332,7 @@ async def optimize_database(project_path: Optional[str] = Query(None)):
 
 
 @app.get("/v1/memory/conversation/{conversation_id}")
-async def get_conversation(
-    conversation_id: int, project_path: Optional[str] = Query(None)
-):
+async def get_conversation(conversation_id: int, project_path: Optional[str] = Query(None)):
     """Get a specific conversation by ID"""
     try:
         if project_path:
@@ -357,9 +341,7 @@ async def get_conversation(
             project_id = memory_system.get_project_id()
 
         with memory_system.transaction(project_id) as conn:
-            cursor = conn.execute(
-                "SELECT * FROM conversations WHERE id = ?", (conversation_id,)
-            )
+            cursor = conn.execute("SELECT * FROM conversations WHERE id = ?", (conversation_id,))
             row = cursor.fetchone()
 
             if row:
@@ -367,9 +349,7 @@ async def get_conversation(
 
                 result = dict(row)
                 result["tags"] = json.loads(result.get("tags", "[]"))
-                result["project_context"] = json.loads(
-                    result.get("project_context", "{}")
-                )
+                result["project_context"] = json.loads(result.get("project_context", "{}"))
                 return result
             else:
                 raise HTTPException(status_code=404, detail="Conversation not found")

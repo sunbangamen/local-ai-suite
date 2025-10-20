@@ -104,18 +104,10 @@ class MetricsExtractor:
                 # Handle both Locust CSV column formats (CamelCase and lowercase with #)
                 requests = int(row.get("Request Count", row.get("# requests", 0)) or 0)
                 failures = int(row.get("Failure Count", row.get("# failures", 0)) or 0)
-                avg_time = row.get(
-                    "Average Response Time", row.get("Average response time", "0")
-                )
-                median_time = row.get(
-                    "Median Response Time", row.get("Median response time", "0")
-                )
-                min_time = row.get(
-                    "Min Response Time", row.get("Min response time", "0")
-                )
-                max_time = row.get(
-                    "Max Response Time", row.get("Max response time", "0")
-                )
+                avg_time = row.get("Average Response Time", row.get("Average response time", "0"))
+                median_time = row.get("Median Response Time", row.get("Median response time", "0"))
+                min_time = row.get("Min Response Time", row.get("Min response time", "0"))
+                max_time = row.get("Max Response Time", row.get("Max response time", "0"))
 
                 metrics[service_key] = {
                     "avg_latency_ms": self._parse_time(avg_time),
@@ -155,19 +147,13 @@ class MetricsExtractor:
                 metrics[service_key] = {
                     "avg_latency_ms": stat.get("avg_response_time", 0),
                     "median_latency_ms": (
-                        response_times.get(0.50, 0)
-                        if isinstance(response_times, dict)
-                        else 0
+                        response_times.get(0.50, 0) if isinstance(response_times, dict) else 0
                     ),
                     "p95_latency_ms": (
-                        response_times.get(0.95, 0)
-                        if isinstance(response_times, dict)
-                        else 0
+                        response_times.get(0.95, 0) if isinstance(response_times, dict) else 0
                     ),
                     "p99_latency_ms": (
-                        response_times.get(0.99, 0)
-                        if isinstance(response_times, dict)
-                        else 0
+                        response_times.get(0.99, 0) if isinstance(response_times, dict) else 0
                     ),
                     "min_latency_ms": stat.get("min_response_time", 0),
                     "max_latency_ms": stat.get("max_response_time", 0),
@@ -256,12 +242,8 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: python scripts/extract_metrics.py <input_file> [output_file]")
         print("\nExample:")
-        print(
-            "  python scripts/extract_metrics.py load_results_stats.csv load-results.json"
-        )
-        print(
-            "  python scripts/extract_metrics.py locust_results.json load-results.json"
-        )
+        print("  python scripts/extract_metrics.py load_results_stats.csv load-results.json")
+        print("  python scripts/extract_metrics.py locust_results.json load-results.json")
         sys.exit(1)
 
     input_file = sys.argv[1]
