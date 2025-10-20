@@ -17,3 +17,10 @@ Follow Conventional Commits, e.g., `feat(rag): add query route`. PR descriptions
 
 ## Security & Configuration Tips
 Bind services to localhost, store secrets in `.env` files or host keychains, and never commit credentials. Keep GGUF weights confined to `models/` and verify GPU passthrough before enabling heavy inference. Ensure `API_GATEWAY_CHAT_MODEL` and `API_GATEWAY_CODE_MODEL` stay aligned with LiteLLM routing configs prior to deployment.
+
+## 남은 보안 승인 워크플로우 작업
+- MCP 승인 흐름을 사용자 경험까지 연결하기 위해 CLI·대시보드 등 요청/승인 경로 설계를 추가해야 합니다 (`scripts/ai.py` 등 클라이언트에 승인 처리 로직이 아직 없음).
+- `APPROVAL_WORKFLOW_ENABLED` 기본값과 관련 문서를 재검토해 운영 환경에서 승인 기능을 활성화하는 절차를 정리해야 합니다 (`docs/security/IMPLEMENTATION_SUMMARY.md`).
+- 승인 기능이 완성된 뒤에도 PostgreSQL 마이그레이션, Grafana 모니터링 대시보드 같은 장기 과제는 별도 이슈로 추적해야 합니다 (`docs/progress/v1/fb_5.md`).
+- 보안 관리자 API/툴에 승인 요청 조회·처리 기능을 확장해 실운영에서 승인자가 워크플로우를 마칠 수 있게 해야 합니다 (`services/mcp-server/security_admin.py`).
+- 승인 로직을 CI 검증 루틴에 포함시켜 컨테이너 내 `pytest` 실행과 결과 수집을 자동화하고, 보안 검증 문서에 최신 절차와 로그 수집 방법을 반영해야 합니다 (`docs/security/IMPLEMENTATION_SUMMARY.md`).
