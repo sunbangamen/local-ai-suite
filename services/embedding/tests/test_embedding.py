@@ -9,6 +9,7 @@ NOTE: Embedding service truncates large inputs instead of rejecting them:
 - Empty texts: returns empty embeddings array (returns 200)
 """
 
+import asyncio
 import os
 import sys
 from importlib import import_module
@@ -426,10 +427,14 @@ async def test_health_endpoint_model_failure(app_with_mocks):
         embedding_app_module._model_loader = None
         embedding_app_module._last_load_error = None
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.get("/health")
+            data = {}
+            for _ in range(5):
+                response = await client.get("/health")
+                assert response.status_code == 200
+                data = response.json()
+                if data.get("error"):
+                    break
+                await asyncio.sleep(0.05)
 
-            # Health check should return 200 but with ok=False
-            assert response.status_code == 200
-            data = response.json()
-            assert data["ok"] is False
-            assert data["error"] is not None
+            assert data.get("ok") is False
+            assert data.get("error") is not None
