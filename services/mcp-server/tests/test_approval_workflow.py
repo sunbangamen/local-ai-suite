@@ -632,6 +632,7 @@ async def test_wait_for_approval_handles_creation_failure(test_db, monkeypatch):
     except ImportError:
         import sys
         from pathlib import Path
+
         parent = Path(__file__).resolve().parents[1]
         sys.path.insert(0, str(parent))
         from rbac_manager import RBACManager
@@ -648,10 +649,7 @@ async def test_wait_for_approval_handles_creation_failure(test_db, monkeypatch):
 
     # Execute _wait_for_approval with failing create
     approved, context = await manager._wait_for_approval(
-        user_id="test_user",
-        tool_name="execute_bash",
-        request_data={"cmd": "test"},
-        timeout=5
+        user_id="test_user", tool_name="execute_bash", request_data={"cmd": "test"}, timeout=5
     )
 
     # Assertions for creation failure
