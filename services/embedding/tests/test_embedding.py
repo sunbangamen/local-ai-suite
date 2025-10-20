@@ -421,10 +421,15 @@ async def test_health_endpoint_model_failure(app_with_mocks):
 
     # Patch _ensure_model to raise exception
     with patch("app._ensure_model", side_effect=Exception("Model load failed")):
+        embedding_app_module._model = None
+        embedding_app_module._model_dim = None
+        embedding_app_module._model_loader = None
+        embedding_app_module._last_load_error = None
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.get("/health")
 
             # Health check should return 200 but with ok=False
             assert response.status_code == 200
             data = response.json()
-            assert data["ok"] == False
+            assert data["ok"] is False
+            assert data["error"] is not None
