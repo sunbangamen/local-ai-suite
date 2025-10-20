@@ -659,7 +659,7 @@ async def test_wait_for_approval_handles_creation_failure(test_db, monkeypatch):
     assert context.get("request_id") is None, "request_id must be None on failure"
     assert isinstance(context, dict), "Context must be dict for middleware processing"
 
-    print(f"✅ Creation failure test passed:")
+    print("✅ Creation failure test passed:")
     print(f"   approved: {approved}")
     print(f"   reason: {context.get('reason')}")
     print(f"   status: {context.get('status')}")
