@@ -393,3 +393,122 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "requires_docker" in item.keywords and not docker_available:
             item.add_marker(skip_docker)
+
+
+# ============================================================================
+# Approval Workflow Fixtures (Issue #26, Phase 4)
+# ============================================================================
+
+
+@pytest.fixture(scope="function")
+async def auto_approve(monkeypatch):
+    """
+    Auto-approve fixture for CI/CD testing (Issue #26, Phase 4)
+
+    Mocks the RBAC Manager's _wait_for_approval to immediately approve requests.
+    Used in CI environments where manual approval is impossible.
+
+    Usage:
+        @pytest.mark.asyncio
+        async def test_approval_flow_ci(auto_approve):
+            # Approval requests will be auto-approved
+            result = await call_mcp_tool("run_command")
+            assert result["status"] == "success"
+    """
+    try:
+        from rbac_manager import get_rbac_manager, RBACManager
+
+    except ImportError:  # pragma: no cover
+        PARENT = Path(__file__).resolve().parents[1]
+        if str(PARENT) not in sys.path:
+            sys.path.insert(0, str(PARENT))
+        from rbac_manager import get_rbac_manager, RBACManager  # type: ignore
+
+    import uuid
+    import json
+
+    # Save original method
+    rbac_manager = get_rbac_manager()
+    original_wait = rbac_manager._wait_for_approval
+
+    # Mock auto-approve
+    async def mock_wait_for_approval(user_id, tool_name, request_data, timeout):
+        """Immediately approve requests without waiting"""
+        from security_database import get_security_database
+
+        request_id = str(uuid.uuid4())
+        db = get_security_database()
+
+        # Create and immediately approve the request
+        success = await db.create_approval_request(
+            request_id=request_id,
+            tool_name=tool_name,
+            user_id=user_id,
+            role="test_user",
+            request_data=json.dumps(request_data),
+            timeout_seconds=timeout,
+        )
+
+        if success:
+            # Immediately approve
+            await db.update_approval_status(
+                request_id=request_id,
+                status="approved",
+                responder_id="ci_bot",
+                response_reason="Auto-approved for CI testing",
+            )
+        return success
+
+    # Apply mock
+    monkeypatch.setattr(rbac_manager, "_wait_for_approval", mock_wait_for_approval)
+
+    yield  # Test runs with mocked approval
+
+    # Restore original method
+    monkeypatch.setattr(rbac_manager, "_wait_for_approval", original_wait)
+
+
+@pytest.fixture(scope="function")
+def approval_settings(monkeypatch):
+    """
+    Enable approval workflow settings for testing (Issue #26, Phase 4)
+
+    Usage:
+        @pytest.mark.asyncio
+        async def test_approval_required(approval_settings):
+            # APPROVAL_WORKFLOW_ENABLED=true
+            result = await handle_tool_request("run_command")
+            assert result["approval_required"] == True
+    """
+    try:
+        from settings import SecuritySettings
+
+    except ImportError:  # pragma: no cover
+        PARENT = Path(__file__).resolve().parents[1]
+        if str(PARENT) not in sys.path:
+            sys.path.insert(0, str(PARENT))
+        from settings import SecuritySettings  # type: ignore
+
+    # Save original values
+    original_approval_enabled = SecuritySettings.APPROVAL_WORKFLOW_ENABLED
+    original_approval_timeout = SecuritySettings.APPROVAL_TIMEOUT
+    original_approval_polling = SecuritySettings.APPROVAL_POLLING_INTERVAL
+
+    # Enable approval workflow for testing
+    monkeypatch.setenv("APPROVAL_WORKFLOW_ENABLED", "true")
+    monkeypatch.setenv("APPROVAL_TIMEOUT", "300")
+    monkeypatch.setenv("APPROVAL_POLLING_INTERVAL", "1")
+
+    SecuritySettings.APPROVAL_WORKFLOW_ENABLED = True
+    SecuritySettings.APPROVAL_TIMEOUT = 300
+    SecuritySettings.APPROVAL_POLLING_INTERVAL = 1
+
+    yield SecuritySettings
+
+    # Restore original values
+    SecuritySettings.APPROVAL_WORKFLOW_ENABLED = original_approval_enabled
+    SecuritySettings.APPROVAL_TIMEOUT = original_approval_timeout
+    SecuritySettings.APPROVAL_POLLING_INTERVAL = original_approval_polling
+    monkeypatch.delenv("APPROVAL_WORKFLOW_ENABLED", raising=False)
+    monkeypatch.delenv("APPROVAL_TIMEOUT", raising=False)
+    monkeypatch.delenv("APPROVAL_POLLING_INTERVAL", raising=False)

@@ -25,6 +25,7 @@ DEFAULT_RPS = 100
 TMP_TOOL_FILE = str(Path(gettempdir()) / "rbac-test.txt")
 
 # Test scenarios: cycle through different users and tools
+# Includes HIGH/CRITICAL approval-required tools for Phase 5 benchmarking
 TEST_SCENARIOS = [
     {"user_id": "dev_user", "tool_name": "list_files", "args": {}},
     {
@@ -35,6 +36,19 @@ TEST_SCENARIOS = [
     {"user_id": "guest_user", "tool_name": "git_status", "args": {}},
     {"user_id": "guest_user", "tool_name": "git_log", "args": {"max_count": 5}},
     {"user_id": "admin_user", "tool_name": "get_current_model", "args": {}},
+    # Phase 5: HIGH/CRITICAL approval-required tools for benchmarking
+    {
+        "user_id": "dev_user",
+        "tool_name": "execute_bash",
+        "args": {"command": "echo 'benchmark test'"},
+        "requires_approval": True,
+    },
+    {
+        "user_id": "dev_user",
+        "tool_name": "web_scrape",
+        "args": {"url": "http://example.com"},
+        "requires_approval": True,
+    },
 ]
 
 

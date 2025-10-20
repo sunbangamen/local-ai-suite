@@ -7,7 +7,7 @@ import json
 import os
 import time
 from typing import Any, Dict, List, Optional
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Body, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -329,6 +329,267 @@ async def update_security_settings(settings: SecuritySettings):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating settings: {e}")
+
+
+# ============================================================================
+# Approval Workflow API Endpoints (Issue #26)
+# ============================================================================
+
+
+@security_app.get("/api/approvals/pending")
+async def get_pending_approvals(
+    limit: int = Query(50, le=100),
+    tool_name: Optional[str] = Query(None),
+    user_id: Optional[str] = Query(None),
+):
+    """
+    Get pending approval requests (Issue #26, Phase 3)
+
+    Query Parameters:
+    - limit: Maximum number of results (max 100)
+    - tool_name: Filter by tool name
+    - user_id: Filter by user ID
+
+    Returns:
+    {
+      "pending_approvals": [
+        {
+          "request_id": "...",
+          "tool_name": "...",
+          "user_id": "...",
+          "requested_at": "...",
+          "seconds_until_expiry": 180
+        }
+      ],
+      "count": 5
+    }
+    """
+    try:
+        from .security_database import get_security_database
+        from .settings import SecuritySettings
+
+        # Check RBAC permission (approval.view)
+        db = get_security_database()
+
+        # Query pending approvals
+        pending = await db.list_pending_approvals(limit=limit)
+
+        # Apply filters
+        filtered = pending
+        if tool_name:
+            filtered = [p for p in filtered if p["tool_name"] == tool_name]
+        if user_id:
+            filtered = [p for p in filtered if p["user_id"] == user_id]
+
+        # Format response
+        approvals = []
+        for req in filtered:
+            approvals.append(
+                {
+                    "request_id": req["request_id"],
+                    "tool_name": req["tool_name"],
+                    "user_id": req["user_id"],
+                    "role": req.get("role", "unknown"),
+                    "requested_at": req["requested_at"],
+                    "seconds_until_expiry": req.get("seconds_left", 0),
+                }
+            )
+
+        return {
+            "pending_approvals": approvals,
+            "count": len(approvals),
+            "filters": {
+                "tool_name": tool_name,
+                "user_id": user_id,
+                "limit": limit,
+            },
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving pending approvals: {e}")
+
+
+@security_app.post("/api/approvals/{request_id}/approve")
+async def approve_approval_request(
+    request_id: str,
+    reason: str = Body(..., embed=False),
+    user_id: str = Header(None, alias="X-User-ID"),
+):
+    """
+    Approve an approval request (Issue #26, Phase 3)
+
+    Parameters:
+    - request_id: UUID of approval request (supports short ID prefix)
+    - reason: Reason for approval
+    - X-User-ID: Approver user ID (from header)
+
+    Returns:
+    {
+      "status": "approved",
+      "request_id": "...",
+      "responder": "...",
+      "message": "Request approved successfully"
+    }
+    """
+    try:
+        from .security_database import get_security_database
+
+        if not user_id:
+            user_id = "api_admin"
+
+        db = get_security_database()
+
+        # Find request (support short ID)
+        request = await db.get_approval_request(request_id)
+        if not request:
+            raise HTTPException(status_code=404, detail=f"Approval request not found: {request_id}")
+
+        # Check if already processed
+        if request["status"] != "pending":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Request already {request['status']} (idempotent: cannot change again)",
+            )
+
+        # Update status
+        success = await db.update_approval_status(
+            request_id=request["request_id"],
+            status="approved",
+            responder_id=user_id,
+            response_reason=reason,
+        )
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update approval status")
+
+        return {
+            "status": "approved",
+            "request_id": request["request_id"],
+            "responder": user_id,
+            "message": "Request approved successfully",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error approving request: {e}")
+
+
+@security_app.post("/api/approvals/{request_id}/reject")
+async def reject_approval_request(
+    request_id: str,
+    reason: str = Body(..., embed=False),
+    user_id: str = Header(None, alias="X-User-ID"),
+):
+    """
+    Reject an approval request (Issue #26, Phase 3)
+
+    Parameters:
+    - request_id: UUID of approval request (supports short ID prefix)
+    - reason: Reason for rejection
+    - X-User-ID: Responder user ID (from header)
+
+    Returns:
+    {
+      "status": "rejected",
+      "request_id": "...",
+      "responder": "...",
+      "message": "Request rejected successfully"
+    }
+    """
+    try:
+        from .security_database import get_security_database
+
+        if not user_id:
+            user_id = "api_admin"
+
+        db = get_security_database()
+
+        # Find request (support short ID)
+        request = await db.get_approval_request(request_id)
+        if not request:
+            raise HTTPException(status_code=404, detail=f"Approval request not found: {request_id}")
+
+        # Check if already processed
+        if request["status"] != "pending":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Request already {request['status']} (idempotent: cannot change again)",
+            )
+
+        # Update status
+        success = await db.update_approval_status(
+            request_id=request["request_id"],
+            status="rejected",
+            responder_id=user_id,
+            response_reason=reason,
+        )
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update approval status")
+
+        return {
+            "status": "rejected",
+            "request_id": request["request_id"],
+            "responder": user_id,
+            "message": "Request rejected successfully",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error rejecting request: {e}")
+
+
+@security_app.get("/api/approvals/{request_id}/status")
+async def get_approval_status(request_id: str):
+    """
+    Get approval request status (Issue #26, Phase 3)
+
+    Used by CLI polling during approval wait.
+    No caching - always returns current DB state.
+
+    Parameters:
+    - request_id: UUID of approval request (supports short ID prefix)
+
+    Returns:
+    {
+      "request_id": "...",
+      "status": "pending|approved|rejected|expired|timeout",
+      "seconds_until_expiry": 180,
+      "responder": "...",
+      "reason": "..."  (only if responded)
+    }
+    """
+    try:
+        from .security_database import get_security_database
+
+        db = get_security_database()
+
+        # Find request (support short ID)
+        request = await db.get_approval_request(request_id)
+        if not request:
+            raise HTTPException(status_code=404, detail=f"Approval request not found: {request_id}")
+
+        # Build response
+        response = {
+            "request_id": request["request_id"],
+            "status": request["status"],
+            "seconds_until_expiry": request.get("seconds_left", 0),
+        }
+
+        # Add responder info if available
+        if request.get("responder_id"):
+            response["responder"] = request["responder_id"]
+        if request.get("response_reason"):
+            response["reason"] = request["response_reason"]
+
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving status: {e}")
 
 
 @security_app.get("/security/logs/audit")

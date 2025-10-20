@@ -19,7 +19,12 @@ def ensure_results_dir():
 
 
 def run_locust_in_docker(
-    scenario_name: str, host: str, user_class: str, users: int, spawn_rate: int, run_time: str
+    scenario_name: str,
+    host: str,
+    user_class: str,
+    users: int,
+    spawn_rate: int,
+    run_time: str,
 ) -> dict:
     """
     Run a Locust load test in Docker and return results

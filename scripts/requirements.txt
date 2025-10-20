@@ -1,0 +1,9 @@
+# Global AI CLI Script Dependencies
+# Install with: pip install -r scripts/requirements.txt
+
+# Core dependencies
+requests>=2.28.0
+rich>=13.0.0
+
+# Optional: Memory system integration
+# aiosqlite>=0.17.0  (included in MCP server)
