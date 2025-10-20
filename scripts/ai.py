@@ -243,7 +243,7 @@ def handle_approval_workflow(
         TimeElapsedColumn(),
         console=console,
     ) as progress:
-        task = progress.add_task(f"Waiting for approval...", total=approval_timeout)
+        task = progress.add_task("Waiting for approval...", total=approval_timeout)
 
         while elapsed < approval_timeout:
             # Poll approval status
