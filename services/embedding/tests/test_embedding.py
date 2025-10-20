@@ -56,11 +56,15 @@ def app_with_mocks(mock_text_embedding):
     original_model = embedding_app_module._model
     original_model_name = embedding_app_module._model_name
     original_model_dim = embedding_app_module._model_dim
+    original_loader = embedding_app_module._model_loader
+    original_last_error = embedding_app_module._last_load_error
 
     # Override global model
     embedding_app_module._model = mock_text_embedding
     embedding_app_module._model_name = "BAAI/bge-small-en-v1.5"
     embedding_app_module._model_dim = 384
+    embedding_app_module._model_loader = None
+    embedding_app_module._last_load_error = None
 
     yield embedding_app_module.app
 
@@ -68,6 +72,8 @@ def app_with_mocks(mock_text_embedding):
     embedding_app_module._model = original_model
     embedding_app_module._model_name = original_model_name
     embedding_app_module._model_dim = original_model_dim
+    embedding_app_module._model_loader = original_loader
+    embedding_app_module._last_load_error = original_last_error
 
 
 @pytest.mark.asyncio
