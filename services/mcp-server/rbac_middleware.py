@@ -90,7 +90,7 @@ class RBACMiddleware(BaseHTTPMiddleware):
                 logger.warning(f"Failed to extract request body: {e}")
 
             # Wait for approval
-            approval_granted = await self.rbac_manager._wait_for_approval(
+            approval_granted, approval_context = await self.rbac_manager._wait_for_approval(
                 user_id=user_id,
                 tool_name=tool_name,
                 request_data=request_data,
@@ -109,6 +109,25 @@ class RBACMiddleware(BaseHTTPMiddleware):
                 except Exception as e:
                     logger.error(f"Failed to log approval denial: {e}")
 
+                request_id = approval_context.get("request_id")
+                expires_at = approval_context.get("expires_at")
+                status = approval_context.get("status")
+
+                if approval_context.get("reason") == "create_failed":
+                    logger.error(
+                        "Approval workflow unavailable (failed to create request): "
+                        f"user={user_id}, tool={tool_name}"
+                    )
+                    return JSONResponse(
+                        status_code=503,
+                        content={
+                            "error": "Approval workflow unavailable",
+                            "detail": "Failed to create approval request. Please try again later.",
+                            "user_id": user_id,
+                            "tool_name": tool_name,
+                        },
+                    )
+
                 return JSONResponse(
                     status_code=403,
                     content={
@@ -116,6 +135,10 @@ class RBACMiddleware(BaseHTTPMiddleware):
                         "detail": "Request requires administrator approval but was denied or timed out",
                         "user_id": user_id,
                         "tool_name": tool_name,
+                        "approval_required": True,
+                        "request_id": request_id,
+                        "expires_at": expires_at,
+                        "status": status,
                     },
                 )
 

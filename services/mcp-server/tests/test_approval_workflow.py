@@ -31,7 +31,9 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from rbac_manager import RBACManager
 from security_database import SecurityDatabase
+from settings import SecuritySettings
 from audit_logger import AuditLogger
 
 
@@ -490,6 +492,66 @@ async def test_audit_logging_flow(test_db, audit_logger):
 
 
 # ============================================================================
+# Metadata verification for approval workflow
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_wait_for_approval_provides_request_metadata(test_db):
+    """
+    Ensure _wait_for_approval returns request metadata required by clients.
+    """
+
+    # Configure approval workflow settings for fast polling
+    original_enabled = SecuritySettings.APPROVAL_WORKFLOW_ENABLED
+    original_timeout = SecuritySettings.APPROVAL_TIMEOUT
+    original_polling = SecuritySettings.APPROVAL_POLLING_INTERVAL
+
+    SecuritySettings.APPROVAL_WORKFLOW_ENABLED = True
+    SecuritySettings.APPROVAL_TIMEOUT = 2
+    SecuritySettings.APPROVAL_POLLING_INTERVAL = 0.1
+
+    manager = RBACManager()
+    manager.db = test_db
+
+    try:
+        # Start approval wait in background
+        wait_task = asyncio.create_task(
+            manager._wait_for_approval(
+                user_id="test_user",
+                tool_name="test_high_tool",
+                request_data={"arg": "value"},
+                timeout=SecuritySettings.APPROVAL_TIMEOUT,
+            )
+        )
+
+        # Allow the request to be created
+        await asyncio.sleep(0.2)
+
+        pending = await test_db.list_pending_approvals(limit=1)
+        assert pending, "Approval request should be pending"
+        request_id = pending[0]["request_id"]
+
+        # Simulate admin rejection
+        await test_db.update_approval_status(
+            request_id=request_id,
+            status="rejected",
+            responder_id="test_admin",
+            response_reason="Test rejection",
+        )
+
+        approved, context = await wait_task
+        assert not approved, "Request should not be approved"
+        assert context["request_id"] == request_id
+        assert context["expires_at"] is not None
+        assert context["status"] == "rejected"
+    finally:
+        SecuritySettings.APPROVAL_WORKFLOW_ENABLED = original_enabled
+        SecuritySettings.APPROVAL_TIMEOUT = original_timeout
+        SecuritySettings.APPROVAL_POLLING_INTERVAL = original_polling
+
+
+# ============================================================================
 # Performance Test: 대량 요청 처리
 # ============================================================================
 
@@ -546,6 +608,63 @@ async def test_performance_bulk_approvals(test_db):
     print(f"   Throughput: {10/elapsed_time:.2f} req/s")
 
     assert elapsed_time < 5.0, f"Should process 10 requests in < 5s (took {elapsed_time:.3f}s)"
+
+
+# ============================================================================
+# Approval Creation Failure Tests: 생성 실패 시나리오
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_wait_for_approval_handles_creation_failure(test_db, monkeypatch):
+    """
+    Test: DB create_approval_request 실패 시 reason="create_failed" 반환
+
+    Scenario:
+    - DB에서 approval_request 생성 실패
+    - _wait_for_approval()이 (False, {"reason": "create_failed", ...}) 반환
+    - rbac_middleware가 503 응답 처리
+
+    Issue #26 Phase 0: 승인 요청 생성 실패 시 적절한 에러 응답 검증
+    """
+    try:
+        from rbac_manager import RBACManager
+    except ImportError:
+        import sys
+        from pathlib import Path
+        parent = Path(__file__).resolve().parents[1]
+        sys.path.insert(0, str(parent))
+        from rbac_manager import RBACManager
+
+    # Setup
+    manager = RBACManager()
+    manager.db = test_db
+
+    # Mock: create_approval_request always fails
+    async def mock_create_failed(*args, **kwargs):
+        return False
+
+    monkeypatch.setattr(test_db, "create_approval_request", mock_create_failed)
+
+    # Execute _wait_for_approval with failing create
+    approved, context = await manager._wait_for_approval(
+        user_id="test_user",
+        tool_name="execute_bash",
+        request_data={"cmd": "test"},
+        timeout=5
+    )
+
+    # Assertions for creation failure
+    assert approved is False, "Should return False when DB creation fails"
+    assert context.get("reason") == "create_failed", "Should set reason='create_failed'"
+    assert context.get("status") == "error", "Should set status='error'"
+    assert context.get("request_id") is None, "request_id must be None on failure"
+    assert isinstance(context, dict), "Context must be dict for middleware processing"
+
+    print(f"✅ Creation failure test passed:")
+    print(f"   approved: {approved}")
+    print(f"   reason: {context.get('reason')}")
+    print(f"   status: {context.get('status')}")
 
 
 # ============================================================================

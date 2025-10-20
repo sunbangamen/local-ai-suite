@@ -457,7 +457,22 @@ async def auto_approve(monkeypatch):
                 responder_id="ci_bot",
                 response_reason="Auto-approved for CI testing",
             )
-        return success
+            request_record = await db.get_approval_request(request_id)
+            expires_at = None
+            if request_record:
+                expires_at = request_record.get("expires_at")
+            return True, {
+                "request_id": request_id,
+                "expires_at": expires_at,
+                "status": "approved",
+            }
+
+        return False, {
+            "request_id": None,
+            "expires_at": None,
+            "status": "error",
+            "reason": "create_failed",
+        }
 
     # Apply mock
     monkeypatch.setattr(rbac_manager, "_wait_for_approval", mock_wait_for_approval)
