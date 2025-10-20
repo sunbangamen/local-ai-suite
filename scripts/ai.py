@@ -202,14 +202,22 @@ def call_mcp_tool(tool_name: str, **kwargs) -> Optional[Dict[str, Any]]:
         return None
 
 
-def handle_approval_workflow(request_id: str, tool_name: str, args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def handle_approval_workflow(
+    request_id: str, tool_name: str, args: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
     """
     Handle approval workflow for HIGH/CRITICAL tools (Issue #26, Phase 1)
 
     Shows progress bar while waiting for admin approval, then re-executes the tool
     """
     try:
-        from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
+        from rich.progress import (
+            Progress,
+            SpinnerColumn,
+            BarColumn,
+            TextColumn,
+            TimeElapsedColumn,
+        )
         from rich.console import Console as RichConsole
 
         console = RichConsole()
@@ -271,7 +279,9 @@ def handle_approval_workflow(request_id: str, tool_name: str, args: Dict[str, An
         return None
 
 
-def wait_for_approval_simple(request_id: str, tool_name: str, args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def wait_for_approval_simple(
+    request_id: str, tool_name: str, args: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
     """
     Simple fallback approval handler (no Rich library)
     """
@@ -661,11 +671,13 @@ def call_api(
     if ANALYTICS_ENABLED and analytics:
         try:
             recommendation = analytics.get_model_recommendation(query, model_type)
-            if recommendation.get("confidence", 0) > 0.7:
+            confidence = recommendation.get("confidence", 0)
+            if confidence > 0.7:
                 suggested_model = recommendation["recommended_model"]
                 if suggested_model in AVAILABLE_MODELS.values():
                     print(
-                        f"💡 Smart recommendation: Using {suggested_model} (confidence: {recommendation['confidence']:.2f})"
+                        "💡 Smart recommendation: "
+                        f"Using {suggested_model} (confidence: {confidence:.2f})"
                     )
         except Exception:
             pass  # Fallback to default logic
@@ -684,7 +696,11 @@ def call_api(
         ]
         temperature = 0.2
     else:
-        system_prompt = "You are a helpful Korean AI assistant. You must respond ONLY in Korean language. Never use Chinese, English or any other language. 당신은 한국어 AI 어시스턴트입니다. 반드시 한국어로만 답변해주세요. 중국어나 영어를 절대 사용하지 마세요."
+        system_prompt = (
+            "You are a helpful Korean AI assistant. You must respond ONLY in Korean language. "
+            "Never use Chinese, English or any other language. 당신은 한국어 AI 어시스턴트입니다. "
+            "반드시 한국어로만 답변해주세요. 중국어나 영어를 절대 사용하지 마세요."
+        )
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": query},
@@ -1157,7 +1173,8 @@ Examples:
     else:
         response = call_api(args.query, model_type, args.tokens, use_streaming)
 
-    # For non-streaming single query mode, show the response without prefix since it's already shown during streaming
+    # For non-streaming single query mode, show the response without prefix.
+    # Streaming output already displayed the content during generation.
     if response and not use_streaming:
         print(response)
     elif not response:
@@ -1409,9 +1426,10 @@ def show_memory_status():
                 health = response.json()
                 print("💾 Memory System Status (API)")
                 print(f"   Status: {health.get('status', 'unknown')}")
-                print(
-                    f"   Storage: {'Available' if health.get('storage_available') else 'Unavailable'}"
+                storage_status = (
+                    "Available" if health.get("storage_available") else "Unavailable"
                 )
+                print(f"   Storage: {storage_status}")
                 print(
                     f"   Vector Search: {'Enabled' if health.get('vector_enabled') else 'Disabled'}"
                 )
