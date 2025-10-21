@@ -14,8 +14,14 @@ class SecuritySettings:
     # RBAC Settings
     RBAC_ENABLED: bool = os.getenv("RBAC_ENABLED", "false").lower() == "true"
 
-    # Database Settings
-    SECURITY_DB_PATH: str = os.getenv("SECURITY_DB_PATH", "/mnt/e/ai-data/sqlite/security.db")
+    # Paths (must be defined before SECURITY_DB_PATH)
+    DATA_DIR: str = os.getenv("DATA_DIR", "/mnt/e/ai-data")
+
+    # Database Settings (uses DATA_DIR as base)
+    SECURITY_DB_PATH: str = os.getenv(
+        "SECURITY_DB_PATH",
+        os.path.join(DATA_DIR, "sqlite", "security.db")
+    )
 
     # Logging Settings
     SECURITY_QUEUE_SIZE: int = int(os.getenv("SECURITY_QUEUE_SIZE", "1000"))
@@ -35,9 +41,6 @@ class SecuritySettings:
     APPROVAL_TIMEOUT: int = int(os.getenv("APPROVAL_TIMEOUT", "300"))  # 5 minutes
     APPROVAL_POLLING_INTERVAL: int = int(os.getenv("APPROVAL_POLLING_INTERVAL", "1"))  # 1 second
     APPROVAL_MAX_PENDING: int = int(os.getenv("APPROVAL_MAX_PENDING", "50"))
-
-    # Paths
-    DATA_DIR: str = os.getenv("DATA_DIR", "/mnt/e/ai-data")
 
     @classmethod
     def get_db_path(cls) -> Path:
