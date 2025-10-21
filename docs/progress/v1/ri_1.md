@@ -1,8 +1,10 @@
 # GitHub Issue Analysis & Solution Planning Command
 
-**Usage:** `resolve-issue 1`
+**이 문서는 Issue #1의 분석 및 구현 계획 결과입니다.**
 
-**Input:** GitHub Issue #1
+**관련 명령**:
+- AI CLI로 이슈 조회: `python scripts/ai.py "이슈 분석"`
+- 승인 워크플로우 관리: `python scripts/approval_cli.py`
 
 ---
 
@@ -66,7 +68,9 @@ find . -name "*.yml" -o -name "*.yaml" -o -name "Makefile*" -o -name ".env*"
 - **Makefile**: Phase 1-3 명령어 이미 정의됨 (`make up-p1`)
 - **.env.example**: 환경 변수 설정 준비됨
 - **README.md**: 전체 아키텍처 및 사용법 문서화됨
-- **Missing Files**: `docker/compose.p1.yml`, API Gateway 설정 파일
+- **필수 파일 확인**:
+  - `docker/compose.p1.yml` (포트: 8000/8001, GPU 설정, 모델 경로 확인 필요)
+  - `services/api-gateway/config.p1.yaml` (LiteLLM 설정, OpenAI 호환성 확인 필요)
 
 ---
 
@@ -116,7 +120,7 @@ find . -name "*.yml" -o -name "*.yaml" -o -name "Makefile*" -o -name ".env*"
 |------|-------------|-------|-----|------|
 | 브랜치 생성 | `feature/phase1` 브랜치 생성 및 체크아웃 | Dev | 브랜치 생성 완료 | Low |
 | 환경파일 생성 | `.env.example` → `.env` 복사 | Dev | `.env` 파일 생성 | Low |
-| 디렉토리 생성 | `docker/`, `services/api-gateway/` 생성 | Dev | 필요 디렉토리 존재 | Low |
+| 파일 검토 및 조정 | `docker/compose.p1.yml` 및 API Gateway 설정 검토 후 필요시 조정 | Dev | Phase 1 설정값과 일치 확인 | Low |
 
 ### Phase 1.2: Docker 서비스 구현 (1.5시간)
 **목표**: 컨테이너 설정 및 서비스 정의
@@ -248,79 +252,33 @@ echo "[4/4] .env 검증"; source .env && grep -E "CHAT_MODEL|PORT" .env && echo 
 echo "🚀 Preflight 점검 완료"
 ```
 
-### 생성할 파일들
+### 필수 파일 구성 및 조정 가이드
 
-1. **docker/compose.p1.yml**
-```yaml
-version: "3.9"
-services:
-  inference:
-    image: ghcr.io/ggerganov/llama.cpp:full
-    command: [
-      "--server", "--host", "0.0.0.0", "--port", "8001",
-      "--model", "/models/${CHAT_MODEL}",
-      "--parallel", "4", "--ctx-size", "8192",
-      "--n-gpu-layers", "35"
-    ]
-    volumes:
-      - ../models:/models:ro
-    ports:
-      - "${INFERENCE_PORT:-8001}:8001"
-    device_requests:
-      - driver: "nvidia"
-        count: -1
-        capabilities: [["gpu"]]
-    environment:
-      - CUDA_VISIBLE_DEVICES=0
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
+기존 `docker/compose.p1.yml` 및 `services/api-gateway/config.p1.yaml` 파일이 저장소에 이미 존재합니다.
 
-  api-gateway:
-    image: ghcr.io/berriai/litellm:latest
-    environment:
-      - LITELLM_CONFIG=/app/config.yaml
-      - LITELLM_LOG=INFO
-    volumes:
-      - ../services/api-gateway/config.p1.yaml:/app/config.yaml:ro
-    ports:
-      - "${API_GATEWAY_PORT:-8000}:8000"
-    depends_on:
-      inference:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-```
+**다음 파라미터를 확인 및 조정하세요**:
 
-2. **services/api-gateway/config.p1.yaml**
-```yaml
-model_list:
-  - model_name: "local-chat"
-    litellm_params:
-      model: "llamacpp/chat"  # llama.cpp 전용 프로바이더
-      api_base: "http://inference:8001"
-      api_key: "dummy-key"  # 로컬 환경용
-      temperature: 0.2
-      max_tokens: 2048
+| 파라미터 | 파일 | 기존값 | 설정값 | 설명 |
+|---------|------|--------|--------|------|
+| `CHAT_MODEL` | compose.p1.yml | `Qwen2.5-3B-Instruct-Q4_K_M.gguf` | .env에서 정의 | 3B 모델 (추론 서버용) |
+| `--n-gpu-layers` | compose.p1.yml | 35 | RTX 4050 기준 35 | GPU 계층 수 조정 |
+| `--ctx-size` | compose.p1.yml | 8192 | 1024 (권장) | 메모리 최적화 |
+| `INFERENCE_PORT` | compose.p1.yml | 8001 | 필요시 변경 | 추론 서버 포트 |
+| `API_GATEWAY_PORT` | compose.p1.yml | 8000 | 필요시 변경 | API 게이트웨이 포트 |
+| `api_base` | config.p1.yaml | `http://inference:8001` | Docker 환경에서 자동 | 내부 컨테이너 통신 |
 
-defaults:
-  temperature: 0.2
-  max_tokens: 1024
-  timeout: 120
+**조정 후 확인**:
+```bash
+# 기존 파일 확인
+ls -la docker/compose.p1.yml
+ls -la services/api-gateway/config.p1.yaml
 
-server:
-  host: 0.0.0.0
-  port: 8000
+# 환경 변수 설정
+cp .env.example .env
+# .env 파일 편집하여 필요한 값 조정
 
-logging:
-  level: INFO
+# Phase 1 시작
+make up-p1
 ```
 
 3. **환경변수 설정 (.env)**

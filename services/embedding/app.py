@@ -44,9 +44,12 @@ Instrumentator().instrument(app).expose(app)
 
 # ---- Global model holder (thread-safe) ----
 _model_lock = threading.Lock()
+_loader_guard = threading.Lock()
 _model: Optional[TextEmbedding] = None
 _model_name: str = DEFAULT_MODEL
 _model_dim: Optional[int] = None
+_model_loader: Optional[threading.Thread] = None
+_last_load_error: Optional[str] = None
 
 
 def _load_model(model_name: str) -> TextEmbedding:
@@ -79,23 +82,41 @@ class EmbedResponse(BaseModel):
     normalize: bool
 
 
+def _start_background_load() -> None:
+    global _model_loader
+    with _loader_guard:
+        if _model is not None:
+            return
+        if _model_loader and _model_loader.is_alive():
+            return
+
+        def _target() -> None:
+            global _last_load_error, _model_loader
+            try:
+                _ensure_model()
+                _last_load_error = None
+            except Exception as exc:
+                _last_load_error = repr(exc)
+            finally:
+                with _loader_guard:
+                    _model_loader = None
+
+        _model_loader = threading.Thread(target=_target, daemon=True)
+        _model_loader.start()
+
+
 @app.on_event("startup")
 def on_startup():
-    # 지연 로딩이지만, 초기 스타트업 시도(캐시/네트워크 미리 당기기 용)
-    try:
-        _ensure_model()
-    except Exception:
-        # 모델 캐시 다운로드가 늦거나 오프라인일 수 있으므로 실패해도 서비스는 기동
-        pass
+    # 지연 로딩이지만, 앱 기동은 블로킹하지 않도록 백그라운드에서만 시도
+    _start_background_load()
 
 
 @app.get("/health")
 def health():
-    try:
-        _ensure_model()
-        ok = True
-    except Exception:
-        ok = False
+    _start_background_load()
+    with _loader_guard:
+        loader_alive = bool(_model_loader and _model_loader.is_alive())
+    ok = _model is not None and not loader_alive
     return {
         "ok": ok,
         "model": _model_name,
@@ -103,6 +124,8 @@ def health():
         "batch_size": BATCH_SIZE,
         "normalize": NORMALIZE,
         "threads": NUM_THREADS,
+        "loading": loader_alive,
+        "error": _last_load_error,
     }
 
 

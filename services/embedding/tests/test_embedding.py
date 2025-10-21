@@ -9,6 +9,7 @@ NOTE: Embedding service truncates large inputs instead of rejecting them:
 - Empty texts: returns empty embeddings array (returns 200)
 """
 
+import asyncio
 import os
 import sys
 from importlib import import_module
@@ -56,11 +57,15 @@ def app_with_mocks(mock_text_embedding):
     original_model = embedding_app_module._model
     original_model_name = embedding_app_module._model_name
     original_model_dim = embedding_app_module._model_dim
+    original_loader = embedding_app_module._model_loader
+    original_last_error = embedding_app_module._last_load_error
 
     # Override global model
     embedding_app_module._model = mock_text_embedding
     embedding_app_module._model_name = "BAAI/bge-small-en-v1.5"
     embedding_app_module._model_dim = 384
+    embedding_app_module._model_loader = None
+    embedding_app_module._last_load_error = None
 
     yield embedding_app_module.app
 
@@ -68,6 +73,8 @@ def app_with_mocks(mock_text_embedding):
     embedding_app_module._model = original_model
     embedding_app_module._model_name = original_model_name
     embedding_app_module._model_dim = original_model_dim
+    embedding_app_module._model_loader = original_loader
+    embedding_app_module._last_load_error = original_last_error
 
 
 @pytest.mark.asyncio
@@ -415,10 +422,19 @@ async def test_health_endpoint_model_failure(app_with_mocks):
 
     # Patch _ensure_model to raise exception
     with patch("app._ensure_model", side_effect=Exception("Model load failed")):
+        embedding_app_module._model = None
+        embedding_app_module._model_dim = None
+        embedding_app_module._model_loader = None
+        embedding_app_module._last_load_error = None
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.get("/health")
+            data = {}
+            for _ in range(5):
+                response = await client.get("/health")
+                assert response.status_code == 200
+                data = response.json()
+                if data.get("error"):
+                    break
+                await asyncio.sleep(0.05)
 
-            # Health check should return 200 but with ok=False
-            assert response.status_code == 200
-            data = response.json()
-            assert data["ok"] == False
+            assert data.get("ok") is False
+            assert data.get("error") is not None

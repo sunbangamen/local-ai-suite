@@ -7,7 +7,7 @@ Role-Based Access Control permission checking with caching
 import asyncio
 import logging
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from security_database import get_security_database
 from settings import SecuritySettings
@@ -145,7 +145,7 @@ class RBACManager:
 
     async def _wait_for_approval(
         self, user_id: str, tool_name: str, request_data: dict, timeout: int = 300
-    ) -> bool:
+    ) -> Tuple[bool, Dict[str, Any]]:
         """
         Wait for approval from admin/approver
 
@@ -156,7 +156,7 @@ class RBACManager:
             timeout: Timeout in seconds (default 300 = 5 minutes)
 
         Returns:
-            True if approved, False if rejected/timeout
+            Tuple of (approved flag, approval context)
         """
         import uuid
         import json
@@ -180,7 +180,29 @@ class RBACManager:
 
         if not success:
             logger.error(f"Failed to create approval request for {user_id}:{tool_name}")
-            return False
+            return (
+                False,
+                {
+                    "request_id": None,
+                    "expires_at": None,
+                    "status": "error",
+                    "reason": "create_failed",
+                },
+            )
+
+        approval_context: Dict[str, Any] = {
+            "request_id": request_id,
+            "expires_at": None,
+            "status": "pending",
+        }
+
+        # Fetch request info to expose expires_at to clients
+        try:
+            created_request = await self.db.get_approval_request(request_id)
+            if created_request:
+                approval_context["expires_at"] = created_request.get("expires_at")
+        except Exception as exc:  # pragma: no cover - defensive guard
+            logger.error(f"Failed to fetch approval request after creation: {exc}")
 
         # Log approval request creation
         from audit_logger import get_audit_logger
@@ -209,6 +231,10 @@ class RBACManager:
                     return "error"
 
                 status = request["status"]
+                # Keep context up to date
+                approval_context["status"] = status
+                approval_context["expires_at"] = request.get("expires_at")
+
                 if status in ["approved", "rejected", "expired", "timeout"]:
                     approval_event.set()
                     return status
@@ -222,10 +248,12 @@ class RBACManager:
 
             if status == "approved":
                 logger.info(f"Approval granted: {request_id}")
-                return True
+                approval_context["status"] = status
+                return True, approval_context
             else:
                 logger.warning(f"Approval {status}: {request_id}")
-                return False
+                approval_context["status"] = status
+                return False, approval_context
 
         except asyncio.TimeoutError:
             # Mark as timeout in database
@@ -248,7 +276,8 @@ class RBACManager:
             except Exception as e:
                 logger.error(f"Failed to log approval timeout: {e}")
 
-            return False
+            approval_context["status"] = "timeout"
+            return False, approval_context
 
     async def invalidate_user_cache(self, user_id: str) -> None:
         """
