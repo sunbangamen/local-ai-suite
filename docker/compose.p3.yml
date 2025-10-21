@@ -193,7 +193,7 @@ services:
       - SECURITY_MODE=${SECURITY_MODE:-development}
       # RBAC & Security (Issue #8)
       - RBAC_ENABLED=${RBAC_ENABLED:-false}
-      - SECURITY_DB_PATH=${SECURITY_DB_PATH:-/mnt/data/sqlite/security.db}
+      - SECURITY_DB_PATH=/mnt/data/sqlite/security.db  # Container path (mounted from host /mnt/e/ai-data)
       - SECURITY_QUEUE_SIZE=${SECURITY_QUEUE_SIZE:-1000}
       - SECURITY_LOG_LEVEL=${SECURITY_LOG_LEVEL:-INFO}
       - SANDBOX_ENABLED=${SANDBOX_ENABLED:-true}
