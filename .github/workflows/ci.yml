@@ -336,16 +336,25 @@
           run: mkdir -p test-results playwright-report
 
         - name: Start Desktop App web server
-          working-directory: desktop-app/src
           run: |
-            python3 -m http.server 3000 > /tmp/web.log 2>&1 &
-            sleep 3
-            curl -f http://localhost:3000 > /dev/null || {
-              echo "::error::Web server health check failed"
-              cat /tmp/web.log
-              exit 1
-            }
-            echo "✓ Web server started successfully"
+            docker rm -f desktop-app-web || true
+            docker run --rm -d --name desktop-app-web \
+              -p 3000:80 \
+              -v "${GITHUB_WORKSPACE}/desktop-app/src":/usr/share/nginx/html:ro \
+              nginx:alpine
+
+            echo "Waiting for desktop app web server..."
+            for attempt in $(seq 1 15); do
+              if curl -fsS http://localhost:3000 > /dev/null; then
+                echo "✓ Web server started successfully"
+                exit 0
+              fi
+              sleep 2
+            done
+
+            echo "::error::Web server health check failed"
+            docker logs desktop-app-web || true
+            exit 1
 
         - name: Run E2E tests - ${{ matrix.browser }}
           working-directory: desktop-app
@@ -358,6 +367,10 @@
               exit 1
             }
             echo "::endgroup::"
+
+        - name: Stop Desktop App web server
+          if: always()
+          run: docker stop desktop-app-web || true
 
         - name: Upload Playwright report
           if: always()
