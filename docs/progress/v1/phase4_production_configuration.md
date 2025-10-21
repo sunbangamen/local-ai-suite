@@ -24,10 +24,15 @@
 | `RBAC_ENABLED` | `true` | `true` | ✅ | 역할 기반 접근 제어 활성화 |
 | `SECURITY_MODE` | `normal` | `normal` | ✅ | 보안 모드 (normal/strict/legacy) |
 | `SANDBOX_ENABLED` | `true` | `true` | ✅ | 샌드박스 격리 실행 활성화 |
-| `APPROVAL_WORKFLOW_ENABLED` | `false` | `false` | ✅ | 승인 워크플로우 (개발 환경) |
+| `APPROVAL_WORKFLOW_ENABLED` | `false` | `false` | ✅ | 승인 워크플로우 (구현 완료, 기본값은 비활성) |
 | `RATE_LIMIT_ENABLED` | `true` | `true` | ✅ | 요청 속도 제한 활성화 |
 
 **결과**: ✅ 모든 보안 설정이 프로덕션 기본값으로 구성됨
+
+**승인 워크플로우 상태**:
+- ✅ **구현 완료**: HIGH/CRITICAL 도구에 대한 승인 메커니즘 완전 구현
+- 📌 **기본값**: `APPROVAL_WORKFLOW_ENABLED=false` (개발/테스트 환경)
+- 🔓 **활성화 방법**: `.env`에서 `APPROVAL_WORKFLOW_ENABLED=true`로 변경 후 MCP 서버 재시작
 
 **프로덕션 권장사항**:
 ```bash
@@ -35,7 +40,7 @@
 RBAC_ENABLED=true
 SECURITY_MODE=normal
 SANDBOX_ENABLED=true
-APPROVAL_WORKFLOW_ENABLED=false
+APPROVAL_WORKFLOW_ENABLED=false    # 비활성 (필요 시 활성화 가능)
 
 # 프로덕션 환경 (선택적 강화)
 RBAC_ENABLED=true
@@ -126,21 +131,26 @@ APPROVAL_WORKFLOW_ENABLED=true    # HIGH/CRITICAL 도구 승인 필수
 SECURITY_MODE=normal
 SANDBOX_ENABLED=true
 RBAC_ENABLED=true
-APPROVAL_WORKFLOW_ENABLED=false
+APPROVAL_WORKFLOW_ENABLED=false    # 비활성 (승인 메커니즘 구현 완료)
 
 # Staging/QA
 SECURITY_MODE=normal
 SANDBOX_ENABLED=true
 RBAC_ENABLED=true
-APPROVAL_WORKFLOW_ENABLED=true    # 승인 워크플로우 활성화
+APPROVAL_WORKFLOW_ENABLED=true    # 승인 워크플로우 활성화 (구현 완료)
 
 # Production
 SECURITY_MODE=strict              # 엄격한 정책 검사
 SANDBOX_ENABLED=true              # 모든 외부 도구 격리
 RBAC_ENABLED=true                 # 역할 기반 접근
-APPROVAL_WORKFLOW_ENABLED=true    # 모든 HIGH/CRITICAL 도구 승인 필수
+APPROVAL_WORKFLOW_ENABLED=true    # 모든 HIGH/CRITICAL 도구 승인 필수 (구현 완료)
 RATE_LIMIT_ENABLED=true           # 요청 속도 제한
 ```
+
+**승인 워크플로우 활성화 시 고려사항**:
+- 구현 완료: cli_approval_flow + approval_requests 테이블 + 승인 CLI 도구
+- 권장: Staging/QA에서 먼저 테스트 후 프로덕션 적용
+- 활성화 후: `scripts/approval_cli.py` 도구로 대기 중인 승인 요청 처리
 
 **결과**: ✅ 프로덕션 보안 체크리스트 작성 완료
 
