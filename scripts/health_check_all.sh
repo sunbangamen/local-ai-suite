@@ -62,7 +62,8 @@ TOTAL=$(docker compose -f "$COMPOSE_FILE" config --services 2>/dev/null | wc -l)
 check_info "Running containers: $RUNNING/$TOTAL"
 echo ""
 
-# Define services and their health endpoints (9 services)
+# Define services and their health endpoints (8 direct health checks)
+# Note: Memory-API included as 8th service
 declare -A SERVICES=(
     ["mcp-server"]="http://localhost:8020/health"
     ["api-gateway"]="http://localhost:8000/health"
