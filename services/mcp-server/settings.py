@@ -19,8 +19,7 @@ class SecuritySettings:
 
     # Database Settings (uses DATA_DIR as base)
     SECURITY_DB_PATH: str = os.getenv(
-        "SECURITY_DB_PATH",
-        os.path.join(DATA_DIR, "sqlite", "security.db")
+        "SECURITY_DB_PATH", os.path.join(DATA_DIR, "sqlite", "security.db")
     )
 
     # Logging Settings
