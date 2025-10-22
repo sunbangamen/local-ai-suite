@@ -125,14 +125,27 @@ $ docker compose -f docker/compose.p2.cpu.yml exec api-gateway \
 - test_memory_router.py: 15개 (보류)
 - test_api_gateway_integration.py: 9개 (보류)
 
-## 현재 확정된 커버리지
+## ✅ 최종 확정된 커버리지 (아티팩트 기반)
 
-| 서비스 | 기존 | 현재 | 변화 | 테스트 | 상태 |
-|--------|------|------|------|--------|------|
-| **RAG** | 67% | 67% | - | 28/29 ✅ | 유지 |
-| **Embedding** | 81% | 84% | +3% | 23/23 ✅ | 상향 |
-| **MCP** | - | - | - | 0/11 | 보류 |
-| **API Gateway** | - | - | - | 0/24 | 보류 |
+| 서비스 | 기존 | 현재 | 변화 | 테스트 | 아티팩트 |
+|--------|------|------|------|--------|----------|
+| **RAG** | 67% | 66.7% | - | 28/29 ✅ | ✅ docs/coverage-rag-phase2/ |
+| **Embedding** | 81% | 84.5% | +3.5% | 23/23 ✅ | ✅ docs/coverage-embedding-phase2/ |
+| **MCP** | - | - | - | 0/11 | ⏳ 미실행 |
+| **API Gateway** | - | - | - | 0/24 | ⏳ 미실행 |
+
+**검증 방법**:
+```bash
+# RAG 커버리지 확인
+python3 -c "import json; data=json.load(open('docs/coverage-rag-phase2.json')); print(f'RAG: {data[\"totals\"][\"percent_covered\"]:.1f}%')"
+
+# Embedding 커버리지 확인
+python3 -c "import json; data=json.load(open('docs/coverage-embedding-phase2.json')); print(f'Embedding: {data[\"totals\"][\"percent_covered\"]:.1f}%')"
+
+# HTML 리포트 확인
+open docs/coverage-rag-phase2/htmlcov/index.html
+open docs/coverage-embedding-phase2/htmlcov/index.html
+```
 
 ## 주요 발견사항
 
