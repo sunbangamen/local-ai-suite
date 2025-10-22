@@ -438,3 +438,106 @@ async def test_health_endpoint_model_failure(app_with_mocks):
 
             assert data.get("ok") is False
             assert data.get("error") is not None
+
+
+# ============================================================================
+# Phase 2: Additional Tests for Embedding Coverage Improvement (3-5 new tests)
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_embed_special_characters_and_unicode(app_with_mocks):
+    """Test embedding texts with special characters and Unicode"""
+    transport = ASGITransport(app=app_with_mocks)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Special characters and Unicode
+        special_texts = [
+            "Hello™ © 2025 @ Special: $100 & #123",
+            "emoji test 🎉 🚀 ✨",
+            "Unicode: café, naïve, résumé",
+            "한국어 텍스트 테스트",
+            "日本語のテキスト",
+        ]
+
+        response = await client.post("/embed", json={"texts": special_texts})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["embeddings"]) == len(special_texts)
+        assert all(len(emb) == 384 for emb in data["embeddings"])
+
+
+@pytest.mark.asyncio
+async def test_embed_empty_strings_in_batch(app_with_mocks):
+    """Test embedding batch with empty strings mixed in"""
+    transport = ASGITransport(app=app_with_mocks)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Mix of empty and non-empty strings
+        texts = [
+            "Valid text",
+            "",  # Empty string
+            "Another valid text",
+            "",  # Another empty
+        ]
+
+        response = await client.post("/embed", json={"texts": texts})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["embeddings"]) == len(texts)
+
+
+@pytest.mark.asyncio
+async def test_embed_very_long_single_text(app_with_mocks):
+    """Test embedding a single very long text (respects MAX_CHARS truncation)"""
+    transport = ASGITransport(app=app_with_mocks)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Create text exceeding MAX_CHARS
+        long_text = "word " * 100000  # Very long text (~500K chars)
+
+        response = await client.post("/embed", json={"texts": [long_text]})
+
+        # Should truncate and return 200
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["embeddings"]) == 1
+        assert len(data["embeddings"][0]) == 384
+
+
+@pytest.mark.asyncio
+async def test_embed_whitespace_only_texts(app_with_mocks):
+    """Test embedding texts that contain only whitespace"""
+    transport = ASGITransport(app=app_with_mocks)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Whitespace-only texts
+        whitespace_texts = [
+            "   ",  # Spaces
+            "\t\t\t",  # Tabs
+            "\n\n\n",  # Newlines
+            " \t \n ",  # Mixed whitespace
+        ]
+
+        response = await client.post("/embed", json={"texts": whitespace_texts})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["embeddings"]) == len(whitespace_texts)
+
+
+@pytest.mark.asyncio
+async def test_health_after_successful_embedding(app_with_mocks):
+    """Test /health endpoint returns OK after successful embedding operation"""
+    transport = ASGITransport(app=app_with_mocks)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # First do an embedding operation
+        embed_response = await client.post("/embed", json={"texts": ["test"]})
+        assert embed_response.status_code == 200
+
+        # Then check health
+        health_response = await client.get("/health")
+
+        assert health_response.status_code == 200
+        data = health_response.json()
+        assert data["ok"] is True
+        assert data["dim"] == 384
+        assert "model" in data
