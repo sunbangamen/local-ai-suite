@@ -156,17 +156,22 @@ API Gateway:+24개   (0→24)
 - services/embedding/tests/test_embedding.py: +103줄 (5개 테스트)
 
 ### 신규 파일
-- services/mcp-server/tests/test_rbac_advanced.py: 401줄 (11개 테스트)
+- services/mcp-server/tests/test_rbac_advanced.py: 394줄 (11개 테스트)
 - services/api-gateway/tests/test_memory_router.py: 449줄 (15개 테스트)
 - services/api-gateway/tests/test_api_gateway_integration.py: 328줄 (9개 테스트)
 - services/api-gateway/tests/__init__.py: 1줄
 
-**총 추가 코드**: ~1,471줄
+### 요약 문서
+- docs/progress/v1/ISSUE_22_PHASE_2_SUMMARY.md: 226줄
+
+**총 추가 코드**: 1,693줄
 
 ## 커밋 정보
-- **커밋 ID**: a998f69
-- **메시지**: feat(issue-22-phase2): Add 47 new tests for RAG, Embedding, MCP, and API Gateway services
-- **변경 파일**: 6개 수정/생성, 1,467줄 추가
+- **커밋 ID**: 8490be5
+- **메시지**: feat(issue-22-phase2): Add 45 new tests for RAG, Embedding, MCP, and API Gateway services
+- **변경 파일**: 7개 수정/생성
+- **추가 라인**: 1,693줄
+- **참고**: 커밋 메시지는 "45 new tests"로 표기되지만, 실제 작성된 테스트는 RAG 7 + Embedding 5 + MCP 11 + API Gateway 24 = **47개**입니다.
 
 ## 다음 단계
 
@@ -206,11 +211,14 @@ pytest --cov=services/api-gateway --cov-report=json services/api-gateway/tests/
 
 | 지표 | 값 |
 |------|-----|
-| **추가 테스트** | 47개 |
-| **추가 코드** | ~1,471줄 |
+| **추가 테스트** | 47개 (실제 작성 수) |
+| **추가 코드** | 1,693줄 |
 | **총 테스트** | 164개 |
+| **변경 파일** | 7개 |
 | **커버리지 목표** | 80% |
 | **예상 개선** | 50-75% 범위 |
+
+**참고**: 커밋 통계는 "45 new tests"로 표기되지만, 실제 구현된 테스트는 47개입니다. (RAG 7 + Embedding 5 + MCP 11 + API Gateway 24)
 
 ## 특징
 
