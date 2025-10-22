@@ -202,163 +202,103 @@ class SecurityValidator:
 
     def _legacy_validation(self, code: str) -> bool:
         """기존 키워드 기반 검증 (레거시 모드) - deny-list 기반"""
-        # 레거시 모드에서도 위험한 모듈만 차단
         dangerous_modules = ["subprocess", "shutil", "ctypes", "socket", "importlib"]
-
         for module in dangerous_modules:
             if f"import {module}" in code or f"from {module}" in code:
                 raise SecurityError(f"Dangerous module import blocked (legacy mode): {module}")
 
-        # 동적 import 우회 시도도 레거시 모드에서 차단
         dangerous_patterns = [
             "import_module",
             "__import__",
             "importlib.import_module",
             "importlib.reload",
         ]
-
         for pattern in dangerous_patterns:
             if pattern in code:
                 raise SecurityError(f"Dynamic import bypass blocked (legacy mode): {pattern}")
-
         return True
 
     def _check_ast_nodes(self, tree: ast.AST) -> bool:
         """화이트리스트 기반 AST 노드 검사"""
         for node in ast.walk(tree):
-            # Import 문 검사
             if isinstance(node, (ast.Import, ast.ImportFrom)):
                 self._check_imports(node)
-
-            # 함수 호출 검사
             elif isinstance(node, ast.Call):
                 self._check_function_call(node)
-
-            # 속성 접근 검사 (동적 import 우회 차단 포함)
             elif isinstance(node, ast.Attribute):
                 self._check_attribute_access(node)
                 self._check_dynamic_import_bypass(node)
-
-            # 이름 접근 검사
             elif isinstance(node, ast.Name):
                 self._check_name_access(node)
-
         return True
 
     def _check_function_call(self, node: ast.Call) -> None:
-        """
-        Inspect function call nodes for dangerous builtins or attributes.
-        """
         if isinstance(node.func, ast.Name):
             name = node.func.id
             if name in self.DANGEROUS_FUNCTIONS:
                 raise SecurityError(f"Dangerous function call blocked: {name}")
-
-        elif isinstance(node.func, ast.Attribute):
-            attr_name = node.func.attr
-            if attr_name in self.DANGEROUS_FUNCTIONS:
-                raise SecurityError(f"Dangerous attribute call blocked: {attr_name}")
-
-
-def detect_dangerous_patterns(code: str, security_level: str = "normal") -> Dict[str, Any]:
-    """
-    Helper function that returns a user-friendly report about potential security issues.
-
-    Args:
-        code: The Python code to inspect.
-        security_level: Security profile used by SecurityValidator.
-
-    Returns:
-        Dictionary with `is_safe` flag and list of `issues`.
-    """
-    validator = SecurityValidator(security_level=security_level)
-    try:
-        validator.validate_code(code)
-        return {"is_safe": True, "issues": []}
-    except SecurityError as exc:
-        return {"is_safe": False, "issues": [str(exc)]}
-
-    def _check_imports(self, node):
-        """Import 문 보안성 검사 (deny-list 우선 방식)"""
-        if isinstance(node, ast.Import):
-            modules = [alias.name.split(".")[0] for alias in node.names]
-        elif isinstance(node, ast.ImportFrom):
-            if node.module:
-                modules = [node.module.split(".")[0]]
-            else:
-                modules = []  # relative import
-        else:
-            return
-
-        # 1단계: 위험 모듈 차단 (deny-list 우선)
-        for module in modules:
-            if module in self.DENY_MODULES:
-                raise SecurityError(f"Dangerous module import blocked: {module}")
-
-        # 2단계: strict 모드에서만 허용 목록 검사
-        if self.security_level == "strict":
-            for module in modules:
-                if module not in self.allowed_modules:
-                    raise SecurityError(f"Module not in strict whitelist: {module}")
-
-    def _check_function_call(self, node: ast.Call):
-        """함수 호출 보안성 검사"""
-        if isinstance(node.func, ast.Name):
-            func_name = node.func.id
-            if func_name in self.DANGEROUS_FUNCTIONS:
-                raise SecurityError(f"Dangerous function call blocked: {func_name}")
-
         elif isinstance(node.func, ast.Attribute):
             attr_name = node.func.attr
             if attr_name in self.DANGEROUS_FUNCTIONS:
                 raise SecurityError(f"Dangerous method call blocked: {attr_name}")
 
-    def _check_attribute_access(self, node: ast.Attribute):
-        """속성 접근 보안성 검사"""
+    def _check_attribute_access(self, node: ast.Attribute) -> None:
         if node.attr in self.DANGEROUS_ATTRIBUTES:
             raise SecurityError(f"Dangerous attribute access blocked: {node.attr}")
 
-    def _check_name_access(self, node: ast.Name):
-        """이름 접근 보안성 검사"""
-        if node.id in self.DANGEROUS_FUNCTIONS:
-            # 함수 이름 자체에 대한 참조도 차단
-            if isinstance(node.ctx, ast.Load):
-                raise SecurityError(f"Access to dangerous function blocked: {node.id}")
+    def _check_name_access(self, node: ast.Name) -> None:
+        if node.id in self.DANGEROUS_FUNCTIONS and isinstance(node.ctx, ast.Load):
+            raise SecurityError(f"Access to dangerous function blocked: {node.id}")
 
-    def _check_dynamic_import_bypass(self, node: ast.Attribute):
-        """동적 import 우회 시도 검사 (importlib.import_module 등)"""
-        # importlib.import_module() 패턴 검사
+    def _check_dynamic_import_bypass(self, node: ast.Attribute) -> None:
         if (
             node.attr == "import_module"
             and isinstance(node.value, ast.Name)
             and node.value.id == "importlib"
         ):
             raise SecurityError("Dynamic import bypass blocked: importlib.import_module")
-
-        # importlib.reload() 패턴 검사
         if (
             node.attr == "reload"
             and isinstance(node.value, ast.Name)
             and node.value.id == "importlib"
         ):
             raise SecurityError("Dynamic import bypass blocked: importlib.reload")
-
-        # __import__ 속성 접근 검사
         if node.attr == "__import__":
             raise SecurityError("Dynamic import bypass blocked: __import__ attribute access")
-
-        # 기타 알려진 우회 패턴들
         dangerous_import_patterns = {
             "util": "importlib.util",
             "machinery": "importlib.machinery",
             "find_spec": "importlib.util.find_spec",
             "spec_from_loader": "importlib.util.spec_from_loader",
         }
-
         if node.attr in dangerous_import_patterns:
             raise SecurityError(
                 f"Dynamic import bypass blocked: {dangerous_import_patterns[node.attr]}"
             )
+
+    def _check_imports(self, node):
+        if isinstance(node, ast.Import):
+            modules = [alias.name.split(".")[0] for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            modules = [node.module.split(".")[0]] if node.module else []
+        else:
+            return
+        for module in modules:
+            if module in self.DENY_MODULES:
+                raise SecurityError(f"Dangerous module import blocked: {module}")
+        if self.security_level == "strict":
+            for module in modules:
+                if module not in self.allowed_modules:
+                    raise SecurityError(f"Module not in strict whitelist: {module}")
+
+
+def detect_dangerous_patterns(code: str, security_level: str = "normal") -> Dict[str, Any]:
+    validator = SecurityValidator(security_level=security_level)
+    try:
+        validator.validate_code(code)
+        return {"is_safe": True, "issues": []}
+    except SecurityError as exc:
+        return {"is_safe": False, "issues": [str(exc)]}
 
 
 class SecureExecutionEnvironment:
