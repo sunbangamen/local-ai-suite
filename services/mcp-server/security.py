@@ -245,6 +245,20 @@ class SecurityValidator:
 
         return True
 
+    def _check_function_call(self, node: ast.Call) -> None:
+        """
+        Inspect function call nodes for dangerous builtins or attributes.
+        """
+        if isinstance(node.func, ast.Name):
+            name = node.func.id
+            if name in self.DANGEROUS_FUNCTIONS:
+                raise SecurityError(f"Dangerous function call blocked: {name}")
+
+        elif isinstance(node.func, ast.Attribute):
+            attr_name = node.func.attr
+            if attr_name in self.DANGEROUS_FUNCTIONS:
+                raise SecurityError(f"Dangerous attribute call blocked: {attr_name}")
+
 
 def detect_dangerous_patterns(code: str, security_level: str = "normal") -> Dict[str, Any]:
     """
