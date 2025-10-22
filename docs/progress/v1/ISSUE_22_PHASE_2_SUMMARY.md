@@ -32,7 +32,7 @@
 **테스트 수**: 18개 → 23개 (+5개)
 
 ### 3. MCP Server RBAC 추가 테스트 (11개)
-**파일**: services/mcp-server/tests/test_rbac_advanced.py (신규, 401줄)
+**파일**: services/mcp-server/tests/test_rbac_advanced.py (신규, 394줄)
 
 **추가 테스트**:
 - test_rbac_permission_inheritance: 권한 상속
@@ -162,7 +162,7 @@ API Gateway:+24개   (0→24)
 - services/api-gateway/tests/__init__.py: 1줄
 
 ### 요약 문서
-- docs/progress/v1/ISSUE_22_PHASE_2_SUMMARY.md: 226줄
+- docs/progress/v1/ISSUE_22_PHASE_2_SUMMARY.md: 234줄
 
 **총 추가 코드**: 1,693줄
 
