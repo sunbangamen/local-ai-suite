@@ -5,6 +5,7 @@ MCP Server Security Module - AST 기반 코드 보안 검증기
 
 import ast
 import os
+from typing import Any, Dict
 
 
 class SecurityError(Exception):
@@ -243,6 +244,25 @@ class SecurityValidator:
                 self._check_name_access(node)
 
         return True
+
+
+def detect_dangerous_patterns(code: str, security_level: str = "normal") -> Dict[str, Any]:
+    """
+    Helper function that returns a user-friendly report about potential security issues.
+
+    Args:
+        code: The Python code to inspect.
+        security_level: Security profile used by SecurityValidator.
+
+    Returns:
+        Dictionary with `is_safe` flag and list of `issues`.
+    """
+    validator = SecurityValidator(security_level=security_level)
+    try:
+        validator.validate_code(code)
+        return {"is_safe": True, "issues": []}
+    except SecurityError as exc:
+        return {"is_safe": False, "issues": [str(exc)]}
 
     def _check_imports(self, node):
         """Import 문 보안성 검사 (deny-list 우선 방식)"""
