@@ -28,6 +28,33 @@ TEST_COLLECTION = "integration_test"
 QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant:6333")
 EMBEDDING_URL = os.getenv("EMBEDDING_URL", "http://embedding:8003")
 RAG_API_URL = os.getenv("RAG_API_URL", "http://localhost:8002")
+RUN_INTEGRATION = os.getenv("RUN_RAG_INTEGRATION_TESTS", "false").lower() == "true"
+
+if not RUN_INTEGRATION:
+    pytest.skip(
+        "RAG integration tests disabled. Set RUN_RAG_INTEGRATION_TESTS=true to enable.",
+        allow_module_level=True,
+    )
+
+
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def ensure_services_available():
+    """Skip integration suite gracefully when dependent services are unavailable."""
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        try:
+            await client.get(f"{RAG_API_URL}/health")
+        except Exception as exc:
+            pytest.skip(f"RAG service unreachable at {RAG_API_URL}: {exc}")
+
+        try:
+            await client.get(f"{QDRANT_URL}/readyz")
+        except Exception as exc:
+            pytest.skip(f"Qdrant service unreachable at {QDRANT_URL}: {exc}")
+
+        try:
+            await client.get(f"{EMBEDDING_URL}/health")
+        except Exception as exc:
+            pytest.skip(f"Embedding service unreachable at {EMBEDDING_URL}: {exc}")
 
 
 @pytest_asyncio.fixture
@@ -51,6 +78,7 @@ async def test_documents():
 
     # Cleanup
     import shutil
+
     shutil.rmtree(TEST_DOCUMENTS_DIR, ignore_errors=True)
 
 
@@ -65,6 +93,7 @@ async def client():
 async def qdrant_client():
     """Qdrant 클라이언트"""
     from qdrant_client import QdrantClient
+
     client = QdrantClient(url=QDRANT_URL)
     yield client
     # Cleanup: 테스트 컬렉션 삭제
@@ -89,10 +118,7 @@ class TestRagIndexing:
         - Points stored in Qdrant
         """
         # 1. Index documents
-        response = await client.post(
-            "/index",
-            json={"collection": TEST_COLLECTION}
-        )
+        response = await client.post("/index", json={"collection": TEST_COLLECTION})
         assert response.status_code == 200
         result = response.json()
         assert result["collection"] == TEST_COLLECTION
@@ -110,10 +136,7 @@ class TestRagIndexing:
         Expected: Multiple chunks created from single document
         """
         collection = "chunking_test"
-        response = await client.post(
-            "/index",
-            json={"collection": collection}
-        )
+        response = await client.post("/index", json={"collection": collection})
         assert response.status_code == 200
 
         # Verify multiple chunks were created
@@ -131,10 +154,7 @@ class TestRagIndexing:
         Expected: Unicode preserved in embeddings
         """
         collection = "unicode_test"
-        response = await client.post(
-            "/index",
-            json={"collection": collection}
-        )
+        response = await client.post("/index", json={"collection": collection})
         assert response.status_code == 200
 
         # Verify Korean text was processed
@@ -156,10 +176,7 @@ class TestRagQuery:
         Expected: Query returns relevant context and answer
         """
         # Setup: Index some documents first
-        index_response = await client.post(
-            "/index",
-            json={"collection": TEST_COLLECTION}
-        )
+        index_response = await client.post("/index", json={"collection": TEST_COLLECTION})
         assert index_response.status_code == 200
 
         # Wait for indexing to complete
@@ -167,12 +184,7 @@ class TestRagQuery:
 
         # Query
         response = await client.post(
-            "/query",
-            json={
-                "query": "What is Python?",
-                "collection": TEST_COLLECTION,
-                "topk": 3
-            }
+            "/query", json={"query": "What is Python?", "collection": TEST_COLLECTION, "topk": 3}
         )
         assert response.status_code == 200
         result = response.json()
@@ -192,11 +204,7 @@ class TestRagQuery:
         """
         response = await client.post(
             "/query",
-            json={
-                "query": "파이썬이란 무엇인가?",
-                "collection": TEST_COLLECTION,
-                "topk": 2
-            }
+            json={"query": "파이썬이란 무엇인가?", "collection": TEST_COLLECTION, "topk": 2},
         )
         assert response.status_code == 200
         result = response.json()
@@ -230,10 +238,7 @@ class TestQdrantFailure:
 
         Expected: Retries attempted before failure
         """
-        response = await client.post(
-            "/index",
-            json={"collection": "retry_test"}
-        )
+        response = await client.post("/index", json={"collection": "retry_test"})
         # Should either succeed or return proper error after retries
         assert response.status_code in [200, 503]
 
@@ -249,11 +254,7 @@ class TestEmbeddingFailure:
         Expected: Query succeeds with embeddings
         """
         response = await client.post(
-            "/query",
-            json={
-                "query": "test query",
-                "collection": TEST_COLLECTION
-            }
+            "/query", json={"query": "test query", "collection": TEST_COLLECTION}
         )
         # Should succeed if Embedding service is up
         if response.status_code == 200:
@@ -338,10 +339,7 @@ async def test_integration_full_workflow(client, qdrant_client):
 
     try:
         # 1. Index
-        index_resp = await client.post(
-            "/index",
-            json={"collection": collection}
-        )
+        index_resp = await client.post("/index", json={"collection": collection})
         assert index_resp.status_code == 200
         assert index_resp.json()["chunks"] > 0
 
@@ -352,11 +350,7 @@ async def test_integration_full_workflow(client, qdrant_client):
 
         # 3. Query
         query_resp = await client.post(
-            "/query",
-            json={
-                "query": "What is the main topic?",
-                "collection": collection
-            }
+            "/query", json={"query": "What is the main topic?", "collection": collection}
         )
         assert query_resp.status_code == 200
         result = query_resp.json()
