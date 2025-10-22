@@ -25,7 +25,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rbac_manager import RBACManager
-from security import SecurityValidator, detect_dangerous_patterns
+from security import SecurityError, SecurityValidator, detect_dangerous_patterns
 from security_database import SecurityDatabase, get_security_database, reset_security_database
 from settings import SecuritySettings
 
@@ -208,9 +208,14 @@ def test_security_validator_detects_dangerous_patterns() -> None:
     dangerous_code = "import os\nos.system('rm -rf /')"
     safe_code = "print('hello world')"
 
-    assert validator.detect_dangerous_patterns(dangerous_code)
-    assert not validator.detect_dangerous_patterns(safe_code)
+    # Safe code should pass validation
+    assert validator.validate_code(safe_code)
 
+    # Dangerous code should raise SecurityError
+    with pytest.raises(SecurityError):
+        validator.validate_code(dangerous_code)
+
+    # Helper function should provide a descriptive report
     results = detect_dangerous_patterns(dangerous_code)
     assert results["is_safe"] is False
     assert any("os.system" in issue for issue in results["issues"])
