@@ -205,7 +205,7 @@ async def test_audit_log_insert_and_query(security_db: SecurityDatabase) -> None
 def test_security_validator_detects_dangerous_patterns() -> None:
     """The security validator should flag dangerous code patterns."""
     validator = SecurityValidator()
-    dangerous_code = "import os\nos.system('rm -rf /')"
+    dangerous_code = "import subprocess\nsubprocess.call(['rm', '-rf', '/'])"
     safe_code = "print('hello world')"
 
     # Safe code should pass validation
@@ -218,4 +218,4 @@ def test_security_validator_detects_dangerous_patterns() -> None:
     # Helper function should provide a descriptive report
     results = detect_dangerous_patterns(dangerous_code)
     assert results["is_safe"] is False
-    assert any("os.system" in issue for issue in results["issues"])
+    assert any("subprocess" in issue for issue in results["issues"])
