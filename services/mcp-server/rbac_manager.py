@@ -194,13 +194,17 @@ class RBACManager:
             "request_id": request_id,
             "expires_at": None,
             "status": "pending",
+            "seconds_until_expiry": 0,
         }
 
-        # Fetch request info to expose expires_at to clients
+        # Fetch request info to expose expires_at and seconds_until_expiry to clients
         try:
             created_request = await self.db.get_approval_request(request_id)
             if created_request:
                 approval_context["expires_at"] = created_request.get("expires_at")
+                approval_context["seconds_until_expiry"] = created_request.get(
+                    "seconds_until_expiry", 0
+                )
         except Exception as exc:  # pragma: no cover - defensive guard
             logger.error(f"Failed to fetch approval request after creation: {exc}")
 
@@ -231,9 +235,12 @@ class RBACManager:
                     return "error"
 
                 status = request["status"]
-                # Keep context up to date
+                # Keep context up to date with current values from DB
                 approval_context["status"] = status
                 approval_context["expires_at"] = request.get("expires_at")
+                approval_context["seconds_until_expiry"] = request.get(
+                    "seconds_until_expiry", 0
+                )
 
                 if status in ["approved", "rejected", "expired", "timeout"]:
                     approval_event.set()
