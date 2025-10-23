@@ -959,7 +959,12 @@ Examples:
     parser.add_argument("--optimize", action="store_true", help="Run database optimization")
     parser.add_argument("--mcp", metavar="TOOL", help="Call MCP tool directly")
     parser.add_argument("--mcp-args", metavar="ARGS", help="Arguments for MCP tool (JSON format)")
-    parser.add_argument("--mcp-user", metavar="USER_ID", default="dev_user", help="User ID for RBAC authentication (default: dev_user)")
+    parser.add_argument(
+        "--mcp-user",
+        metavar="USER_ID",
+        default="dev_user",
+        help="User ID for RBAC authentication (default: dev_user)",
+    )
     parser.add_argument("--mcp-list", action="store_true", help="List available MCP tools")
     parser.add_argument(
         "--tools", action="store_true", help="Enable AI to use MCP tools automatically"
@@ -990,6 +995,10 @@ Examples:
     parser.add_argument("--memory-dir", metavar="DIR", help="Override memory storage directory")
 
     args = parser.parse_args()
+
+    # Ensure all MCP invocations share the same user context for RBAC
+    if args.mcp_user:
+        os.environ["MCP_USER_ID"] = args.mcp_user
 
     # Handle indexing command
     if args.index is not None:
@@ -1133,7 +1142,7 @@ Examples:
                     parts = query[5:].split(" ", 1)
                     tool_name = parts[0]
                     args_json = parts[1] if len(parts) > 1 else None
-                    handle_mcp_call(tool_name, args_json)
+                    handle_mcp_call(tool_name, args_json, user_id=args.mcp_user)
                     continue
                 else:
                     model_type = "auto"

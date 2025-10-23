@@ -317,11 +317,22 @@ async def main():
     parser = argparse.ArgumentParser(description="Approval Workflow CLI")
     parser.add_argument("--db", type=str, default=str(DEFAULT_DB_PATH), help="Database path")
     parser.add_argument("--responder", type=str, default="cli_admin", help="Responder ID")
+    parser.add_argument(
+        "--mcp-user",
+        type=str,
+        default="admin_user",
+        help="User ID for RBAC authentication (default: admin_user)",
+    )
     parser.add_argument("--continuous", action="store_true", help="Run in continuous mode")
     parser.add_argument("--list-only", action="store_true", help="List requests and exit")
 
     args = parser.parse_args()
     db_path = Path(args.db)
+
+    # Sync MCP user ID to environment for consistent RBAC context (Issue #38)
+    import os
+
+    os.environ["MCP_USER_ID"] = args.mcp_user
 
     # DB 존재 확인
     if not db_path.exists():
