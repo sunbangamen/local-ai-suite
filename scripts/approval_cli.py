@@ -43,7 +43,7 @@ async def get_pending_requests(db_path: Path, limit: int = 20):
                 request_data,
                 requested_at,
                 expires_at,
-                CAST((julianday(expires_at) - julianday('now')) * 86400 AS INTEGER) AS seconds_left
+                CAST((julianday(expires_at) - julianday('now')) * 86400 AS INTEGER) AS seconds_until_expiry
             FROM approval_requests
             WHERE status = 'pending' AND datetime('now') < expires_at
             ORDER BY requested_at ASC
@@ -204,11 +204,11 @@ def display_requests(requests):
 
         # 시간 포맷팅
         requested_at = req["requested_at"]
-        seconds_left = req["seconds_left"]
-        if seconds_left > 60:
-            expires_in = f"{seconds_left // 60}m {seconds_left % 60}s"
+        seconds_until_expiry = req["seconds_until_expiry"]
+        if seconds_until_expiry > 60:
+            expires_in = f"{seconds_until_expiry // 60}m {seconds_until_expiry % 60}s"
         else:
-            expires_in = f"{seconds_left}s"
+            expires_in = f"{seconds_until_expiry}s"
 
         table.add_row(
             short_id,
@@ -314,11 +314,56 @@ async def single_run(db_path: Path):
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Approval Workflow CLI")
+    parser = argparse.ArgumentParser(
+        description="Approval Workflow CLI - Manage approval requests",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # List pending approval requests
+  python scripts/approval_cli.py list
+
+  # Approve a request
+  python scripts/approval_cli.py approve abc12345 --reason "Approved by security team"
+
+  # Reject a request
+  python scripts/approval_cli.py reject abc12345 --reason "Does not meet policy requirements"
+
+  # Interactive mode (default)
+  python scripts/approval_cli.py
+""",
+    )
+
+    # Add global arguments
     parser.add_argument("--db", type=str, default=str(DEFAULT_DB_PATH), help="Database path")
-    parser.add_argument("--responder", type=str, default="cli_admin", help="Responder ID")
-    parser.add_argument("--continuous", action="store_true", help="Run in continuous mode")
-    parser.add_argument("--list-only", action="store_true", help="List requests and exit")
+    parser.add_argument(
+        "--responder", type=str, default="cli_admin", help="Responder ID (for approve/reject)"
+    )
+
+    # Create subparsers for commands
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # List command
+    list_parser = subparsers.add_parser("list", help="List pending approval requests")
+    list_parser.add_argument(
+        "--limit", type=int, default=20, help="Maximum number of requests to display (default: 20)"
+    )
+
+    # Approve command
+    approve_parser = subparsers.add_parser("approve", help="Approve an approval request")
+    approve_parser.add_argument("request_id", help="Request ID (short UUID or full UUID)")
+    approve_parser.add_argument("--reason", required=True, help="Reason for approval")
+
+    # Reject command
+    reject_parser = subparsers.add_parser("reject", help="Reject an approval request")
+    reject_parser.add_argument("request_id", help="Request ID (short UUID or full UUID)")
+    reject_parser.add_argument("--reason", required=True, help="Reason for rejection")
+
+    # Interactive mode (default when no command specified)
+    parser.add_argument(
+        "--continuous",
+        action="store_true",
+        help="Run in continuous polling mode (interactive only)",
+    )
 
     args = parser.parse_args()
     db_path = Path(args.db)
@@ -329,10 +374,77 @@ async def main():
         sys.exit(1)
 
     try:
-        if args.list_only:
-            await single_run(db_path)
+        if args.command == "list":
+            # List command
+            requests = await get_pending_requests(db_path, limit=args.limit)
+            display_requests(requests)
+
+        elif args.command == "approve":
+            # Approve command
+            full_request_id = args.request_id
+
+            # Try to find full ID if short ID provided
+            requests = await get_pending_requests(db_path, limit=100)
+            if len(full_request_id) < 32:  # Likely short ID
+                matches = [r for r in requests if r["request_id"].startswith(full_request_id)]
+                if not matches:
+                    console.print(
+                        f"[red]Error: No matching request found for ID: {full_request_id}[/red]"
+                    )
+                    sys.exit(1)
+                elif len(matches) > 1:
+                    console.print(
+                        f"[red]Error: Ambiguous request ID (matches {len(matches)} requests)[/red]"
+                    )
+                    sys.exit(1)
+                full_request_id = matches[0]["request_id"]
+
+            success, message = await approve_request(
+                db_path, full_request_id, args.responder, args.reason
+            )
+            if success:
+                console.print(
+                    f"[green]✓ Request approved: {full_request_id[:8]}...{full_request_id[-4:]}[/green]"
+                )
+            else:
+                console.print(f"[red]✗ Error: {message}[/red]")
+                sys.exit(1)
+
+        elif args.command == "reject":
+            # Reject command
+            full_request_id = args.request_id
+
+            # Try to find full ID if short ID provided
+            requests = await get_pending_requests(db_path, limit=100)
+            if len(full_request_id) < 32:  # Likely short ID
+                matches = [r for r in requests if r["request_id"].startswith(full_request_id)]
+                if not matches:
+                    console.print(
+                        f"[red]Error: No matching request found for ID: {full_request_id}[/red]"
+                    )
+                    sys.exit(1)
+                elif len(matches) > 1:
+                    console.print(
+                        f"[red]Error: Ambiguous request ID (matches {len(matches)} requests)[/red]"
+                    )
+                    sys.exit(1)
+                full_request_id = matches[0]["request_id"]
+
+            success, message = await reject_request(
+                db_path, full_request_id, args.responder, args.reason
+            )
+            if success:
+                console.print(
+                    f"[green]✓ Request rejected: {full_request_id[:8]}...{full_request_id[-4:]}[/green]"
+                )
+            else:
+                console.print(f"[red]✗ Error: {message}[/red]")
+                sys.exit(1)
+
         else:
+            # Interactive mode (default)
             await interactive_mode(db_path, args.responder)
+
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted by user[/yellow]")
     except Exception as e:

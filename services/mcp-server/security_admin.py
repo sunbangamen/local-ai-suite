@@ -391,7 +391,7 @@ async def get_pending_approvals(
                     "user_id": req["user_id"],
                     "role": req.get("role", "unknown"),
                     "requested_at": req["requested_at"],
-                    "seconds_until_expiry": req.get("seconds_left", 0),
+                    "seconds_until_expiry": req.get("seconds_until_expiry", 0),
                 }
             )
 
@@ -575,7 +575,7 @@ async def get_approval_status(request_id: str):
         response = {
             "request_id": request["request_id"],
             "status": request["status"],
-            "seconds_until_expiry": request.get("seconds_left", 0),
+            "seconds_until_expiry": request.get("seconds_until_expiry", 0),
         }
 
         # Add responder info if available
