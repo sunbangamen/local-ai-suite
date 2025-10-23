@@ -486,7 +486,7 @@ ai --interactive
 - ✅ **CLI 필드 정합성**: `seconds_left` → `seconds_until_expiry` 필드 통합 (Issue #36)
 - ✅ **API 필드 통합**: GET /api/approvals/pending, /status 응답 필드 통일 (Issue #36)
 - ✅ **미들웨어 통합**: RBAC 미들웨어에서 자동 승인 요청 생성 및 타임아웃 처리
-- ✅ **통합 테스트**: 10개 시나리오 (approved, rejected, timeout, seconds_until_expiry 등) 문서화 완료
+- ✅ **통합 테스트**: 9개 시나리오 (approved, rejected, timeout, 동시성, 권한, 감사, 성능, 정확도, CLI) 문서화 완료
 - ✅ **성능 벤치마크**: SQLite WAL 모드, 80 RPS 지속 처리, P95 latency 397ms
 - ✅ **Feature Flag**: `APPROVAL_WORKFLOW_ENABLED=True` (프로덕션 기본값)
 
@@ -526,10 +526,10 @@ curl http://localhost:8020/api/approvals/<id>/status
 
 **참고 문서:**
 - 완전 계획: `docs/progress/v1/ri_18.md` (Issue #36 해결 계획)
-- 테스트 결과: `docs/progress/v1/APPROVAL_WORKFLOW_TEST_RESULTS.log` (환경 설정 및 검증 가이드)
+- 테스트 결과: `docs/progress/v1/APPROVAL_WORKFLOW_TEST_RESULTS.md` (환경 설정 및 검증 가이드)
 - 구현: `docs/security/IMPLEMENTATION_SUMMARY.md`
 - 가이드: `docs/security/RBAC_GUIDE.md`
-- 테스트: `services/mcp-server/tests/test_approval_workflow.py` (10 scenarios)
+- 테스트: `services/mcp-server/tests/test_approval_workflow.py` (9 scenarios)
 
 #### **Future Roadmap Items (Phase 6+)**
 

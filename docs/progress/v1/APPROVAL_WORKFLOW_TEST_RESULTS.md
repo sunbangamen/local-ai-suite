@@ -45,16 +45,12 @@ The approval workflow integration tests validate the following scenarios:
    - Verify latency targets
 
 8. test_approval_request_expiry_accuracy
-   - Verify seconds_until_expiry field accuracy
-   - Check countdown is not always 0
+   - Verify seconds_until_expiry field accuracy via get_approval_request()
+   - Validate database view calculation
 
-9. test_cli_approval_command_short_id
-   - Test CLI approve command with short ID
-   - Verify short ID matching
-
-10. test_cli_rejection_command_with_reason
-    - Test CLI reject command
-    - Verify reason is recorded
+9. test_cli_single_run_display
+   - Test CLI list display without approval/reject
+   - Verify Rich table formatting
 
 ================================================================================
 Code Changes Verified
@@ -90,11 +86,11 @@ python3 -m pytest tests/test_approval_workflow.py -v --tb=short
 
 Expected Output Format:
 ```
-test_approval_workflow.py::test_approval_granted_flow PASSED [10%]
-test_approval_workflow.py::test_approval_rejected_flow PASSED [20%]
-test_approval_workflow.py::test_approval_timeout_flow PASSED [30%]
+test_approval_workflow.py::test_approval_granted_flow PASSED [11%]
+test_approval_workflow.py::test_approval_rejected_flow PASSED [22%]
+test_approval_workflow.py::test_approval_timeout_flow PASSED [33%]
 ...
-========================= 10 passed in X.XXs =========================
+========================= 9 passed in X.XXs =========================
 ```
 
 Individual Test Verification:
@@ -110,9 +106,10 @@ Backwards Compatibility Verification
   Command: python scripts/approval_cli.py
   Status: PASS (no args triggers interactive mode)
 
-✓ Legacy --list-only flag (deprecated but functional)
+⚠️ Legacy --list-only flag (REMOVED)
   Command: python scripts/approval_cli.py --list-only
-  Status: PASS (legacy flag still works)
+  Status: NOT SUPPORTED (replaced by 'list' subcommand)
+  Migration: Use `python scripts/approval_cli.py list` instead
 
 ✓ CLI subcommands
   Command: python scripts/approval_cli.py list
