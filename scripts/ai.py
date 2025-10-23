@@ -143,11 +143,21 @@ def detect_query_type(query: str) -> str:
     return "chat"
 
 
-def call_mcp_tool(tool_name: str, **kwargs) -> Optional[Dict[str, Any]]:
+def call_mcp_tool(tool_name: str, user_id: str = None, **kwargs) -> Optional[Dict[str, Any]]:
     """
     Call MCP server tool with current working directory support (UTF-8 enhanced)
+
+    Args:
+        tool_name: Name of the MCP tool to call
+        user_id: User ID for RBAC authentication (default: env var MCP_USER_ID or 'dev_user')
+        **kwargs: Tool arguments
     """
     headers = {"Content-Type": "application/json; charset=utf-8"}
+
+    # Add X-User-ID header for RBAC authentication (Issue #38)
+    if user_id is None:
+        user_id = os.getenv("MCP_USER_ID", "dev_user")
+    headers["X-User-ID"] = user_id
 
     # Add current working directory to kwargs for path-based tools
     current_dir = os.getcwd()
@@ -181,7 +191,7 @@ def call_mcp_tool(tool_name: str, **kwargs) -> Optional[Dict[str, Any]]:
                 error_data = response.json()
                 if error_data.get("approval_required"):
                     request_id = error_data.get("request_id")
-                    return handle_approval_workflow(request_id, tool_name, kwargs)
+                    return handle_approval_workflow(request_id, tool_name, kwargs, user_id)
             except Exception as e:
                 print(f"⚠️ Error handling approval response: {e}")
 
@@ -203,12 +213,18 @@ def call_mcp_tool(tool_name: str, **kwargs) -> Optional[Dict[str, Any]]:
 
 
 def handle_approval_workflow(
-    request_id: str, tool_name: str, args: Dict[str, Any]
+    request_id: str, tool_name: str, args: Dict[str, Any], user_id: str = None
 ) -> Optional[Dict[str, Any]]:
     """
     Handle approval workflow for HIGH/CRITICAL tools (Issue #26, Phase 1)
 
     Shows progress bar while waiting for admin approval, then re-executes the tool
+
+    Args:
+        request_id: Approval request ID
+        tool_name: MCP tool name
+        args: Tool arguments
+        user_id: User ID for RBAC (default: env var MCP_USER_ID or 'dev_user')
     """
     try:
         from rich.progress import (
@@ -223,7 +239,7 @@ def handle_approval_workflow(
         console = RichConsole()
     except ImportError:
         # Fallback if Rich is not installed
-        return wait_for_approval_simple(request_id, tool_name, args)
+        return wait_for_approval_simple(request_id, tool_name, args, user_id)
 
     approval_timeout = int(os.getenv("APPROVAL_TIMEOUT", "300"))  # 5 minutes default
     polling_interval = int(os.getenv("APPROVAL_POLLING_INTERVAL", "1"))  # 1 second default
@@ -257,8 +273,8 @@ def handle_approval_workflow(
 
                 if status == "approved":
                     console.print("✅ [green]Approval Granted![/green]")
-                    # Re-execute the tool
-                    return call_mcp_tool(tool_name, **args)
+                    # Re-execute the tool with same user_id
+                    return call_mcp_tool(tool_name, user_id=user_id, **args)
 
                 elif status in ["rejected", "expired", "timeout"]:
                     console.print(f"❌ [red]Approval {status}[/red]")
@@ -280,10 +296,16 @@ def handle_approval_workflow(
 
 
 def wait_for_approval_simple(
-    request_id: str, tool_name: str, args: Dict[str, Any]
+    request_id: str, tool_name: str, args: Dict[str, Any], user_id: str = None
 ) -> Optional[Dict[str, Any]]:
     """
     Simple fallback approval handler (no Rich library)
+
+    Args:
+        request_id: Approval request ID
+        tool_name: MCP tool name
+        args: Tool arguments
+        user_id: User ID for RBAC (default: env var MCP_USER_ID or 'dev_user')
     """
     approval_timeout = int(os.getenv("APPROVAL_TIMEOUT", "300"))
     polling_interval = int(os.getenv("APPROVAL_POLLING_INTERVAL", "1"))
@@ -304,7 +326,7 @@ def wait_for_approval_simple(
 
             if status == "approved":
                 print("✅ Approval Granted!")
-                return call_mcp_tool(tool_name, **args)
+                return call_mcp_tool(tool_name, user_id=user_id, **args)
 
             elif status in ["rejected", "expired", "timeout"]:
                 print(f"❌ Approval {status}")
@@ -937,6 +959,7 @@ Examples:
     parser.add_argument("--optimize", action="store_true", help="Run database optimization")
     parser.add_argument("--mcp", metavar="TOOL", help="Call MCP tool directly")
     parser.add_argument("--mcp-args", metavar="ARGS", help="Arguments for MCP tool (JSON format)")
+    parser.add_argument("--mcp-user", metavar="USER_ID", default="dev_user", help="User ID for RBAC authentication (default: dev_user)")
     parser.add_argument("--mcp-list", action="store_true", help="List available MCP tools")
     parser.add_argument(
         "--tools", action="store_true", help="Enable AI to use MCP tools automatically"
@@ -1025,7 +1048,7 @@ Examples:
 
     # Handle direct MCP tool call
     if args.mcp:
-        handle_mcp_call(args.mcp, args.mcp_args)
+        handle_mcp_call(args.mcp, args.mcp_args, args.mcp_user)
         sys.exit(0)
 
     # Determine model type and streaming preference
@@ -1271,8 +1294,15 @@ def show_mcp_tools():
             print(f"   Required: {', '.join(required)}")
 
 
-def handle_mcp_call(tool_name: str, args_json: str = None):
-    """Handle direct MCP tool call"""
+def handle_mcp_call(tool_name: str, args_json: str = None, user_id: str = None):
+    """
+    Handle direct MCP tool call
+
+    Args:
+        tool_name: MCP tool name
+        args_json: JSON arguments for the tool
+        user_id: User ID for RBAC authentication (default: 'dev_user')
+    """
     try:
         # Parse arguments if provided
         kwargs = {}
@@ -1301,8 +1331,8 @@ def handle_mcp_call(tool_name: str, args_json: str = None):
                         print("💡 Try using double quotes and proper JSON format")
                         return
 
-        # Call the tool
-        result = call_mcp_tool(tool_name, **kwargs)
+        # Call the tool with user_id for RBAC
+        result = call_mcp_tool(tool_name, user_id=user_id, **kwargs)
         if result:
             print("✅ MCP Tool Result:")
             if isinstance(result, dict):
