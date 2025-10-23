@@ -41,9 +41,10 @@ The approval workflow integration tests validate the following scenarios:
    - Check all approval events are logged
 
 7. test_wait_for_approval_provides_request_metadata
-   - Verify approval request metadata includes seconds_until_expiry
-   - Validate database view calculation
-   - Check correct field names in response
+   - Verify approval request metadata includes seconds_until_expiry field
+   - Validate that seconds_until_expiry value is greater than 0
+   - Confirm seconds_until_expiry is present in both DB view and API response context
+   - Ensure database view correctly calculates remaining seconds
 
 8. test_performance_bulk_approvals
    - Process 10 approval requests in < 5 seconds

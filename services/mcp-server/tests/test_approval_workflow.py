@@ -532,6 +532,10 @@ async def test_wait_for_approval_provides_request_metadata(test_db):
         assert pending, "Approval request should be pending"
         request_id = pending[0]["request_id"]
 
+        # Verify seconds_until_expiry is present and positive in DB view
+        assert "seconds_until_expiry" in pending[0], "seconds_until_expiry should be in DB view"
+        assert pending[0]["seconds_until_expiry"] > 0, "seconds_until_expiry should be positive"
+
         # Simulate admin rejection
         await test_db.update_approval_status(
             request_id=request_id,
@@ -545,6 +549,9 @@ async def test_wait_for_approval_provides_request_metadata(test_db):
         assert context["request_id"] == request_id
         assert context["expires_at"] is not None
         assert context["status"] == "rejected"
+
+        # Verify seconds_until_expiry is present in context metadata
+        assert context["seconds_until_expiry"] > 0, "seconds_until_expiry should be positive in metadata"
     finally:
         SecuritySettings.APPROVAL_WORKFLOW_ENABLED = original_enabled
         SecuritySettings.APPROVAL_TIMEOUT = original_timeout
