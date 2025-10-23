@@ -40,17 +40,19 @@ The approval workflow integration tests validate the following scenarios:
    - Verify comprehensive audit trail
    - Check all approval events are logged
 
-7. test_performance_bulk_approvals
+7. test_wait_for_approval_provides_request_metadata
+   - Verify approval request metadata includes seconds_until_expiry
+   - Validate database view calculation
+   - Check correct field names in response
+
+8. test_performance_bulk_approvals
    - Process 10 approval requests in < 5 seconds
    - Verify latency targets
 
-8. test_approval_request_expiry_accuracy
-   - Verify seconds_until_expiry field accuracy via get_approval_request()
-   - Validate database view calculation
-
-9. test_cli_single_run_display
-   - Test CLI list display without approval/reject
-   - Verify Rich table formatting
+9. test_wait_for_approval_handles_creation_failure
+   - Test error handling when approval request creation fails
+   - Verify proper exception propagation
+   - Ensure database state consistency
 
 ================================================================================
 Code Changes Verified
@@ -89,7 +91,12 @@ Expected Output Format:
 test_approval_workflow.py::test_approval_granted_flow PASSED [11%]
 test_approval_workflow.py::test_approval_rejected_flow PASSED [22%]
 test_approval_workflow.py::test_approval_timeout_flow PASSED [33%]
-...
+test_approval_workflow.py::test_concurrent_approval_requests PASSED [44%]
+test_approval_workflow.py::test_permission_validation_flow PASSED [56%]
+test_approval_workflow.py::test_audit_logging_flow PASSED [67%]
+test_approval_workflow.py::test_wait_for_approval_provides_request_metadata PASSED [78%]
+test_approval_workflow.py::test_performance_bulk_approvals PASSED [89%]
+test_approval_workflow.py::test_wait_for_approval_handles_creation_failure PASSED [100%]
 ========================= 9 passed in X.XXs =========================
 ```
 
