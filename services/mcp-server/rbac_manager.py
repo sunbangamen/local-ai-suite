@@ -6,6 +6,7 @@ Role-Based Access Control permission checking with caching
 
 import asyncio
 import logging
+import math
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -32,7 +33,7 @@ def _calculate_seconds_until_expiry(expires_at: Optional[str]) -> int:
     try:
         expiry_dt = datetime.strptime(expires_at, "%Y-%m-%d %H:%M:%S")
         now = datetime.utcnow()
-        seconds_remaining = int((expiry_dt - now).total_seconds())
+        seconds_remaining = math.ceil((expiry_dt - now).total_seconds())
         return max(seconds_remaining, 0)  # Return 0 if already expired
     except (ValueError, TypeError):
         logger.warning(f"Failed to parse expires_at: {expires_at}")
