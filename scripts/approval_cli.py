@@ -330,19 +330,23 @@ Examples:
 
   # Interactive mode (default)
   python scripts/approval_cli.py
-"""
+""",
     )
 
     # Add global arguments
     parser.add_argument("--db", type=str, default=str(DEFAULT_DB_PATH), help="Database path")
-    parser.add_argument("--responder", type=str, default="cli_admin", help="Responder ID (for approve/reject)")
+    parser.add_argument(
+        "--responder", type=str, default="cli_admin", help="Responder ID (for approve/reject)"
+    )
 
     # Create subparsers for commands
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # List command
     list_parser = subparsers.add_parser("list", help="List pending approval requests")
-    list_parser.add_argument("--limit", type=int, default=20, help="Maximum number of requests to display (default: 20)")
+    list_parser.add_argument(
+        "--limit", type=int, default=20, help="Maximum number of requests to display (default: 20)"
+    )
 
     # Approve command
     approve_parser = subparsers.add_parser("approve", help="Approve an approval request")
@@ -355,7 +359,11 @@ Examples:
     reject_parser.add_argument("--reason", required=True, help="Reason for rejection")
 
     # Interactive mode (default when no command specified)
-    parser.add_argument("--continuous", action="store_true", help="Run in continuous polling mode (interactive only)")
+    parser.add_argument(
+        "--continuous",
+        action="store_true",
+        help="Run in continuous polling mode (interactive only)",
+    )
 
     args = parser.parse_args()
     db_path = Path(args.db)
@@ -380,16 +388,24 @@ Examples:
             if len(full_request_id) < 32:  # Likely short ID
                 matches = [r for r in requests if r["request_id"].startswith(full_request_id)]
                 if not matches:
-                    console.print(f"[red]Error: No matching request found for ID: {full_request_id}[/red]")
+                    console.print(
+                        f"[red]Error: No matching request found for ID: {full_request_id}[/red]"
+                    )
                     sys.exit(1)
                 elif len(matches) > 1:
-                    console.print(f"[red]Error: Ambiguous request ID (matches {len(matches)} requests)[/red]")
+                    console.print(
+                        f"[red]Error: Ambiguous request ID (matches {len(matches)} requests)[/red]"
+                    )
                     sys.exit(1)
                 full_request_id = matches[0]["request_id"]
 
-            success, message = await approve_request(db_path, full_request_id, args.responder, args.reason)
+            success, message = await approve_request(
+                db_path, full_request_id, args.responder, args.reason
+            )
             if success:
-                console.print(f"[green]✓ Request approved: {full_request_id[:8]}...{full_request_id[-4:]}[/green]")
+                console.print(
+                    f"[green]✓ Request approved: {full_request_id[:8]}...{full_request_id[-4:]}[/green]"
+                )
             else:
                 console.print(f"[red]✗ Error: {message}[/red]")
                 sys.exit(1)
@@ -403,16 +419,24 @@ Examples:
             if len(full_request_id) < 32:  # Likely short ID
                 matches = [r for r in requests if r["request_id"].startswith(full_request_id)]
                 if not matches:
-                    console.print(f"[red]Error: No matching request found for ID: {full_request_id}[/red]")
+                    console.print(
+                        f"[red]Error: No matching request found for ID: {full_request_id}[/red]"
+                    )
                     sys.exit(1)
                 elif len(matches) > 1:
-                    console.print(f"[red]Error: Ambiguous request ID (matches {len(matches)} requests)[/red]")
+                    console.print(
+                        f"[red]Error: Ambiguous request ID (matches {len(matches)} requests)[/red]"
+                    )
                     sys.exit(1)
                 full_request_id = matches[0]["request_id"]
 
-            success, message = await reject_request(db_path, full_request_id, args.responder, args.reason)
+            success, message = await reject_request(
+                db_path, full_request_id, args.responder, args.reason
+            )
             if success:
-                console.print(f"[green]✓ Request rejected: {full_request_id[:8]}...{full_request_id[-4:]}[/green]")
+                console.print(
+                    f"[green]✓ Request rejected: {full_request_id[:8]}...{full_request_id[-4:]}[/green]"
+                )
             else:
                 console.print(f"[red]✗ Error: {message}[/red]")
                 sys.exit(1)

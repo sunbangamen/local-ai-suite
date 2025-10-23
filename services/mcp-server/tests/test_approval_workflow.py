@@ -551,7 +551,9 @@ async def test_wait_for_approval_provides_request_metadata(test_db):
         assert context["status"] == "rejected"
 
         # Verify seconds_until_expiry is present in context metadata
-        assert context["seconds_until_expiry"] > 0, "seconds_until_expiry should be positive in metadata"
+        assert (
+            context["seconds_until_expiry"] > 0
+        ), "seconds_until_expiry should be positive in metadata"
     finally:
         SecuritySettings.APPROVAL_WORKFLOW_ENABLED = original_enabled
         SecuritySettings.APPROVAL_TIMEOUT = original_timeout
