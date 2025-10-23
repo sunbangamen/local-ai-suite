@@ -338,6 +338,12 @@ Examples:
     parser.add_argument(
         "--responder", type=str, default="cli_admin", help="Responder ID (for approve/reject)"
     )
+    parser.add_argument(
+        "--mcp-user",
+        type=str,
+        default="admin_user",
+        help="User ID for RBAC authentication (default: admin_user)",
+    )
 
     # Create subparsers for commands
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -364,9 +370,15 @@ Examples:
         action="store_true",
         help="Run in continuous polling mode (interactive only)",
     )
+    parser.add_argument("--list-only", action="store_true", help="List requests and exit")
 
     args = parser.parse_args()
     db_path = Path(args.db)
+
+    # Sync MCP user ID to environment for consistent RBAC context (Issue #38)
+    import os
+
+    os.environ["MCP_USER_ID"] = args.mcp_user
 
     # DB 존재 확인
     if not db_path.exists():

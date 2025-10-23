@@ -258,6 +258,37 @@ sqlite3 /mnt/e/ai-data/sqlite/security.db "SELECT * FROM security_audit_logs ORD
 
 ## 📝 참고 사항
 
+### CLI 사용자 인증 (Issue #38)
+
+**X-User-ID 헤더 처리**:
+- MCP 서버는 모든 요청에서 `X-User-ID` 헤더를 필수로 요구 (rbac_middleware.py:119)
+- 기본 사용자 "default"는 DB에 미등록되므로 반드시 유효한 사용자 ID 전달 필요
+
+**CLI에서 사용자 ID 지정**:
+```bash
+# ai.py: --mcp-user 인자 (기본값: dev_user)
+python scripts/ai.py --mcp write_file --mcp-user dev_user --mcp-args '{"path": "./test.txt", "content": "test"}'
+
+# approval_cli.py: --mcp-user 인자 (기본값: admin_user)
+python scripts/approval_cli.py --list-only --mcp-user admin_user
+
+# 환경변수 사용 (모든 MCP 호출에 적용)
+export MCP_USER_ID=admin_user
+python scripts/approval_cli.py --list-only
+```
+
+**사용자 ID 우선순위** (ai.py):
+1. CLI 인자: `--mcp-user <USER_ID>`
+2. 환경변수: `MCP_USER_ID=<USER_ID>`
+3. 기본값: `dev_user`
+
+**RBAC 역할별 권한**:
+| 역할 | 사용자 ID | 권한 |
+|------|-----------|------|
+| guest | guest_user | read_file, list_files |
+| developer | dev_user | + write_file, git_*, execute_bash, execute_python |
+| admin | admin_user | 모든 도구 |
+
 ### Feature Flags (기본값)
 ```bash
 RBAC_ENABLED=false              # RBAC 비활성화 (개발 편의)

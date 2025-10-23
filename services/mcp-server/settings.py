@@ -33,7 +33,7 @@ class SecuritySettings:
     SANDBOX_ENABLED: bool = os.getenv("SANDBOX_ENABLED", "true").lower() == "true"
     RATE_LIMIT_ENABLED: bool = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
     APPROVAL_WORKFLOW_ENABLED: bool = (
-        os.getenv("APPROVAL_WORKFLOW_ENABLED", "false").lower() == "true"
+        os.getenv("APPROVAL_WORKFLOW_ENABLED", "true").lower() == "true"
     )
 
     # Approval Workflow Settings (Issue #16)
