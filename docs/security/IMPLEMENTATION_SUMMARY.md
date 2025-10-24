@@ -341,9 +341,166 @@ docker-compose -f docker/compose.p3.yml restart mcp-server
 
 ---
 
+---
+
+## ✅ Issue #40: 승인 워크플로우 운영화 개선 (2025-10-24)
+
+**상태**: 진행 중
+**목표**: 프로덕션 운영 준비를 위한 문서화, CLI/서버 정합, 환경 변수 처리
+
+### 승인 워크플로우 배포 절차 (3단계)
+
+#### 1단계: 환경 변수 설정
+```bash
+# .env 파일에서 다음 값 확인/수정
+APPROVAL_WORKFLOW_ENABLED=true           # 승인 워크플로우 활성화 (기본값: false)
+APPROVAL_TIMEOUT=300                     # 타임아웃 5분
+APPROVAL_POLLING_INTERVAL=1              # 1초 폴링 간격
+APPROVAL_MAX_PENDING=50                  # 최대 50개 요청 동시 처리
+```
+
+#### 2단계: 서버 재시작
+```bash
+# Docker Compose로 서버 재시작
+docker compose -f docker/compose.p3.yml restart mcp-server
+
+# 서비스 정상화 확인
+curl http://localhost:8020/health
+
+# 로그 확인
+docker logs mcp-server --tail 20
+```
+
+#### 3단계: 운영팀 준비
+```bash
+# 1. 관리자용 CLI 도구 확인
+python scripts/approval_cli.py --help
+
+# 2. 승인 대기 요청 모니터링 시작
+python scripts/approval_cli.py --continuous
+
+# 3. 로그 조회 쿼리 확인 (아래 참고)
+```
+
+### 승인 워크플로우 운영 참고사항
+
+#### 주의: CLI 상태 폴링 경로
+- Issue #40 Phase 2에서 메인 MCP 서버(`services/mcp-server/app.py`)에 `GET /api/approvals/{request_id}/status` 엔드포인트가 추가됨
+- `scripts/ai.py`는 `APPROVAL_WORKFLOW_ENABLED=true`일 때 해당 엔드포인트를 1초 간격으로 폴링하여 승인 상태를 확인함
+- 기존에 보안 관리자 앱(8021 포트)을 직접 호출하던 환경은 최신 코드로 업데이트하거나 `MCP_URL` 환경 변수를 재확인할 것
+- 운영팀은 방화벽/리버스 프록시 설정에서 `/api/approvals/**` 경로가 MCP 서버로 정상 라우팅되는지 검증 필요
+
+#### 운영팀 체크리스트
+- [ ] APPROVAL_WORKFLOW_ENABLED 환경 변수 확인
+- [ ] MCP 서버 상태 확인 (Health Check 200 OK)
+- [ ] approval_cli.py 도구 동작 확인
+- [ ] 테스트 승인 요청 → 승인 → 도구 재실행 플로우 검증
+- [ ] 롤백 절차 숙지 (아래 참고)
+
+#### 롤백 절차 (문제 발생 시)
+```bash
+# Scenario 1: 환경 변수 문제
+APPROVAL_WORKFLOW_ENABLED=false docker compose -f docker/compose.p3.yml restart mcp-server
+
+# Scenario 2: CLI 경로 문제
+git checkout HEAD~1 -- scripts/ai.py
+
+# Scenario 3: 긴급 비활성화
+echo "APPROVAL_WORKFLOW_ENABLED=false" >> .env
+docker compose -f docker/compose.p3.yml restart mcp-server
+```
+
+### Feature Flags (프로덕션 권장 설정)
+```bash
+# 프로덕션 환경
+RBAC_ENABLED=true                       # RBAC 활성화 (권장)
+APPROVAL_WORKFLOW_ENABLED=true          # 승인 워크플로우 활성화 (HIGH/CRITICAL 도구)
+SECURITY_MODE=strict                    # 보안 모드 강화
+SANDBOX_ENABLED=true                    # 샌드박스 격리 활성화
+RATE_LIMIT_ENABLED=true                 # Rate limiting 활성화
+
+# 개발 환경
+RBAC_ENABLED=false                      # RBAC 비활성화 (개발 편의)
+APPROVAL_WORKFLOW_ENABLED=false         # 승인 워크플로우 비활성화 (빠른 테스트)
+SECURITY_MODE=normal                    # 일반 모드
+```
+
+### 운영팀 로그 조회 쿼리
+
+#### 쿼리 1: 최근 승인 이력 (최근 24시간)
+```sql
+SELECT request_id, tool_name, user_id, status, requested_at, responded_at, responder_id, response_reason
+FROM approval_requests
+WHERE datetime('now', '-1 day') < requested_at
+ORDER BY requested_at DESC
+LIMIT 50;
+```
+
+#### 쿼리 2: 시간별 승인 통계
+```sql
+SELECT
+  DATE(requested_at) as date,
+  COUNT(*) as total_requests,
+  SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved_count,
+  SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_count,
+  SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_count
+FROM approval_requests
+GROUP BY DATE(requested_at)
+ORDER BY date DESC;
+```
+
+#### 쿼리 3: 도구별 승인 현황
+```sql
+SELECT
+  tool_name,
+  COUNT(*) as total_requests,
+  SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved_count,
+  SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_count,
+  ROUND(100.0 * SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) / COUNT(*), 2) as approval_rate
+FROM approval_requests
+GROUP BY tool_name
+ORDER BY total_requests DESC;
+```
+
+#### 쿼리 4: 타임아웃된 요청 확인
+```sql
+SELECT request_id, tool_name, user_id, requested_at, expires_at
+FROM approval_requests
+WHERE status = 'pending' AND datetime('now') > expires_at
+LIMIT 20;
+```
+
+#### 쿼리 5: 높은 거부율 도구 조사
+```sql
+SELECT
+  tool_name,
+  COUNT(*) as total_requests,
+  SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected_count,
+  ROUND(100.0 * SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) / COUNT(*), 2) as rejection_rate
+FROM approval_requests
+WHERE datetime('now', '-7 days') < requested_at
+GROUP BY tool_name
+HAVING rejection_rate > 20
+ORDER BY rejection_rate DESC;
+```
+
+### 트러블슈팅
+
+**Q: CLI가 상태 API 404 오류 받음**
+- A: Issue #40 Phase 2에서 `/api/approvals/{id}/status` 엔드포인트 정비 필요
+
+**Q: 환경 변수가 적용되지 않음**
+- A: Docker 컨테이너 재시작 필수 (docker-compose restart)
+
+**Q: 승인 요청이 타임아웃됨**
+- A: APPROVAL_TIMEOUT 환경 변수 증가 (기본값 300초 = 5분)
+
+---
+
 ## 📞 Support
 
 문제 발생 시:
 1. 로그 확인: `docker logs mcp-server`
 2. DB 상태 확인: `python scripts/backup_security_db.py --output-dir /tmp`
 3. 캐시 무효화: RBAC Manager의 `invalidate_all_cache()` 호출
+4. 승인 로그 조회: 위의 SQL 쿼리 5개 참고

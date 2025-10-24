@@ -185,13 +185,28 @@ def call_mcp_tool(tool_name: str, user_id: str = None, **kwargs) -> Optional[Dic
             timeout=60,
         )
 
-        # Handle approval workflow (Issue #26)
+        # Handle approval workflow (Issue #26, #40)
+        # Check if approval workflow is enabled (Issue #40)
+        approval_enabled = os.getenv("APPROVAL_WORKFLOW_ENABLED", "false").lower() == "true"
+
         if response.status_code == 403:
             try:
                 error_data = response.json()
-                if error_data.get("approval_required"):
+                if error_data.get("approval_required") and approval_enabled:
+                    # Approval workflow is enabled, handle approval (Issue #40 with Issue #38 user_id)
                     request_id = error_data.get("request_id")
                     return handle_approval_workflow(request_id, tool_name, kwargs, user_id)
+                elif error_data.get("approval_required") and not approval_enabled:
+                    # Approval workflow is disabled, show user-friendly message
+                    print("⚠️ [Authorization Required]")
+                    print(f"   Tool: {tool_name}")
+                    print("   This tool requires administrator approval to execute.")
+                    print("   ")
+                    print("💡 [Solution]")
+                    print("   Set APPROVAL_WORKFLOW_ENABLED=true in your .env file")
+                    print("   Then restart the MCP server:")
+                    print("   $ docker compose -f docker/compose.p3.yml restart mcp-server")
+                    return None
             except Exception as e:
                 print(f"⚠️ Error handling approval response: {e}")
 
@@ -291,7 +306,15 @@ def handle_approval_workflow(
             time.sleep(polling_interval)
 
         # Timeout
-        console.print("❌ [red]Approval Timeout[/red]")
+        console.print("❌ [red]Approval Request Expired[/red]")
+        console.print(f"   Timeout: {approval_timeout} seconds")
+        console.print("   ")
+        console.print("💡 [What to do?]")
+        console.print("   1. Contact your administrator to retry")
+        console.print(f"   2. Or increase APPROVAL_TIMEOUT in .env (current: {approval_timeout}s)")
+        console.print(
+            "   3. Then restart: docker compose -f docker/compose.p3.yml restart mcp-server"
+        )
         return None
 
 
@@ -342,7 +365,13 @@ def wait_for_approval_simple(
         elapsed += polling_interval
         time.sleep(polling_interval)
 
-    print("❌ Approval Timeout")
+    print("❌ Approval Request Expired")
+    print(f"   Timeout: {approval_timeout} seconds")
+    print("")
+    print("💡 [What to do?]")
+    print("   1. Contact your administrator to retry")
+    print(f"   2. Or increase APPROVAL_TIMEOUT in .env (current: {approval_timeout}s)")
+    print("   3. Then restart: docker compose -f docker/compose.p3.yml restart mcp-server")
     return None
 
 
@@ -967,6 +996,11 @@ Examples:
     )
     parser.add_argument("--mcp-list", action="store_true", help="List available MCP tools")
     parser.add_argument(
+        "--approvals",
+        action="store_true",
+        help="List pending approval requests for current user (Issue #40)",
+    )
+    parser.add_argument(
         "--tools", action="store_true", help="Enable AI to use MCP tools automatically"
     )
     parser.add_argument(
@@ -1158,9 +1192,65 @@ Examples:
         return
 
     # Single query mode
-    if not args.query:
+    if not args.query and not args.approvals:
         parser.print_help()
         sys.exit(1)
+
+    # Handle approval requests listing (Issue #40)
+    if args.approvals:
+        try:
+            import sqlite3
+
+            db_path = os.getenv("SECURITY_DB_PATH", "/mnt/e/ai-data/sqlite/security.db")
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # Get user ID from environment or use default
+            user_id = os.getenv("USER", "unknown_user")
+
+            # Query pending approval requests for current user
+            cursor.execute(
+                """
+                SELECT request_id, tool_name, status, requested_at, expires_at,
+                       CAST((julianday(expires_at) - julianday('now')) * 60 AS INTEGER) as minutes_left
+                FROM approval_requests
+                WHERE user_id = ? AND status = 'pending'
+                ORDER BY requested_at DESC
+                LIMIT 20
+            """,
+                (user_id,),
+            )
+
+            rows = cursor.fetchall()
+            conn.close()
+
+            if not rows:
+                print("✅ No pending approval requests for your user")
+                sys.exit(0)
+
+            print(f"📋 Pending Approval Requests for {user_id}:")
+            print(f"{'ID (Short)':<10} {'Tool':<20} {'Requested':<20} {'Expires In':<12}")
+            print("-" * 62)
+
+            for row in rows:
+                short_id = row["request_id"][:8]
+                tool = row["tool_name"]
+                requested = row["requested_at"][11:16]  # HH:MM format
+                minutes = row["minutes_left"]
+                expires_str = f"{minutes}min" if minutes > 0 else "⏱️ EXPIRED"
+
+                print(f"{short_id:<10} {tool:<20} {requested:<20} {expires_str:<12}")
+
+            print("\n💡 Share request ID with admin to approve/reject")
+            sys.exit(0)
+
+        except Exception as e:
+            print(f"❌ Error listing approval requests: {e}")
+            print("💡 Make sure security database is initialized:")
+            print("   $ cd services/mcp-server")
+            print("   $ python scripts/seed_security_data.py --reset")
+            sys.exit(1)
 
     # Handle RAG query
     if args.rag:

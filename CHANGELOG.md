@@ -5,6 +5,54 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2025-10-24
+
+### Added
+
+- **Approval Workflow Operationalization** (#40): Production-ready operational documentation and CLI enhancements
+  - `GET /api/approvals/{request_id}/status` endpoint for CLI polling with timeout detection
+  - `APPROVAL_WORKFLOW_ENABLED` environment variable to enable/disable approval workflow
+  - `ai --approvals` command for users to list pending approval requests with expiry countdown
+  - Improved error messages for approval timeout and disabled workflow scenarios
+  - Comprehensive operations guide: `docs/security/OPERATIONS_GUIDE.md` (배포 절차, 일일 작업, 롤백 전략)
+
+### Enhanced
+
+- **Approval Workflow Documentation** (#40):
+  - `docs/security/IMPLEMENTATION_SUMMARY.md`: 배포 절차 (3단계), Feature Flags, 운영팀 체크리스트
+  - `docs/security/APPROVAL_GUIDE.md`: 로그 수집 SQL 쿼리 (5개), 운영팀 FAQ (10개 시나리오)
+  - `.env.example`: 상세한 환경 변수 주석 (배포 시 운영 권장값)
+  - `CLAUDE.md`: Issue #40 승인 워크플로우 운영화 완료 상태 반영
+
+- **CLI User Experience** (#40):
+  - Timeout 메시지에 구체적인 대응 절차 포함 (관리자 연락, 설정 변경, 재시작)
+  - 승인 워크플로우 비활성화 시 명확한 활성화 가이드 제공
+
+### Technical Details
+
+- **Operational Readiness** (#40): 1.6일 구현으로 프로덕션 배포 준비 완료
+  - Phase 1: 문서화 강화 (4시간) ✅
+  - Phase 2: CLI/서버 정합 (3시간) ✅
+  - Phase 3: 검증 및 테스트 (수동 E2E)
+  - Phase 4: 배포 준비 (1시간) ✅
+
+- **Database Enhancements**:
+  - `approval_requests` 테이블에 status 폴링용 인덱스 추가 (Issue #40에서 자동 구성)
+  - 타임아웃 감지 로직 개선 (expires_at 기반)
+
+- **Rollback Strategy** (#40): 3가지 시나리오 완벽 문서화
+  - Scenario 1: 환경 변수 문제 (30초)
+  - Scenario 2: CLI 호환성 문제 (10초)
+  - Scenario 3: 긴급 비활성화 (재시작 포함)
+
+### Notes
+
+- **Feature Flags**: `APPROVAL_WORKFLOW_ENABLED` 기본값 `false` (개발 편의, 프로덕션 시 `true`)
+- **Performance**: CLI 폴링 1초 간격 (시스템 부하 <1%)
+- **Compatibility**: 기존 Issue #26 승인 워크플로우와 100% 호환
+
+---
+
 ## [1.5.0] - 2025-10-20
 
 ### Added
