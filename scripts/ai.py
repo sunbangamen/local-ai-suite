@@ -294,10 +294,10 @@ def handle_approval_workflow(
         console.print(f"   Timeout: {approval_timeout} seconds")
         console.print("   ")
         console.print("💡 [What to do?]")
-        console.print(f"   1. Contact your administrator to retry")
+        console.print("   1. Contact your administrator to retry")
         console.print(f"   2. Or increase APPROVAL_TIMEOUT in .env (current: {approval_timeout}s)")
         console.print(
-            f"   3. Then restart: docker compose -f docker/compose.p3.yml restart mcp-server"
+            "   3. Then restart: docker compose -f docker/compose.p3.yml restart mcp-server"
         )
         return None
 
@@ -347,9 +347,9 @@ def wait_for_approval_simple(
     print(f"   Timeout: {approval_timeout} seconds")
     print("")
     print("💡 [What to do?]")
-    print(f"   1. Contact your administrator to retry")
+    print("   1. Contact your administrator to retry")
     print(f"   2. Or increase APPROVAL_TIMEOUT in .env (current: {approval_timeout}s)")
-    print(f"   3. Then restart: docker compose -f docker/compose.p3.yml restart mcp-server")
+    print("   3. Then restart: docker compose -f docker/compose.p3.yml restart mcp-server")
     return None
 
 
@@ -1210,7 +1210,7 @@ Examples:
 
                 print(f"{short_id:<10} {tool:<20} {requested:<20} {expires_str:<12}")
 
-            print(f"\n💡 Share request ID with admin to approve/reject")
+            print("\n💡 Share request ID with admin to approve/reject")
             sys.exit(0)
 
         except Exception as e:
