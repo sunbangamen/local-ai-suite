@@ -388,13 +388,20 @@ Configure OpenAI-compatible endpoint:
 - ✅ **에러 응답 개선**: RAG 503 + Retry-After 헤더 구현
 - ⚠️ **통합 테스트**: 로컬 환경에서 실행 완료, 테스트 로그 미저장 (재현 방법: `docs/progress/v1/fb_7.md:175` 참조)
 
-**Phase 4: Security Enhancement (Issue #8, #16, #18) - ✅ 100% Complete**
+**Phase 4: Security Enhancement (Issues #8, #16, #18, #40) - ✅ 100% Complete**
 - ✅ **RBAC 시스템**: SQLite 기반 역할 기반 접근 제어 (완료)
 - ✅ **승인 워크플로우**: HIGH/CRITICAL 도구 승인 메커니즘 (Issue #16 완료)
 - ✅ **감사 로깅**: 비동기 큐 기반 구조화된 로깅 (완료)
 - ✅ **FastAPI 미들웨어**: 자동 권한 검증 통합 완료
 - ✅ **통합 테스트**: RBAC 통합 테스트 작성 완료 (10/10 통과, FINAL_TEST_VERIFICATION.log)
 - ✅ **운영 준비**: DB 시딩 (10 tables), approval_requests 테이블, 벤치마크 (80 RPS), 문서화 완료 (Issue #18 완료)
+- ✅ **승인 워크플로우 운영화** (Issue #40 - 2025-10-24):
+  - 배포 절차 (3단계), 롤백 전략 (3가지), SQL 쿼리 (5개)
+  - CLI 상태 폴링 API (`GET /api/approvals/{id}/status`) 구현
+  - 환경 변수 체크 (`APPROVAL_WORKFLOW_ENABLED`)
+  - 사용자 승인 요청 조회 명령 (`ai --approvals`)
+  - 운영팀 가이드 (OPERATIONS_GUIDE.md), FAQ (10개)
+  - 예상 일정: 1.6일 (Phase 1-2 완료, Phase 3-4 진행 중)
 
 **New MCP Git Tools:**
 ```bash

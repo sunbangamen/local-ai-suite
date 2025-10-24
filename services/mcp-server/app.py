@@ -496,6 +496,89 @@ async def reject_request(
     return {"status": "rejected", "request_id": request_id, "responder": user_id}
 
 
+@app.get("/api/approvals/{request_id}/status")
+async def get_approval_status(
+    request_id: str,
+    user_id: str = Header(None, alias="X-User-ID"),
+):
+    """
+    승인 요청의 현재 상태 조회
+
+    CLI 폴링용 엔드포인트 (Issue #40)
+    - scripts/ai.py에서 1초 간격으로 호출
+    - pending → approved/rejected/expired 상태 변화 감지
+
+    Args:
+        request_id: 승인 요청 ID (정규 UUID 또는 처음 8자 short ID)
+        user_id: 요청 사용자 (X-User-ID 헤더)
+
+    Returns:
+        {
+            "status": "pending" | "approved" | "rejected" | "expired" | "not_found",
+            "request_id": "full_uuid",
+            "tool_name": "...",
+            "requested_at": "2025-10-24T...",
+            "expires_at": "2025-10-24T...",
+            "responded_at": "2025-10-24T..." (status != pending 시만),
+            "responder_id": "admin_user" (status != pending 시만),
+            "response_reason": "..." (거부/승인 사유)
+        }
+    """
+    try:
+        from security_database import get_security_database
+
+        db = get_security_database()
+
+        # 요청 조회 (short ID 또는 full UUID 지원)
+        request_data = await db.get_approval_request(request_id)
+
+        if not request_data:
+            return {
+                "status": "not_found",
+                "request_id": request_id,
+                "error": f"Approval request not found: {request_id}",
+            }
+
+        # 타임아웃 확인
+        import datetime
+        expires_at = datetime.datetime.fromisoformat(request_data.get("expires_at", ""))
+        if request_data.get("status") == "pending" and datetime.datetime.now() > expires_at:
+            # 만료된 요청 표시
+            return {
+                "status": "expired",
+                "request_id": request_data["request_id"],
+                "tool_name": request_data["tool_name"],
+                "requested_at": request_data["requested_at"],
+                "expires_at": request_data["expires_at"],
+            }
+
+        # 현재 상태 반환
+        response = {
+            "status": request_data.get("status", "pending"),
+            "request_id": request_data["request_id"],
+            "tool_name": request_data["tool_name"],
+            "requested_at": request_data["requested_at"],
+            "expires_at": request_data["expires_at"],
+        }
+
+        # 응답된 경우 추가 정보 포함
+        if request_data.get("responded_at"):
+            response["responded_at"] = request_data["responded_at"]
+        if request_data.get("responder_id"):
+            response["responder_id"] = request_data["responder_id"]
+        if request_data.get("response_reason"):
+            response["response_reason"] = request_data["response_reason"]
+
+        return response
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "request_id": request_id,
+            "error": f"Status check failed: {str(e)}",
+        }
+
+
 # ============================================================================
 # MCP Tools API
 # ============================================================================
