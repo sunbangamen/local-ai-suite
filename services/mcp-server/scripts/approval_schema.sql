@@ -36,7 +36,8 @@ CREATE INDEX IF NOT EXISTS idx_approval_requested_at
     ON approval_requests(requested_at DESC);
 
 -- View: pending_approvals (for convenience)
-CREATE VIEW IF NOT EXISTS pending_approvals AS
+DROP VIEW IF EXISTS pending_approvals;
+CREATE VIEW pending_approvals AS
 SELECT
     request_id,
     tool_name,
@@ -45,7 +46,10 @@ SELECT
     request_data,
     requested_at,
     expires_at,
-    CAST((julianday(expires_at) - julianday('now')) * 86400 AS INTEGER) AS seconds_until_expiry
+    CASE
+        WHEN datetime('now') >= expires_at THEN 0
+        ELSE CAST(((julianday(expires_at) - julianday('now')) * 86400) + 0.999 AS INTEGER)
+    END AS seconds_until_expiry
 FROM approval_requests
 WHERE status = 'pending'
   AND datetime('now') < expires_at
