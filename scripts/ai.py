@@ -296,7 +296,9 @@ def handle_approval_workflow(
         console.print("💡 [What to do?]")
         console.print(f"   1. Contact your administrator to retry")
         console.print(f"   2. Or increase APPROVAL_TIMEOUT in .env (current: {approval_timeout}s)")
-        console.print(f"   3. Then restart: docker compose -f docker/compose.p3.yml restart mcp-server")
+        console.print(
+            f"   3. Then restart: docker compose -f docker/compose.p3.yml restart mcp-server"
+        )
         return None
 
 
@@ -1166,9 +1168,8 @@ Examples:
     if args.approvals:
         try:
             import sqlite3
-            db_path = os.getenv(
-                "SECURITY_DB_PATH", "/mnt/e/ai-data/sqlite/security.db"
-            )
+
+            db_path = os.getenv("SECURITY_DB_PATH", "/mnt/e/ai-data/sqlite/security.db")
             conn = sqlite3.connect(db_path)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()

@@ -541,6 +541,7 @@ async def get_approval_status(
 
         # 타임아웃 확인
         import datetime
+
         expires_at = datetime.datetime.fromisoformat(request_data.get("expires_at", ""))
         if request_data.get("status") == "pending" and datetime.datetime.now() > expires_at:
             # 만료된 요청 표시
