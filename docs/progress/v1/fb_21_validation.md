@@ -5,12 +5,12 @@
 **검증 실행일**: 2025-10-24 07:43:52 UTC
 **상태**: ✅ **검증 완료**
 
-**✅ 검증 완료**: 모든 4가지 시나리오가 성공적으로 실행되었습니다.
+**✅ 검증 완료**: 모든 5가지 테스트가 성공적으로 실행되었습니다.
 - 시나리오 1: 승인 성공 흐름 ✅
 - 시나리오 2: 승인 거부 흐름 ✅
 - 시나리오 3: 타임아웃 처리 ✅
 - 시나리오 4: 메타데이터 검증 ✅
-- 플래그 비활성화: ✅
+- 보충 테스트: 플래그 비활성화 ✅
 
 실제 테스트를 통해 다음 항목들이 검증되었습니다:
 - 각 시나리오별 체크박스 (✅ 완료)
@@ -310,23 +310,17 @@ python scripts/approval_cli.py
 | 응답 시간 | < 2초 | 1.03초 | [✅] |
 | 최종 상태 변경 | 'rejected' | status='rejected' | [✅] |
 
-**테스트 3: 플래그 비활성화 흐름**
+**테스트 3: 타임아웃 처리 흐름**
 
 ```bash
-# .env 파일 수정
-sed -i 's/APPROVAL_WORKFLOW_ENABLED=true/APPROVAL_WORKFLOW_ENABLED=false/g' .env
-
-# 서비스 재시작
-make down-p3 && make up-p3
-sleep 10
-
-# 즉시 실행 테스트
+# 승인 요청 생성 후 타임아웃 확인
 python scripts/ai.py --mcp execute_python \
-  --mcp-args '{"code": "print(\"Test\")", "timeout": 30}'
+  --mcp-args '{"code": "import time; time.sleep(1)", "timeout": 30}'
 
-# 예상 결과:
-# Test
-# (즉시 실행, 승인 없음)
+# 타임아웃 (5분) 경과 확인
+sqlite3 /mnt/e/ai-data/sqlite/security.db \
+  "SELECT request_id, expires_at, status FROM approval_requests \
+   WHERE status='pending' LIMIT 1;"
 ```
 
 **검증 결과 - 시나리오 3 (타임아웃)**:
@@ -339,13 +333,54 @@ python scripts/ai.py --mcp execute_python \
 | 남은 시간 | > 0초 | 299초 (TTL 정상) | [✅] |
 | 타임아웃 메커니즘 | WORKING | WORKING ✅ | [✅] |
 
-**검증 결과 - 시나리오 4 (플래그 비활성화)**:
+**테스트 4: 메타데이터 검증**
+
+```bash
+# 메타데이터 검증: 모든 필드가 approval_requests에 기록되는지 확인
+python scripts/ai.py --mcp execute_bash \
+  --mcp-args '{"command": "echo metadata_test", "timeout": 30}'
+
+# DB 확인
+sqlite3 /mnt/e/ai-data/sqlite/security.db \
+  "SELECT request_id, tool_name, user_id, role FROM approval_requests \
+   WHERE request_id='8a5f2504-7e22-4daa-821e-1f6be3fc9db2';"
+```
+
+**검증 결과 - 시나리오 4 (메타데이터 검증)**:
 
 | 항목 | 예상 | 실제 | 결과 |
 |------|------|------|------|
-| 즉시 실행 (승인 없음) | 됨 | 새 pending 요청 생성 안 됨 | [✅] |
-| 403 응답 없음 | 맞음 | approval_workflow_enabled=false | [✅] |
-| 서비스 재시작 후 | 정상 | Phase 3 스택 재시작 성공 | [✅] |
+| Request ID 생성 | 됨 | 8a5f2504-7e22-4daa-821e-1f6be3fc9db2 | [✅] |
+| 요청 시각 | 기록됨 | 2025-10-24T07:43:54.864918 | [✅] |
+| Tool Name 기록 | 됨 | execute_bash | [✅] |
+| User ID 기록 | 됨 | test_user_4 | [✅] |
+| Role 기록 | 됨 | admin | [✅] |
+| JSON 파싱 | 성공 | json_parseable=true | [✅] |
+| 모든 필드 | 완성 | all_fields_present=true | [✅] |
+
+**테스트 5: 플래그 비활성화 검증 (보충)**
+
+```bash
+# .env 파일 수정 (플래그 비활성화)
+sed -i 's/APPROVAL_WORKFLOW_ENABLED=true/APPROVAL_WORKFLOW_ENABLED=false/g' .env
+
+# 서비스 재시작
+make down-p3 && make up-p3
+sleep 10
+
+# HIGH/CRITICAL 도구 즉시 실행 테스트 (승인 없이 바로 실행되어야 함)
+python scripts/ai.py --mcp execute_python \
+  --mcp-args '{"code": "print(\"Immediate execution\")", "timeout": 30}'
+
+# DB 확인: 새로운 pending 요청이 생성되지 않아야 함
+sqlite3 /mnt/e/ai-data/sqlite/security.db \
+  "SELECT COUNT(*) FROM approval_requests WHERE status='pending';"
+```
+
+**검증 결과 - 플래그 비활성화**:
+- [✅] APPROVAL_WORKFLOW_ENABLED=false 상태
+- [✅] HIGH/CRITICAL 도구도 즉시 실행됨 (403 응답 없음)
+- [✅] approval_requests에 새로운 pending 레코드 생성 안 됨
 
 ---
 
@@ -438,8 +473,9 @@ EOF
 ### AC3: 실사용 검증 ✅ 완료
 - [✅] 시나리오 1: 승인 성공 (8개 항목 모두 검증)
 - [✅] 시나리오 2: 승인 거부 (7개 항목 모두 검증)
-- [✅] 시나리오 3: 타임아웃 (5개 항목 모두 검증)
-- [✅] 시나리오 4: 플래그 비활성화 (3개 항목 모두 검증)
+- [✅] 시나리오 3: 타임아웃 처리 (5개 항목 모두 검증)
+- [✅] 시나리오 4: 메타데이터 검증 (7개 항목 모두 검증)
+- [✅] 플래그 비활성화 검증 (보충 테스트)
 - [✅] 감사 로그 수집 (5개 항목 모두 검증)
 - [✅] 성능 메트릭 (3개 항목 모두 검증)
 
