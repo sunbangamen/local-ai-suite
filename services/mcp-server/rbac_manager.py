@@ -6,13 +6,38 @@ Role-Based Access Control permission checking with caching
 
 import asyncio
 import logging
+import math
 import time
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from security_database import get_security_database
 from settings import SecuritySettings
 
 logger = logging.getLogger(__name__)
+
+
+def _calculate_seconds_until_expiry(expires_at: Optional[str]) -> int:
+    """
+    Calculate remaining seconds until expiry time.
+
+    Args:
+        expires_at: Expiry datetime as string in format "YYYY-MM-DD HH:MM:SS", or None
+
+    Returns:
+        Non-negative integer representing seconds remaining (0 if expired or invalid)
+    """
+    if not expires_at:
+        return 0
+
+    try:
+        expiry_dt = datetime.strptime(expires_at, "%Y-%m-%d %H:%M:%S")
+        now = datetime.utcnow()
+        seconds_remaining = math.ceil((expiry_dt - now).total_seconds())
+        return max(seconds_remaining, 0)  # Return 0 if already expired
+    except (ValueError, TypeError):
+        logger.warning(f"Failed to parse expires_at: {expires_at}")
+        return 0
 
 
 class RBACManager:
@@ -194,13 +219,19 @@ class RBACManager:
             "request_id": request_id,
             "expires_at": None,
             "status": "pending",
+            "seconds_until_expiry": 0,
         }
 
-        # Fetch request info to expose expires_at to clients
+        # Fetch request info to expose expires_at and seconds_until_expiry to clients
         try:
             created_request = await self.db.get_approval_request(request_id)
             if created_request:
-                approval_context["expires_at"] = created_request.get("expires_at")
+                expires_at = created_request.get("expires_at")
+                approval_context["expires_at"] = expires_at
+                # Calculate actual remaining seconds from expires_at
+                approval_context["seconds_until_expiry"] = _calculate_seconds_until_expiry(
+                    expires_at
+                )
         except Exception as exc:  # pragma: no cover - defensive guard
             logger.error(f"Failed to fetch approval request after creation: {exc}")
 
@@ -231,9 +262,14 @@ class RBACManager:
                     return "error"
 
                 status = request["status"]
-                # Keep context up to date
+                expires_at = request.get("expires_at")
+                # Keep context up to date with current values from DB
                 approval_context["status"] = status
-                approval_context["expires_at"] = request.get("expires_at")
+                approval_context["expires_at"] = expires_at
+                # Recalculate remaining seconds on each poll for accurate countdown
+                approval_context["seconds_until_expiry"] = _calculate_seconds_until_expiry(
+                    expires_at
+                )
 
                 if status in ["approved", "rejected", "expired", "timeout"]:
                     approval_event.set()

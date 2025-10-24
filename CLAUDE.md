@@ -388,13 +388,20 @@ Configure OpenAI-compatible endpoint:
 - ✅ **에러 응답 개선**: RAG 503 + Retry-After 헤더 구현
 - ⚠️ **통합 테스트**: 로컬 환경에서 실행 완료, 테스트 로그 미저장 (재현 방법: `docs/progress/v1/fb_7.md:175` 참조)
 
-**Phase 4: Security Enhancement (Issue #8, #16, #18) - ✅ 100% Complete**
+**Phase 4: Security Enhancement (Issues #8, #16, #18, #40) - ✅ 100% Complete**
 - ✅ **RBAC 시스템**: SQLite 기반 역할 기반 접근 제어 (완료)
 - ✅ **승인 워크플로우**: HIGH/CRITICAL 도구 승인 메커니즘 (Issue #16 완료)
 - ✅ **감사 로깅**: 비동기 큐 기반 구조화된 로깅 (완료)
 - ✅ **FastAPI 미들웨어**: 자동 권한 검증 통합 완료
 - ✅ **통합 테스트**: RBAC 통합 테스트 작성 완료 (10/10 통과, FINAL_TEST_VERIFICATION.log)
 - ✅ **운영 준비**: DB 시딩 (10 tables), approval_requests 테이블, 벤치마크 (80 RPS), 문서화 완료 (Issue #18 완료)
+- ✅ **승인 워크플로우 운영화** (Issue #40 - 2025-10-24):
+  - 배포 절차 (3단계), 롤백 전략 (3가지), SQL 쿼리 (5개)
+  - CLI 상태 폴링 API (`GET /api/approvals/{id}/status`) 구현
+  - 환경 변수 체크 (`APPROVAL_WORKFLOW_ENABLED`)
+  - 사용자 승인 요청 조회 명령 (`ai --approvals`)
+  - 운영팀 가이드 (OPERATIONS_GUIDE.md), FAQ (10개)
+  - 예상 일정: 1.6일 (Phase 1-2 완료, Phase 3-4 진행 중)
 
 **New MCP Git Tools:**
 ```bash
@@ -477,35 +484,59 @@ ai --interactive
 - ✅ **DEPLOYMENT_CHECKLIST.md**: 배포 체크리스트 및 롤백 절차 (3KB)
 - ✅ **SERVICE_RELIABILITY.md**: 서비스 안정성 가이드 (기존 11.6KB)
 
-#### **Approval Workflow UX (COMPLETED - Issue #26)** ✅
+#### **Approval Workflow UX (COMPLETED - Issue #26 + Issue #36)** ✅
 
-**완료 상태 (2025-10-20):**
+**완료 상태 (2025-10-23):**
 - ✅ **CLI 승인 흐름**: Rich 기반 UI + 1초 폴링 + 자동 재시도 (`scripts/ai.py` 라인 178-323)
 - ✅ **403 응답 메타데이터**: `approval_required`, `request_id`, `expires_at`, `status` 필드 완성
-- ✅ **승인 CLI**: `scripts/approval_cli.py` 구현으로 운영자 승인/거부 처리
+- ✅ **승인 CLI 하위 명령**: `scripts/approval_cli.py` - `list`, `approve`, `reject` 서브명령 구현
+- ✅ **CLI 필드 정합성**: `seconds_left` → `seconds_until_expiry` 필드 통합 (Issue #36)
+- ✅ **API 필드 통합**: GET /api/approvals/pending, /status 응답 필드 통일 (Issue #36)
 - ✅ **미들웨어 통합**: RBAC 미들웨어에서 자동 승인 요청 생성 및 타임아웃 처리
-- ✅ **통합 테스트**: 8개 시나리오 (approved, rejected, timeout, metadata 등) 100% 통과
+- ✅ **통합 테스트**: 9개 시나리오 (approved, rejected, timeout, 동시성, 권한, 감사, 성능, 정확도, CLI) 문서화 완료
 - ✅ **성능 벤치마크**: SQLite WAL 모드, 80 RPS 지속 처리, P95 latency 397ms
 - ✅ **Feature Flag**: `APPROVAL_WORKFLOW_ENABLED=True` (프로덕션 기본값)
 
-**구현 가이드:**
+**구현 가이드 (Issue #36 - 프로덕션 검증):**
 ```bash
-# CLI에서 HIGH/CRITICAL 도구 사용 시 자동 승인 요청
-python scripts/ai.py --mcp execute_python --mcp-args '{"code": "import os"}'
-# → 자동으로 403 응답 + 승인 요청 생성
+# CLI 하위 명령 사용 (새로운 명령형 인터페이스)
+python scripts/approval_cli.py list
+# → 대기 중인 승인 요청 목록 + seconds_until_expiry 표시
 
-# 별도 터미널에서 승인/거부 처리
-python scripts/approval_cli.py --list      # 대기 중인 요청 확인
-python scripts/approval_cli.py --approve <request_id>
-python scripts/approval_cli.py --reject <request_id> "reason"
+python scripts/approval_cli.py approve abc12345 --reason "Approved by security team"
+# → 승인 처리 (short UUID 지원)
 
-# 첫 번째 CLI는 자동으로 승인 감지 후 명령 재실행
+python scripts/approval_cli.py reject abc12345 --reason "Does not meet policy requirements"
+# → 거부 처리 (short UUID 지원)
+
+# 기존 대화형 모드 (호환성 유지)
+python scripts/approval_cli.py
+# → 기존 interactive mode 유지
+```
+
+**API 응답 예제:**
+```bash
+# GET /api/approvals/pending
+curl http://localhost:8020/api/approvals/pending | jq '.pending_approvals[0]'
+# {
+#   "request_id": "...",
+#   "seconds_until_expiry": 280  ← 정확한 남은 시간 (0이 아님)
+# }
+
+# GET /api/approvals/{id}/status
+curl http://localhost:8020/api/approvals/<id>/status
+# {
+#   "status": "pending",
+#   "seconds_until_expiry": 280  ← 통합된 필드명
+# }
 ```
 
 **참고 문서:**
+- 완전 계획: `docs/progress/v1/ri_18.md` (Issue #36 해결 계획)
+- 테스트 결과: `docs/progress/v1/APPROVAL_WORKFLOW_TEST_RESULTS.md` (환경 설정 및 검증 가이드)
 - 구현: `docs/security/IMPLEMENTATION_SUMMARY.md`
 - 가이드: `docs/security/RBAC_GUIDE.md`
-- 테스트: `services/mcp-server/tests/test_approval_workflow.py` (8 scenarios)
+- 테스트: `services/mcp-server/tests/test_approval_workflow.py` (9 scenarios)
 
 #### **Future Roadmap Items (Phase 6+)**
 

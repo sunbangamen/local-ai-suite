@@ -143,11 +143,21 @@ def detect_query_type(query: str) -> str:
     return "chat"
 
 
-def call_mcp_tool(tool_name: str, **kwargs) -> Optional[Dict[str, Any]]:
+def call_mcp_tool(tool_name: str, user_id: str = None, **kwargs) -> Optional[Dict[str, Any]]:
     """
     Call MCP server tool with current working directory support (UTF-8 enhanced)
+
+    Args:
+        tool_name: Name of the MCP tool to call
+        user_id: User ID for RBAC authentication (default: env var MCP_USER_ID or 'dev_user')
+        **kwargs: Tool arguments
     """
     headers = {"Content-Type": "application/json; charset=utf-8"}
+
+    # Add X-User-ID header for RBAC authentication (Issue #38)
+    if user_id is None:
+        user_id = os.getenv("MCP_USER_ID", "dev_user")
+    headers["X-User-ID"] = user_id
 
     # Add current working directory to kwargs for path-based tools
     current_dir = os.getcwd()
@@ -175,13 +185,28 @@ def call_mcp_tool(tool_name: str, **kwargs) -> Optional[Dict[str, Any]]:
             timeout=60,
         )
 
-        # Handle approval workflow (Issue #26)
+        # Handle approval workflow (Issue #26, #40)
+        # Check if approval workflow is enabled (Issue #40)
+        approval_enabled = os.getenv("APPROVAL_WORKFLOW_ENABLED", "false").lower() == "true"
+
         if response.status_code == 403:
             try:
                 error_data = response.json()
-                if error_data.get("approval_required"):
+                if error_data.get("approval_required") and approval_enabled:
+                    # Approval workflow is enabled, handle approval (Issue #40 with Issue #38 user_id)
                     request_id = error_data.get("request_id")
-                    return handle_approval_workflow(request_id, tool_name, kwargs)
+                    return handle_approval_workflow(request_id, tool_name, kwargs, user_id)
+                elif error_data.get("approval_required") and not approval_enabled:
+                    # Approval workflow is disabled, show user-friendly message
+                    print("⚠️ [Authorization Required]")
+                    print(f"   Tool: {tool_name}")
+                    print("   This tool requires administrator approval to execute.")
+                    print("   ")
+                    print("💡 [Solution]")
+                    print("   Set APPROVAL_WORKFLOW_ENABLED=true in your .env file")
+                    print("   Then restart the MCP server:")
+                    print("   $ docker compose -f docker/compose.p3.yml restart mcp-server")
+                    return None
             except Exception as e:
                 print(f"⚠️ Error handling approval response: {e}")
 
@@ -203,12 +228,18 @@ def call_mcp_tool(tool_name: str, **kwargs) -> Optional[Dict[str, Any]]:
 
 
 def handle_approval_workflow(
-    request_id: str, tool_name: str, args: Dict[str, Any]
+    request_id: str, tool_name: str, args: Dict[str, Any], user_id: str = None
 ) -> Optional[Dict[str, Any]]:
     """
     Handle approval workflow for HIGH/CRITICAL tools (Issue #26, Phase 1)
 
     Shows progress bar while waiting for admin approval, then re-executes the tool
+
+    Args:
+        request_id: Approval request ID
+        tool_name: MCP tool name
+        args: Tool arguments
+        user_id: User ID for RBAC (default: env var MCP_USER_ID or 'dev_user')
     """
     try:
         from rich.progress import (
@@ -223,7 +254,7 @@ def handle_approval_workflow(
         console = RichConsole()
     except ImportError:
         # Fallback if Rich is not installed
-        return wait_for_approval_simple(request_id, tool_name, args)
+        return wait_for_approval_simple(request_id, tool_name, args, user_id)
 
     approval_timeout = int(os.getenv("APPROVAL_TIMEOUT", "300"))  # 5 minutes default
     polling_interval = int(os.getenv("APPROVAL_POLLING_INTERVAL", "1"))  # 1 second default
@@ -257,8 +288,8 @@ def handle_approval_workflow(
 
                 if status == "approved":
                     console.print("✅ [green]Approval Granted![/green]")
-                    # Re-execute the tool
-                    return call_mcp_tool(tool_name, **args)
+                    # Re-execute the tool with same user_id
+                    return call_mcp_tool(tool_name, user_id=user_id, **args)
 
                 elif status in ["rejected", "expired", "timeout"]:
                     console.print(f"❌ [red]Approval {status}[/red]")
@@ -275,15 +306,29 @@ def handle_approval_workflow(
             time.sleep(polling_interval)
 
         # Timeout
-        console.print("❌ [red]Approval Timeout[/red]")
+        console.print("❌ [red]Approval Request Expired[/red]")
+        console.print(f"   Timeout: {approval_timeout} seconds")
+        console.print("   ")
+        console.print("💡 [What to do?]")
+        console.print("   1. Contact your administrator to retry")
+        console.print(f"   2. Or increase APPROVAL_TIMEOUT in .env (current: {approval_timeout}s)")
+        console.print(
+            "   3. Then restart: docker compose -f docker/compose.p3.yml restart mcp-server"
+        )
         return None
 
 
 def wait_for_approval_simple(
-    request_id: str, tool_name: str, args: Dict[str, Any]
+    request_id: str, tool_name: str, args: Dict[str, Any], user_id: str = None
 ) -> Optional[Dict[str, Any]]:
     """
     Simple fallback approval handler (no Rich library)
+
+    Args:
+        request_id: Approval request ID
+        tool_name: MCP tool name
+        args: Tool arguments
+        user_id: User ID for RBAC (default: env var MCP_USER_ID or 'dev_user')
     """
     approval_timeout = int(os.getenv("APPROVAL_TIMEOUT", "300"))
     polling_interval = int(os.getenv("APPROVAL_POLLING_INTERVAL", "1"))
@@ -304,7 +349,7 @@ def wait_for_approval_simple(
 
             if status == "approved":
                 print("✅ Approval Granted!")
-                return call_mcp_tool(tool_name, **args)
+                return call_mcp_tool(tool_name, user_id=user_id, **args)
 
             elif status in ["rejected", "expired", "timeout"]:
                 print(f"❌ Approval {status}")
@@ -320,7 +365,13 @@ def wait_for_approval_simple(
         elapsed += polling_interval
         time.sleep(polling_interval)
 
-    print("❌ Approval Timeout")
+    print("❌ Approval Request Expired")
+    print(f"   Timeout: {approval_timeout} seconds")
+    print("")
+    print("💡 [What to do?]")
+    print("   1. Contact your administrator to retry")
+    print(f"   2. Or increase APPROVAL_TIMEOUT in .env (current: {approval_timeout}s)")
+    print("   3. Then restart: docker compose -f docker/compose.p3.yml restart mcp-server")
     return None
 
 
@@ -937,7 +988,18 @@ Examples:
     parser.add_argument("--optimize", action="store_true", help="Run database optimization")
     parser.add_argument("--mcp", metavar="TOOL", help="Call MCP tool directly")
     parser.add_argument("--mcp-args", metavar="ARGS", help="Arguments for MCP tool (JSON format)")
+    parser.add_argument(
+        "--mcp-user",
+        metavar="USER_ID",
+        default="dev_user",
+        help="User ID for RBAC authentication (default: dev_user)",
+    )
     parser.add_argument("--mcp-list", action="store_true", help="List available MCP tools")
+    parser.add_argument(
+        "--approvals",
+        action="store_true",
+        help="List pending approval requests for current user (Issue #40)",
+    )
     parser.add_argument(
         "--tools", action="store_true", help="Enable AI to use MCP tools automatically"
     )
@@ -967,6 +1029,10 @@ Examples:
     parser.add_argument("--memory-dir", metavar="DIR", help="Override memory storage directory")
 
     args = parser.parse_args()
+
+    # Ensure all MCP invocations share the same user context for RBAC
+    if args.mcp_user:
+        os.environ["MCP_USER_ID"] = args.mcp_user
 
     # Handle indexing command
     if args.index is not None:
@@ -1025,7 +1091,7 @@ Examples:
 
     # Handle direct MCP tool call
     if args.mcp:
-        handle_mcp_call(args.mcp, args.mcp_args)
+        handle_mcp_call(args.mcp, args.mcp_args, args.mcp_user)
         sys.exit(0)
 
     # Determine model type and streaming preference
@@ -1110,7 +1176,7 @@ Examples:
                     parts = query[5:].split(" ", 1)
                     tool_name = parts[0]
                     args_json = parts[1] if len(parts) > 1 else None
-                    handle_mcp_call(tool_name, args_json)
+                    handle_mcp_call(tool_name, args_json, user_id=args.mcp_user)
                     continue
                 else:
                     model_type = "auto"
@@ -1126,9 +1192,65 @@ Examples:
         return
 
     # Single query mode
-    if not args.query:
+    if not args.query and not args.approvals:
         parser.print_help()
         sys.exit(1)
+
+    # Handle approval requests listing (Issue #40)
+    if args.approvals:
+        try:
+            import sqlite3
+
+            db_path = os.getenv("SECURITY_DB_PATH", "/mnt/e/ai-data/sqlite/security.db")
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # Get user ID from environment or use default
+            user_id = os.getenv("USER", "unknown_user")
+
+            # Query pending approval requests for current user
+            cursor.execute(
+                """
+                SELECT request_id, tool_name, status, requested_at, expires_at,
+                       CAST((julianday(expires_at) - julianday('now')) * 60 AS INTEGER) as minutes_left
+                FROM approval_requests
+                WHERE user_id = ? AND status = 'pending'
+                ORDER BY requested_at DESC
+                LIMIT 20
+            """,
+                (user_id,),
+            )
+
+            rows = cursor.fetchall()
+            conn.close()
+
+            if not rows:
+                print("✅ No pending approval requests for your user")
+                sys.exit(0)
+
+            print(f"📋 Pending Approval Requests for {user_id}:")
+            print(f"{'ID (Short)':<10} {'Tool':<20} {'Requested':<20} {'Expires In':<12}")
+            print("-" * 62)
+
+            for row in rows:
+                short_id = row["request_id"][:8]
+                tool = row["tool_name"]
+                requested = row["requested_at"][11:16]  # HH:MM format
+                minutes = row["minutes_left"]
+                expires_str = f"{minutes}min" if minutes > 0 else "⏱️ EXPIRED"
+
+                print(f"{short_id:<10} {tool:<20} {requested:<20} {expires_str:<12}")
+
+            print("\n💡 Share request ID with admin to approve/reject")
+            sys.exit(0)
+
+        except Exception as e:
+            print(f"❌ Error listing approval requests: {e}")
+            print("💡 Make sure security database is initialized:")
+            print("   $ cd services/mcp-server")
+            print("   $ python scripts/seed_security_data.py --reset")
+            sys.exit(1)
 
     # Handle RAG query
     if args.rag:
@@ -1271,8 +1393,15 @@ def show_mcp_tools():
             print(f"   Required: {', '.join(required)}")
 
 
-def handle_mcp_call(tool_name: str, args_json: str = None):
-    """Handle direct MCP tool call"""
+def handle_mcp_call(tool_name: str, args_json: str = None, user_id: str = None):
+    """
+    Handle direct MCP tool call
+
+    Args:
+        tool_name: MCP tool name
+        args_json: JSON arguments for the tool
+        user_id: User ID for RBAC authentication (default: 'dev_user')
+    """
     try:
         # Parse arguments if provided
         kwargs = {}
@@ -1301,8 +1430,8 @@ def handle_mcp_call(tool_name: str, args_json: str = None):
                         print("💡 Try using double quotes and proper JSON format")
                         return
 
-        # Call the tool
-        result = call_mcp_tool(tool_name, **kwargs)
+        # Call the tool with user_id for RBAC
+        result = call_mcp_tool(tool_name, user_id=user_id, **kwargs)
         if result:
             print("✅ MCP Tool Result:")
             if isinstance(result, dict):
