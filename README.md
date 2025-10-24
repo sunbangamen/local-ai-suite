@@ -142,6 +142,48 @@ python3 tests/security_tests.py
 
 **기대 결과:** 모든 보안 테스트가 통과해야 하며, 실패 시 보안 취약점이 있음을 의미합니다.
 
+### 승인 워크플로우 (Approval Workflow)
+
+MCP 서버의 HIGH/CRITICAL 도구는 기본적으로 승인 워크플로우를 지원합니다:
+
+**기본 설정** (개발 모드):
+- `APPROVAL_WORKFLOW_ENABLED=false` (기본값)
+- `APPROVAL_TIMEOUT=300` (승인 타임아웃 5분)
+- `APPROVAL_POLLING_INTERVAL=1` (1초 폴링)
+
+**프로덕션 활성화**:
+```bash
+# .env 파일 설정
+echo "APPROVAL_WORKFLOW_ENABLED=true" >> .env
+
+# Phase 3 서비스 재시작
+make down-p3 && make up-p3
+```
+
+**사용 예시**:
+```bash
+# 1. CRITICAL 도구 호출 (execute_python)
+python scripts/ai.py --mcp execute_python --mcp-args '{"code": "import os"}'
+# → 403 Forbidden 응답 + 승인 대기
+
+# 2. 별도 터미널에서 승인 처리
+python scripts/approval_cli.py
+# → 대기 중인 요청 목록 표시 및 승인/거부 선택
+
+# 3. 첫 번째 CLI에서 자동 폴링
+# → 승인 감지 후 도구 자동 재실행
+```
+
+**문서**:
+- 상세 운영 가이드: `docs/runbooks/approval_workflow.md`
+- RBAC 설정 및 권한 관리: `docs/security/RBAC_GUIDE.md`
+- 구현 상세 정보: `docs/security/IMPLEMENTATION_SUMMARY.md`
+
+**참고**:
+- 승인 요청은 `security.db` (SQLite) 에 저장됨
+- 5분(기본) 이내 승인하지 않으면 자동 timeout
+- 모든 승인/거부 기록은 감사 로그(`security_audit_logs`)에 기록됨
+
 ### RAG 통합 테스트 실행
 
 RAG 서비스의 end-to-end 통합 테스트를 실행하여 전체 시스템 동작을 검증할 수 있습니다:

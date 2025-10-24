@@ -286,6 +286,76 @@ docker-compose -f docker/compose.p3.yml restart mcp-server
 
 ---
 
+## 🚀 Production Deployment Checklist
+
+프로덕션 환경에서 승인 워크플로우를 활성화할 때 다음 체크리스트를 따르세요:
+
+### 사전 점검 (Pre-Deployment)
+- [ ] **RBAC 시스템 준비**
+  - [ ] `.env` 파일에서 `RBAC_ENABLED=true` 확인
+  - [ ] `security.db` 파일 존재 여부 확인: `/mnt/e/ai-data/sqlite/security.db`
+  - [ ] 사용자/역할/권한 데이터 시딩: `python scripts/seed_security_data.py --reset`
+  - [ ] 백업 스크립트 설정: `python scripts/backup_security_db.py --output-dir /mnt/e/ai-data/backups`
+
+- [ ] **승인 워크플로우 활성화**
+  - [ ] `.env` 파일 또는 `docker/compose.p3.yml` 환경 변수 확인:
+    ```bash
+    APPROVAL_WORKFLOW_ENABLED=true
+    APPROVAL_TIMEOUT=300          # 5분 (필요시 조정)
+    APPROVAL_POLLING_INTERVAL=1   # 1초 폴링
+    APPROVAL_MAX_PENDING=50       # 최대 대기 요청 수
+    ```
+  - [ ] Docker Compose에서 `.env` 변수 로드 확인 (스택 재시작 필수)
+  - [ ] `approval_requests` 테이블 존재 여부 확인
+
+### 배포 (Deployment)
+- [ ] **서비스 시작**
+  - [ ] Phase 3 스택 중지: `make down-p3`
+  - [ ] Phase 3 스택 시작: `make up-p3`
+  - [ ] MCP 서버 헬스 체크: `curl http://localhost:8020/health`
+  - [ ] 로그 확인: `docker logs mcp-server | tail -20`
+
+- [ ] **기능 검증**
+  - [ ] CRITICAL 도구 호출 시 403 응답 확인: `python scripts/ai.py --mcp execute_python --mcp-args '{"code": "import os"}'`
+  - [ ] 승인 CLI 실행 가능 확인: `python scripts/approval_cli.py --list`
+  - [ ] DB 감사 로그 생성 확인: `sqlite3 /mnt/e/ai-data/sqlite/security.db "SELECT COUNT(*) FROM security_audit_logs;"`
+
+### 사후 점검 (Post-Deployment)
+- [ ] **모니터링 설정**
+  - [ ] 감사 로그 모니터링 활성화 (정기적 리뷰)
+  - [ ] 승인 요청 지연 알림 설정 (선택)
+  - [ ] 매일 자정에 만료된 요청 정리: `PRAGMA wal_checkpoint(FULL);`
+
+- [ ] **운영팀 교육**
+  - [ ] `docs/runbooks/approval_workflow.md` 검토
+  - [ ] `scripts/approval_cli.py` 사용법 확인
+  - [ ] 긴급 롤백 절차 숙지: `APPROVAL_WORKFLOW_ENABLED=false` 재시작
+
+- [ ] **보안 감사**
+  - [ ] 모든 사용자 권한 검증: `RBAC_GUIDE.md` 참조
+  - [ ] HIGH/CRITICAL 도구 권한 매핑 확인
+  - [ ] 감사 로그 암호화 (선택, `/mnt/e/ai-data/backups` 백업 권한 제한)
+
+### 롤백 (Rollback)
+긴급 상황 시 승인 워크플로우 비활성화:
+```bash
+# 1. 환경 변수 변경
+echo "APPROVAL_WORKFLOW_ENABLED=false" >> .env
+
+# 2. 서비스 재시작
+make down-p3 && make up-p3
+
+# 3. 헬스 체크
+curl http://localhost:8020/health
+
+# 4. 동작 확인 (즉시 실행되어야 함)
+python scripts/ai.py --mcp execute_python --mcp-args '{"code": "print(\"OK\")"}'
+```
+
+**참고**: 승인 요청 데이터는 DB에 유지되며, 다시 활성화 시 조회 가능합니다.
+
+---
+
 ## ✅ 구현 완료도 (2025-10-02 기준)
 
 - **Phase 0**: 100% ✅ (환경 및 설계)
