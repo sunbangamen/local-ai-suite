@@ -207,6 +207,37 @@ class TestApprovalEventQueue:
         assert "approval_requested" in repr_str
         assert "abc12345" in repr_str
 
+    @pytest.mark.asyncio
+    async def test_approval_requested_event_enqueue(self):
+        """Test 11: approval_requested 이벤트가 큐에 들어가는지 확인"""
+        from notifications.queue import ApprovalEventQueue, ApprovalEventType
+
+        queue = ApprovalEventQueue()
+        queue.queue = __import__("asyncio").Queue()  # 깨끗한 큐 리셋
+
+        await queue.enqueue(
+            "approval_requested",
+            {
+                "request_id": "test-req-123",
+                "user_id": "test_user",
+                "tool_name": "git_commit",
+                "requested_at": "2025-10-25 15:00:00",
+                "expires_at": "2025-10-25 15:05:00",
+            },
+        )
+
+        # 이벤트가 큐에 들어갔는지 확인
+        assert not queue.queue.empty()
+        event = await queue.queue.get()
+
+        # 이벤트 타입과 데이터 검증
+        assert event.event_type == ApprovalEventType.REQUESTED
+        assert event.data["request_id"] == "test-req-123"
+        assert event.data["user_id"] == "test_user"
+        assert event.data["tool_name"] == "git_commit"
+        assert event.data["requested_at"] == "2025-10-25 15:00:00"
+        assert event.data["expires_at"] == "2025-10-25 15:05:00"
+
 
 if __name__ == "__main__":
     # 수동 실행을 위한 코드

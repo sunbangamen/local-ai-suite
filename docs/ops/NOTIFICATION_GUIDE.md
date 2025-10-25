@@ -234,6 +234,44 @@ services/mcp-server/templates/emails/
 
 ---
 
+## 📍 이벤트 발행 흐름
+
+### approval_requested 이벤트
+
+**발행 위치**: `services/mcp-server/rbac_manager.py` (라인 253-274)
+- **시점**: 승인 요청 생성 직후 (감사 로그 기록 후)
+- **조건**: `NOTIFICATION_ENABLED=true`
+- **데이터**: `request_id`, `user_id`, `tool_name`, `requested_at`, `expires_at`
+
+**흐름**:
+```
+User Action (도구 실행 요청)
+  ↓
+rbac_manager.require_approval()
+  ↓
+log_approval_requested() (감사 로그)
+  ↓
+enqueue("approval_requested", {...}) ← Phase 6.4
+  ↓
+Email 발송 (비동기)
+```
+
+### approval_approved / approval_rejected 이벤트
+
+**발행 위치**: `services/mcp-server/app.py`
+- **approval_approved**: 라인 544-562 (approve_request 엔드포인트)
+- **approval_rejected**: 라인 631-649 (reject_request 엔드포인트)
+
+**조건**: `NOTIFICATION_ENABLED=true`
+
+### approval_timeout 이벤트
+
+**발행 위치**: `services/mcp-server/app.py` (라인 707-724)
+- **시점**: GET /api/approvals/{request_id}/status 호출 시 타임아웃 감지
+- **조건**: `NOTIFICATION_ENABLED=true` + 승인 요청 만료 (5분)
+
+---
+
 ## 🧪 테스트 및 모니터링
 
 ### 1단계: 연결 테스트
@@ -272,27 +310,47 @@ EOF
 
 ### 2단계: 이벤트 발행 테스트
 
-승인 요청을 생성하여 실제 이메일이 발송되는지 확인합니다:
+**Test 2-1: approval_requested 이벤트 (승인 요청 생성 시)**
 
 ```bash
-# API를 통해 승인 요청 생성
-curl -X POST \
-  -H "X-API-Key: approval-admin-001" \
-  -H "Content-Type: application/json" \
-  http://localhost:8020/api/v1/approvals \
-  -d '{
-    "tool_name": "git_commit",
-    "user_id": "test_user"
-  }'
+# CLI를 통해 승인이 필요한 도구 실행
+ai --mcp git_commit --mcp-args '{"message": "test commit"}'
 
-# 응답:
-# {
-#   "request_id": "abc12345-...",
-#   "status": "pending",
-#   "expires_in_seconds": 300
-# }
-
+# 응답: "Waiting for approval" 메시지 + Request ID 표시
 # MailHog Web UI에서 Email 확인
+open http://localhost:8025
+# 주제: "[승인 필요] git_commit 도구"
+```
+
+**Test 2-2: approval_approved 이벤트 (승인 처리 시)**
+
+```bash
+# 관리자가 승인 처리
+python scripts/approval_admin.py approve <request_id> --reason "Approved for testing"
+
+# MailHog Web UI에서 "[승인됨]" Email 확인
+open http://localhost:8025
+```
+
+**Test 2-3: approval_rejected 이벤트 (거부 처리 시)**
+
+```bash
+# 관리자가 거부 처리
+python scripts/approval_admin.py reject <request_id> --reason "Policy violation"
+
+# MailHog Web UI에서 "[거부됨]" Email 확인
+open http://localhost:8025
+```
+
+**Test 2-4: approval_timeout 이벤트 (타임아웃 감지)**
+
+```bash
+# 5분 이상 경과 후 상태 조회
+curl -H "X-User-ID: admin" \
+  http://localhost:8020/api/approvals/<request_id>/status
+
+# 응답에서 "status": "expired" 확인
+# MailHog Web UI에서 "[타임아웃]" Email 확인
 open http://localhost:8025
 ```
 
@@ -429,8 +487,12 @@ Phase 6.4를 프로덕션에 배포하기 전에 확인하세요:
 - [ ] NOTIFICATION_ENABLED=true 설정 확인
 - [ ] Email 템플릿 커스터마이징 완료 (선택사항)
 - [ ] BATCH_SIZE/BATCH_TIMEOUT 성능 튜닝 완료
-- [ ] Email 발송 테스트 성공
-- [ ] 로그 모니터링 설정 완료
+- [ ] **approval_requested 이벤트 테스트** (승인 요청 생성 시 Email 발송 확인)
+- [ ] **approval_approved 이벤트 테스트** (승인 처리 시 Email 발송 확인)
+- [ ] **approval_rejected 이벤트 테스트** (거부 처리 시 Email 발송 확인)
+- [ ] **approval_timeout 이벤트 테스트** (타임아웃 시 Email 발송 확인)
+- [ ] 모든 이벤트 Email 발송 테스트 성공
+- [ ] 로그 모니터링 설정 완료 (docker compose logs mcp-server | grep notification)
 - [ ] 운영팀 교육 완료
 - [ ] 백업/롤백 절차 준비 완료
 
