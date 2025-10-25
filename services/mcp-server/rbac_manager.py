@@ -8,6 +8,7 @@ import asyncio
 import logging
 import math
 import time
+import datetime as dt
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -248,6 +249,29 @@ class RBACManager:
             )
         except Exception as e:
             logger.error(f"Failed to log approval request: {e}")
+
+        # Phase 6.4: Email notification event for approval request creation
+        import os
+
+        notification_enabled = os.getenv("NOTIFICATION_ENABLED", "false").lower() == "true"
+        if notification_enabled:
+            try:
+                from notifications.queue import get_approval_event_queue
+
+                approval_queue = get_approval_event_queue()
+                await approval_queue.enqueue(
+                    "approval_requested",
+                    {
+                        "request_id": request_id,
+                        "user_id": user_id,
+                        "tool_name": tool_name,
+                        "requested_at": str(datetime.now()),
+                        "expires_at": approval_context.get("expires_at")
+                        or str(datetime.now() + dt.timedelta(seconds=timeout)),
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Failed to enqueue approval_requested event: {e}")
 
         # 2. Wait for approval with polling
         approval_event = asyncio.Event()

@@ -10,10 +10,12 @@ MCP Server for Local AI Suite
 """
 
 import asyncio
+import base64
 import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -22,14 +24,13 @@ import httpx
 from fastapi import FastAPI, Request, Header, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
-from pydantic import BaseModel
 from prometheus_fastapi_instrumentator import Instrumentator
-import base64
-import tempfile
+from prometheus_client import Counter, Histogram
+from pydantic import BaseModel
 
 
 def _resolve_host(env_var: str, default: str = "0.0.0.0") -> str:  # nosec B104
-    """Resolve host binding with fallback to default for container environments."""
+    """Resolve host with fallback to default for container environments."""
     value = os.getenv(env_var)
     return value if value else default
 
@@ -173,10 +174,58 @@ def resolve_git_env(work_tree_path: str) -> dict:
 mcp = FastMCP("Local AI MCP Server")
 
 # FastAPI 앱 (헬스체크용)
-app = FastAPI(title="Local AI MCP Server", version="1.0.0")
+app = FastAPI(
+    title="Local AI MCP Server",
+    version="1.0.0",
+    description="""
+    Local AI Suite의 MCP 서버 및 Approval Workflow API를 제공합니다.
+
+    ## 주요 기능
+    - **MCP Tools**: Git, 파일 시스템, 웹 스크래핑 등 14개 도구
+    - **Approval Workflow API**: 승인 요청 관리를 위한 RESTful API
+    - **RBAC System**: 역할 기반 접근 제어
+    - **Monitoring**: Prometheus 메트릭 수집
+
+    ## API 문서
+    - OpenAPI 3.0: `/openapi.json`
+    - Swagger UI: `/docs`
+    - ReDoc: `/redoc`
+    """,
+    openapi_url="/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
 # Prometheus metrics
 Instrumentator().instrument(app).expose(app)
+
+# 승인 워크플로우 메트릭
+approval_requests_total = Counter(
+    "approval_requests_total",
+    "Total approval requests by status",
+    ["status"],  # pending, approved, rejected, expired
+)
+
+approval_response_time_seconds = Histogram(
+    "approval_response_time_seconds",
+    "Approval response time in seconds",
+    buckets=[1, 5, 10, 30, 60, 120, 300, 600],
+)
+
+approval_timeout_total = Counter("approval_timeout_total", "Total timed out approval requests")
+
+# RBAC 메트릭
+rbac_permission_checks_total = Counter(
+    "rbac_permission_checks_total",
+    "Total RBAC permission checks by result",
+    ["result"],  # allowed, denied
+)
+
+rbac_role_assignments_total = Counter(
+    "rbac_role_assignments_total",
+    "Total RBAC role assignments by role",
+    ["role"],  # admin, operator, viewer, user
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -186,11 +235,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Import and register Approval API v1 routes (Issue #45 Phase 6.3)
+try:
+    from api.v1.approvals import router as approval_router_v1
+
+    app.include_router(approval_router_v1)
+except ImportError as e:
+    print(f"Warning: Failed to import Approval API v1 routes: {e}")
+
 # RBAC 미들웨어 등록 (Issue #8)
 # CORS 다음에 등록해야 CORS 헤더가 먼저 처리됨
 settings = get_security_settings()
 if settings.is_rbac_enabled():
     app.add_middleware(RBACMiddleware)
+
+    # Register RBAC metrics with middleware (Issue #45 Phase 6.2)
+    from rbac_middleware import set_rbac_metrics
+
+    set_rbac_metrics(rbac_permission_checks_total)
+
     import logging
 
     logger = logging.getLogger(__name__)
@@ -273,6 +336,11 @@ async def startup_event():
         try:
             await init_database()
             logger.info(f"Security DB initialized: {settings.get_db_path()}")
+
+            # Register metrics callback for role assignments (Issue #45 Phase 6.2)
+            db = get_security_database()
+            db._on_role_assigned = lambda role: rbac_role_assignments_total.labels(role=role).inc()
+
         except Exception as e:
             logger.error(f"Failed to initialize security DB: {e}")
             raise
@@ -305,6 +373,18 @@ async def startup_event():
     else:
         logger.info("RBAC system disabled (RBAC_ENABLED=false)")
 
+    # Phase 6.4: Email notification worker startup
+    notification_enabled = os.getenv("NOTIFICATION_ENABLED", "false").lower() == "true"
+    if notification_enabled:
+        try:
+            from notifications.queue import get_approval_event_queue
+
+            approval_queue = get_approval_event_queue()
+            await approval_queue.start_worker()
+            logger.info("✅ Email notification worker started")
+        except Exception as e:
+            logger.error(f"Failed to start email notification worker: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -326,6 +406,18 @@ async def shutdown_event():
             logger.error(f"Error stopping audit logger: {e}")
 
         logger.info("RBAC system shutdown complete")
+
+    # Phase 6.4: Email notification worker shutdown
+    notification_enabled = os.getenv("NOTIFICATION_ENABLED", "false").lower() == "true"
+    if notification_enabled:
+        try:
+            from notifications.queue import get_approval_event_queue
+
+            approval_queue = get_approval_event_queue()
+            await approval_queue.stop_worker()
+            logger.info("✅ Email notification worker stopped")
+        except Exception as e:
+            logger.error(f"Error stopping email notification worker: {e}")
 
 
 @app.get("/health")
@@ -397,9 +489,13 @@ async def approve_request(
     Returns:
         승인 결과
     """
+    import time
     from security_database import get_security_database
     from rbac_manager import get_rbac_manager
     from audit_logger import get_audit_logger
+
+    # 응답 시간 측정 시작 (Issue #45 Phase 6.2)
+    start_time = time.time()
 
     # Admin 권한 체크
     rbac = get_rbac_manager()
@@ -435,6 +531,31 @@ async def approve_request(
         reason=reason,
     )
 
+    # Prometheus 메트릭 기록 (Issue #45 Phase 6.2)
+    approval_requests_total.labels(status="approved").inc()
+    response_time = time.time() - start_time
+    approval_response_time_seconds.observe(response_time)
+
+    # Phase 6.4: Email notification event
+    notification_enabled = os.getenv("NOTIFICATION_ENABLED", "false").lower() == "true"
+    if notification_enabled:
+        try:
+            from notifications.queue import get_approval_event_queue
+
+            approval_queue = get_approval_event_queue()
+            await approval_queue.enqueue(
+                "approval_approved",
+                {
+                    "request_id": request_id,
+                    "user_id": original_request["user_id"],
+                    "tool_name": original_request["tool_name"],
+                    "responder_id": user_id or "admin",
+                    "reason": reason,
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to enqueue approval_approved event: {e}")
+
     return {"status": "approved", "request_id": request_id, "responder": user_id}
 
 
@@ -455,9 +576,13 @@ async def reject_request(
     Returns:
         거부 결과
     """
+    import time
     from security_database import get_security_database
     from rbac_manager import get_rbac_manager
     from audit_logger import get_audit_logger
+
+    # 응답 시간 측정 시작 (Issue #45 Phase 6.2)
+    start_time = time.time()
 
     # Admin 권한 체크
     rbac = get_rbac_manager()
@@ -492,6 +617,31 @@ async def reject_request(
         responder_id=user_id or "admin",
         reason=reason,
     )
+
+    # Prometheus 메트릭 기록 (Issue #45 Phase 6.2)
+    approval_requests_total.labels(status="rejected").inc()
+    response_time = time.time() - start_time
+    approval_response_time_seconds.observe(response_time)
+
+    # Phase 6.4: Email notification event
+    notification_enabled = os.getenv("NOTIFICATION_ENABLED", "false").lower() == "true"
+    if notification_enabled:
+        try:
+            from notifications.queue import get_approval_event_queue
+
+            approval_queue = get_approval_event_queue()
+            await approval_queue.enqueue(
+                "approval_rejected",
+                {
+                    "request_id": request_id,
+                    "user_id": original_request["user_id"],
+                    "tool_name": original_request["tool_name"],
+                    "responder_id": user_id or "admin",
+                    "reason": reason,
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to enqueue approval_rejected event: {e}")
 
     return {"status": "rejected", "request_id": request_id, "responder": user_id}
 
@@ -545,6 +695,29 @@ async def get_approval_status(
         expires_at = datetime.datetime.fromisoformat(request_data.get("expires_at", ""))
         if request_data.get("status") == "pending" and datetime.datetime.now() > expires_at:
             # 만료된 요청 표시
+            # Prometheus 메트릭 기록 (Issue #45 Phase 6.2)
+            approval_requests_total.labels(status="expired").inc()
+            approval_timeout_total.inc()
+
+            # Phase 6.4: Email notification event for timeout
+            notification_enabled = os.getenv("NOTIFICATION_ENABLED", "false").lower() == "true"
+            if notification_enabled:
+                try:
+                    from notifications.queue import get_approval_event_queue
+
+                    approval_queue = get_approval_event_queue()
+                    await approval_queue.enqueue(
+                        "approval_timeout",
+                        {
+                            "request_id": request_data["request_id"],
+                            "user_id": request_data["user_id"],
+                            "tool_name": request_data["tool_name"],
+                            "requested_at": request_data["requested_at"],
+                        },
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to enqueue approval_timeout event: {e}")
+
             return {
                 "status": "expired",
                 "request_id": request_data["request_id"],
@@ -608,7 +781,10 @@ async def list_tools():
 
 @app.post("/tools/{tool_name}/call")
 async def call_tool(
-    tool_name: str, request: Request, arguments: dict = None, user_id: str = "default"
+    tool_name: str,
+    request: Request,
+    arguments: dict = None,
+    user_id: str = "default",
 ):
     """MCP 도구 실행 (Rate Limiting 및 Access Control 적용)"""
     try:
@@ -625,7 +801,11 @@ async def call_tool(
         access_control = get_access_control()
         allowed, error_msg = access_control.check_access(tool_name, actual_user_id)
         if not allowed:
-            return {"error": error_msg, "success": False, "error_type": "access_denied"}
+            return {
+                "error": error_msg,
+                "success": False,
+                "error_type": "access_denied",
+            }
 
         # 도구 실행 시작 (동시 실행 제한 강제 적용)
         allowed, error_msg = rate_limiter.start_execution(tool_name, actual_user_id, access_control)
@@ -1615,7 +1795,10 @@ async def web_to_notion(
         title_result = await web_scrape(url, title_selector)
         content_result = await web_scrape(url, content_selector)
 
-        title = title_result.data[0] if title_result.data else f"웹페이지: {url}"
+        if title_result.data:
+            title = title_result.data[0]
+        else:
+            title = f"웹페이지: {url}"
         content = "\n".join(content_result.data[:5])  # 최대 5개 문단
 
         # Notion 페이지 생성
@@ -1645,7 +1828,7 @@ class ModelSwitchResult(BaseModel):
     switch_time_seconds: Optional[float] = None
 
 
-async def _detect_phase() -> tuple[bool, str]:
+async def _detect_phase() -> tuple:  # Returns (bool | None, str | None)
     """
     docker compose ps 명령으로 실행 중인 서비스를 확인하여 Phase 판별
 
@@ -1704,7 +1887,7 @@ async def _detect_phase() -> tuple[bool, str]:
         return None, None
 
 
-async def _get_model_info(service_url: str) -> tuple[bool, str]:
+async def _get_model_info(service_url: str) -> tuple:  # Returns (bool, str)
     """
     서비스의 현재 로드된 모델 정보 조회
 
@@ -1721,7 +1904,10 @@ async def _get_model_info(service_url: str) -> tuple[bool, str]:
                 models_data = response.json()
                 if models_data.get("data"):
                     model_path = models_data["data"][0]["id"]
-                    model_name = model_path.split("/")[-1] if "/" in model_path else model_path
+                    if "/" in model_path:
+                        model_name = model_path.split("/")[-1]
+                    else:
+                        model_name = model_path
                     return True, model_name
         return False, "unknown"
     except Exception as e:
@@ -1731,7 +1917,7 @@ async def _get_model_info(service_url: str) -> tuple[bool, str]:
 
 async def _restart_service(
     compose_file: str, service_name: str, env_vars: dict = None
-) -> tuple[bool, str]:
+) -> tuple:  # Returns (bool, str)
     """
     Docker Compose 서비스 재시작
 
@@ -1773,7 +1959,11 @@ async def _restart_service(
             service_name,
         ]
         result = subprocess.run(
-            start_cmd, capture_output=True, text=True, cwd="/mnt/workspace", env=env
+            start_cmd,
+            capture_output=True,
+            text=True,
+            cwd="/mnt/workspace",
+            env=env,
         )
         if result.returncode != 0:
             return False, f"서비스 시작 실패: {result.stderr}"
@@ -1802,9 +1992,10 @@ async def _wait_for_health(service_url: str, max_wait: int = 30) -> bool:
             async with httpx.AsyncClient() as client:
                 response = await client.get(health_url, timeout=5)
                 if response.status_code == 200:
-                    print(f"✅ 헬스체크 성공 (시도 {attempt + 1}/{max_wait})")
+                    success_msg = f"✅ 헬스체크 성공 (시도 {attempt + 1}/{max_wait})"
+                    print(success_msg)
                     return True
-        except:
+        except Exception:
             continue
     return False
 
@@ -1868,12 +2059,17 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
             # CHAT_MODEL 또는 CODE_MODEL 환경변수와 일치하는지 확인
             expected_model = target_model
 
-            if expected_model.lower() == current_model_name.lower():
+            models_match = expected_model.lower() == current_model_name.lower()
+            if models_match:
                 # 이미 올바른 모델 실행 중
                 end_time = time.time()
+                message = (
+                    f"Phase 2: {model_type} 모델은 {service_name}에서 "
+                    f"이미 실행 중입니다 ({current_model_name})."
+                )
                 return ModelSwitchResult(
                     success=True,
-                    message=f"Phase 2: {model_type} 모델은 {service_name}에서 이미 실행 중입니다 ({current_model_name}).",
+                    message=message,
                     current_model=current_model_name,
                     switch_time_seconds=round(time.time() - start_time, 1),
                 )
@@ -1937,10 +2133,12 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
             success, current_model_name = await _get_model_info(service_url)
 
             # 이미 원하는 모델이 로드된 경우
-            if success and target_model.lower() == current_model_name.lower():
+            models_match = target_model.lower() == current_model_name.lower()
+            if success and models_match:
+                message = f"Phase 3: 이미 {model_type} 모델({target_model})이 " "로드되어 있습니다."
                 return ModelSwitchResult(
                     success=True,
-                    message=f"Phase 3: 이미 {model_type} 모델({target_model})이 로드되어 있습니다.",
+                    message=message,
                     current_model=target_model,
                     switch_time_seconds=round(time.time() - start_time, 1),
                 )
@@ -1975,10 +2173,14 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
             success, new_model_name = await _get_model_info(service_url)
             end_time = time.time()
 
-            if success and new_model_name.lower() == target_model.lower():
+            models_match = new_model_name.lower() == target_model.lower()
+            if success and models_match:
+                message = (
+                    f"Phase 3: {model_type} 모델({target_model})로 " "성공적으로 교체되었습니다."
+                )
                 return ModelSwitchResult(
                     success=True,
-                    message=f"Phase 3: {model_type} 모델({target_model})로 성공적으로 교체되었습니다.",
+                    message=message,
                     current_model=new_model_name,
                     switch_time_seconds=round(end_time - start_time, 1),
                 )

@@ -50,6 +50,13 @@ COPY app.py security.py safe_api.py sandbox.py security_admin.py rate_limiter.py
 # RBAC 및 감사 로깅 모듈 복사 (Issue #8)
 COPY settings.py security_database.py rbac_manager.py audit_logger.py rbac_middleware.py .
 
+# Phase 6.3: REST API 모듈 복사 (Issue #45)
+COPY api/ ./api/
+
+# Phase 6.4: Email 알림 시스템 복사 (Issue #45)
+COPY notifications/ ./notifications/
+COPY templates/ ./templates/
+
 # 보안 스크립트 및 스키마 복사
 COPY scripts/ ./scripts/
 

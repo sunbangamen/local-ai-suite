@@ -7,16 +7,32 @@ FastAPI middleware for automatic permission checking
 import json
 import logging
 import time
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from rbac_manager import get_rbac_manager
 from audit_logger import get_audit_logger
+from rbac_manager import get_rbac_manager
 from settings import SecuritySettings
 
 logger = logging.getLogger(__name__)
+
+# Prometheus metrics (imported from app.py)
+# NOTE: These are initialized in app.py and accessed here to avoid circular imports
+try:
+    from prometheus_client import Counter
+
+    rbac_permission_checks_total = None  # Will be set via set_metrics()
+except ImportError:
+    rbac_permission_checks_total = None
+
+
+def set_rbac_metrics(checks_counter):
+    """Set RBAC metrics from app.py (called during app initialization)"""
+    global rbac_permission_checks_total
+    rbac_permission_checks_total = checks_counter
 
 
 class RBACMiddleware(BaseHTTPMiddleware):
@@ -68,8 +84,14 @@ class RBACMiddleware(BaseHTTPMiddleware):
             f"allowed={allowed}, time={check_time:.2f}ms"
         )
 
+        # Prometheus 메트릭 기록 (Issue #45 Phase 6.2)
+        if rbac_permission_checks_total is not None:
+            result = "allowed" if allowed else "denied"
+            rbac_permission_checks_total.labels(result=result).inc()
+
         # Approval workflow integration (Issue #16)
-        if allowed and await self.rbac_manager.requires_approval(tool_name):
+        requires_approval = await self.rbac_manager.requires_approval(tool_name)
+        if allowed and requires_approval:
             logger.info(f"Tool {tool_name} requires approval for user {user_id}")
 
             # Extract request data for approval context
@@ -90,16 +112,19 @@ class RBACMiddleware(BaseHTTPMiddleware):
                 logger.warning(f"Failed to extract request body: {e}")
 
             # Wait for approval
-            approval_granted, approval_context = await self.rbac_manager._wait_for_approval(
+            approval_timeout = SecuritySettings.get_approval_timeout()
+            result = await self.rbac_manager._wait_for_approval(
                 user_id=user_id,
                 tool_name=tool_name,
                 request_data=request_data,
-                timeout=SecuritySettings.get_approval_timeout(),
+                timeout=approval_timeout,
             )
+            approval_granted, approval_context = result
 
             if not approval_granted:
                 # Approval denied or timed out
-                logger.warning(f"Approval denied/timeout: user={user_id}, tool={tool_name}")
+                denial_msg = f"Approval denied/timeout: user={user_id}, tool={tool_name}"
+                logger.warning(denial_msg)
 
                 # Audit logging
                 try:
@@ -114,25 +139,31 @@ class RBACMiddleware(BaseHTTPMiddleware):
                 status = approval_context.get("status")
 
                 if approval_context.get("reason") == "create_failed":
-                    logger.error(
+                    error_msg = (
                         "Approval workflow unavailable (failed to create request): "
                         f"user={user_id}, tool={tool_name}"
                     )
+                    logger.error(error_msg)
                     return JSONResponse(
                         status_code=503,
                         content={
                             "error": "Approval workflow unavailable",
-                            "detail": "Failed to create approval request. Please try again later.",
+                            "detail": (
+                                "Failed to create approval request. " "Please try again later."
+                            ),
                             "user_id": user_id,
                             "tool_name": tool_name,
                         },
                     )
 
+                detail_msg = (
+                    "Request requires administrator approval " "but was denied or timed out"
+                )
                 return JSONResponse(
                     status_code=403,
                     content={
                         "error": "Approval required",
-                        "detail": "Request requires administrator approval but was denied or timed out",
+                        "detail": detail_msg,
                         "user_id": user_id,
                         "tool_name": tool_name,
                         "approval_required": True,
@@ -146,7 +177,8 @@ class RBACMiddleware(BaseHTTPMiddleware):
 
         if not allowed:
             # Permission denied - log and return 403
-            logger.warning(f"Permission denied: user={user_id}, tool={tool_name}, reason={reason}")
+            denial_msg = f"Permission denied: user={user_id}, " f"tool={tool_name}, reason={reason}"
+            logger.warning(denial_msg)
 
             # Audit logging (non-blocking)
             try:

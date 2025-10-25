@@ -4,11 +4,12 @@ Security Database Manager
 SQLite database operations with connection pooling and WAL mode
 """
 
-import aiosqlite
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from contextlib import asynccontextmanager
+
+import aiosqlite
 
 from settings import SecuritySettings
 
@@ -26,10 +27,12 @@ class SecurityDatabase:
     - Transaction support
     """
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Optional[Path] = None, on_role_assigned=None):
         self.db_path = db_path or SecuritySettings.get_db_path()
         self._connection = None
         self._initialized = False
+        # Callback for metrics (Issue #45 Phase 6.2)
+        self._on_role_assigned = on_role_assigned
 
     async def initialize(self) -> None:
         """Initialize database with schema"""
@@ -103,6 +106,13 @@ class SecurityDatabase:
                 )
                 await db.commit()
                 logger.info(f"User created: {user_id} (role_id={role_id})")
+
+                # Record metrics for role assignment (Issue #45 Phase 6.2)
+                if self._on_role_assigned:
+                    role_name = await self._get_role_name(role_id)
+                    if role_name:
+                        self._on_role_assigned(role_name)
+
                 return True
         except aiosqlite.IntegrityError as e:
             logger.error(f"Failed to create user {user_id}: {e}")
@@ -118,10 +128,31 @@ class SecurityDatabase:
                 )
                 await db.commit()
                 logger.info(f"User role updated: {user_id} -> role_id={role_id}")
+
+                # Record metrics for role assignment (Issue #45 Phase 6.2)
+                if self._on_role_assigned:
+                    role_name = await self._get_role_name(role_id)
+                    if role_name:
+                        self._on_role_assigned(role_name)
+
                 return True
         except Exception as e:
             logger.error(f"Failed to update user role: {e}")
             return False
+
+    async def _get_role_name(self, role_id: int) -> Optional[str]:
+        """Get role name by role_id (Issue #45 Phase 6.2)"""
+        try:
+            async with self.get_connection() as db:
+                async with db.execute(
+                    "SELECT role_name FROM security_roles WHERE role_id = ?",
+                    (role_id,),
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    return row[0] if row else None
+        except Exception as e:
+            logger.error(f"Failed to get role name for role_id {role_id}: {e}")
+            return None
 
     # ========================================================================
     # Role Operations
@@ -242,9 +273,10 @@ class SecurityDatabase:
                 role_row = await self.get_role_by_name(role)
                 if not role_row:
                     # Create basic role if doesn't exist
+                    role_description = f"Auto-created role: {role}"
                     await db.execute(
                         "INSERT INTO security_roles (role_name, description) VALUES (?, ?)",
-                        (role, f"Auto-created role: {role}"),
+                        (role, role_description),
                     )
                     await db.commit()
                     role_row = await self.get_role_by_name(role)
@@ -335,13 +367,11 @@ class SecurityDatabase:
                     return False
 
                 # Insert mapping
-                await db.execute(
-                    """
+                insert_query = """
                     INSERT OR IGNORE INTO security_role_permissions (role_id, permission_id)
                     VALUES (?, ?)
-                    """,
-                    (role["role_id"], permission["permission_id"]),
-                )
+                """
+                await db.execute(insert_query, (role["role_id"], permission["permission_id"]))
                 await db.commit()
                 return True
         except Exception as e:
@@ -447,13 +477,14 @@ class SecurityDatabase:
                 total = row[0] if row else 0
 
             # Success count
+            time_filter = f"-{hours} hours"
             async with db.execute(
                 """
                 SELECT COUNT(*) as success_count
                 FROM security_audit_logs
                 WHERE timestamp >= datetime('now', ?) AND status = 'success'
                 """,
-                (f"-{hours} hours",),
+                (time_filter,),
             ) as cursor:
                 row = await cursor.fetchone()
                 success_count = row[0] if row else 0
@@ -465,7 +496,7 @@ class SecurityDatabase:
                 FROM security_audit_logs
                 WHERE timestamp >= datetime('now', ?) AND status = 'denied'
                 """,
-                (f"-{hours} hours",),
+                (time_filter,),
             ) as cursor:
                 row = await cursor.fetchone()
                 denied_count = row[0] if row else 0
@@ -477,17 +508,18 @@ class SecurityDatabase:
                 FROM security_audit_logs
                 WHERE timestamp >= datetime('now', ?) AND status = 'error'
                 """,
-                (f"-{hours} hours",),
+                (time_filter,),
             ) as cursor:
                 row = await cursor.fetchone()
                 error_count = row[0] if row else 0
 
+            success_rate = (success_count / total * 100) if total > 0 else 0
             return {
                 "total_requests": total,
                 "success_count": success_count,
                 "denied_count": denied_count,
                 "error_count": error_count,
-                "success_rate": (success_count / total * 100) if total > 0 else 0,
+                "success_rate": success_rate,
                 "hours": hours,
             }
 
@@ -597,22 +629,24 @@ class SecurityDatabase:
                         logger.warning(f"Approval request not found: {request_id}")
                         return False
                     if row[0] != "pending":
-                        logger.warning(
-                            f"Approval request already processed: {request_id} (status={row[0]})"
+                        warning_msg = (
+                            f"Approval request already processed: "
+                            f"{request_id} (status={row[0]})"
                         )
+                        logger.warning(warning_msg)
                         return False
 
                 # Update status
-                await db.execute(
-                    """
+                update_query = """
                     UPDATE approval_requests
-                    SET status = ?, responder_id = ?, response_reason = ?, responded_at = datetime('now')
+                    SET status = ?, responder_id = ?, response_reason = ?,
+                        responded_at = datetime('now')
                     WHERE request_id = ? AND status = 'pending'
-                    """,
-                    (status, responder_id, response_reason, request_id),
-                )
+                """
+                await db.execute(update_query, (status, responder_id, response_reason, request_id))
                 await db.commit()
-                logger.info(f"Approval request {status}: {request_id} by {responder_id}")
+                info_msg = f"Approval request {status}: {request_id} by {responder_id}"
+                logger.info(info_msg)
                 return True
         except Exception as e:
             logger.error(f"Failed to update approval status: {e}")
@@ -638,6 +672,68 @@ class SecurityDatabase:
             ) as cursor:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
+
+    async def list_all_approvals(
+        self,
+        status: Optional[str] = None,
+        user_id: Optional[str] = None,
+        tool_name: Optional[str] = None,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> tuple[List[Dict], int]:
+        """
+        List all approval requests with filtering (Issue #45 Phase 6.3)
+
+        Args:
+            status: Filter by status (pending, approved, rejected, expired)
+            user_id: Filter by user ID
+            tool_name: Filter by tool name
+            limit: Maximum number of results
+            offset: Results offset for pagination
+
+        Returns:
+            Tuple of (approvals list, total count)
+        """
+        try:
+            async with self.get_connection() as db:
+                # Build WHERE clause dynamically
+                where_parts = []
+                params = []
+
+                if status:
+                    where_parts.append("status = ?")
+                    params.append(status)
+                if user_id:
+                    where_parts.append("user_id = ?")
+                    params.append(user_id)
+                if tool_name:
+                    where_parts.append("tool_name = ?")
+                    params.append(tool_name)
+
+                where_clause = " AND ".join(where_parts) if where_parts else "1=1"
+
+                # Get total count
+                count_query = f"SELECT COUNT(*) FROM approval_requests WHERE {where_clause}"
+                async with db.execute(count_query, params) as cursor:
+                    total = (await cursor.fetchone())[0]
+
+                # Get paginated results
+                params_list = params + [limit, offset]
+                query = f"""
+                    SELECT * FROM approval_requests
+                    WHERE {where_clause}
+                    ORDER BY requested_at DESC
+                    LIMIT ? OFFSET ?
+                """
+                async with db.execute(query, params_list) as cursor:
+                    rows = await cursor.fetchall()
+                    approvals = [dict(row) for row in rows]
+
+                return approvals, total
+
+        except Exception as e:
+            logger.error(f"Failed to list all approvals: {e}")
+            return [], 0
 
     async def cleanup_expired_approvals(self) -> int:
         """

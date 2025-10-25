@@ -77,3 +77,22 @@ groups:
         annotations:
           summary: "Container high CPU usage"
           description: "Container {{ $labels.name }} CPU usage is {{ $value }}%"
+
+      # Approval Workflow alerts (Issue #45 Phase 6.2)
+      - alert: ApprovalRequestTimeout
+        expr: rate(approval_timeout_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Approval request timeout detected"
+          description: "Approval request has timed out. Rate: {{ $value }} timeouts/sec"
+
+      - alert: HighApprovalRejectionRate
+        expr: (sum(rate(approval_requests_total{status="rejected"}[5m])) / (sum(rate(approval_requests_total[5m])) - sum(rate(approval_requests_total{status="pending"}[5m])))) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High approval rejection rate"
+          description: "Approval rejection rate is {{ $value | humanizePercentage }} (target: < 20%)"
