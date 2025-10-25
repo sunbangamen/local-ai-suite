@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # NOTE: These are initialized in app.py and accessed here to avoid circular imports
 try:
     from prometheus_client import Counter
+
     rbac_permission_checks_total = None  # Will be set via set_metrics()
 except ImportError:
     rbac_permission_checks_total = None
@@ -148,8 +149,7 @@ class RBACMiddleware(BaseHTTPMiddleware):
                         content={
                             "error": "Approval workflow unavailable",
                             "detail": (
-                                "Failed to create approval request. "
-                                "Please try again later."
+                                "Failed to create approval request. " "Please try again later."
                             ),
                             "user_id": user_id,
                             "tool_name": tool_name,
@@ -157,8 +157,7 @@ class RBACMiddleware(BaseHTTPMiddleware):
                     )
 
                 detail_msg = (
-                    "Request requires administrator approval "
-                    "but was denied or timed out"
+                    "Request requires administrator approval " "but was denied or timed out"
                 )
                 return JSONResponse(
                     status_code=403,
@@ -178,10 +177,7 @@ class RBACMiddleware(BaseHTTPMiddleware):
 
         if not allowed:
             # Permission denied - log and return 403
-            denial_msg = (
-                f"Permission denied: user={user_id}, "
-                f"tool={tool_name}, reason={reason}"
-            )
+            denial_msg = f"Permission denied: user={user_id}, " f"tool={tool_name}, reason={reason}"
             logger.warning(denial_msg)
 
             # Audit logging (non-blocking)

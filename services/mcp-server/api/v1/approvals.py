@@ -196,9 +196,7 @@ async def respond_approval(
     reason = body.get("reason", "")
 
     if action not in ["approve", "reject"]:
-        raise HTTPException(
-            status_code=400, detail="action must be 'approve' or 'reject'"
-        )
+        raise HTTPException(status_code=400, detail="action must be 'approve' or 'reject'")
 
     # Get request
     db = get_security_database()
@@ -208,9 +206,7 @@ async def respond_approval(
         raise HTTPException(status_code=404, detail="Approval request not found")
 
     if approval.get("status") != "pending":
-        raise HTTPException(
-            status_code=409, detail="Request already processed or expired"
-        )
+        raise HTTPException(status_code=409, detail="Request already processed or expired")
 
     # Process
     status = "approved" if action == "approve" else "rejected"
@@ -245,6 +241,7 @@ async def respond_approval(
 
     # Record metrics
     from app import approval_requests_total
+
     approval_requests_total.labels(status=status).inc()
 
     return {
@@ -283,9 +280,7 @@ async def cancel_approval(
         raise HTTPException(status_code=404, detail="Approval request not found")
 
     if approval.get("status") != "pending":
-        raise HTTPException(
-            status_code=409, detail="Only pending requests can be cancelled"
-        )
+        raise HTTPException(status_code=409, detail="Only pending requests can be cancelled")
 
     # Cancel
     success = await db.update_approval_status(

@@ -103,9 +103,7 @@ class ApprovalEventQueue:
                     try:
                         remaining_slots = batch_size - len(batch)
                         timeout = batch_timeout / max(1, remaining_slots)
-                        event = await asyncio.wait_for(
-                            self.queue.get(), timeout=timeout
-                        )
+                        event = await asyncio.wait_for(self.queue.get(), timeout=timeout)
                         batch.append(event)
                     except asyncio.TimeoutError:
                         # 타임아웃이 되면 현재 배치 처리
@@ -147,9 +145,7 @@ class ApprovalEventQueue:
                 return
 
             # Email 발송
-            await notifier.send_notification(
-                template_name=template_name, context=event.data
-            )
+            await notifier.send_notification(template_name=template_name, context=event.data)
             logger.info(f"Notification sent for {event}")
 
         except Exception as e:
@@ -158,14 +154,12 @@ class ApprovalEventQueue:
                 event.retry_count += 1
                 await self.queue.put(event)
                 retry_msg = (
-                    f"Retrying event {event} "
-                    f"(attempt {event.retry_count}/{event.max_retries})"
+                    f"Retrying event {event} " f"(attempt {event.retry_count}/{event.max_retries})"
                 )
                 logger.warning(retry_msg)
             else:
                 error_msg = (
-                    f"Event processing failed after {event.max_retries} "
-                    f"retries: {str(e)}"
+                    f"Event processing failed after {event.max_retries} " f"retries: {str(e)}"
                 )
                 logger.error(error_msg)
 

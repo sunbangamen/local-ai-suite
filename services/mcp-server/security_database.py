@@ -222,9 +222,7 @@ class SecurityDatabase:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
 
-    async def check_permission(
-        self, user_id: str, permission_name: str
-    ) -> Tuple[bool, str]:
+    async def check_permission(self, user_id: str, permission_name: str) -> Tuple[bool, str]:
         """
         Check if user has permission
 
@@ -257,9 +255,7 @@ class SecurityDatabase:
     # Test Helper Methods (for test_approval_workflow.py)
     # ========================================================================
 
-    async def insert_user(
-        self, user_id: str, role: str, attributes: str = "{}"
-    ) -> bool:
+    async def insert_user(self, user_id: str, role: str, attributes: str = "{}") -> bool:
         """
         Insert user for testing (simplified version)
 
@@ -345,9 +341,7 @@ class SecurityDatabase:
             logger.error(f"Failed to insert test permission: {e}")
             return False
 
-    async def assign_permission_to_role(
-        self, role_name: str, permission_name: str
-    ) -> bool:
+    async def assign_permission_to_role(self, role_name: str, permission_name: str) -> bool:
         """
         Assign permission to role (for testing)
 
@@ -377,9 +371,7 @@ class SecurityDatabase:
                     INSERT OR IGNORE INTO security_role_permissions (role_id, permission_id)
                     VALUES (?, ?)
                 """
-                await db.execute(
-                    insert_query, (role["role_id"], permission["permission_id"])
-                )
+                await db.execute(insert_query, (role["role_id"], permission["permission_id"]))
                 await db.commit()
                 return True
         except Exception as e:
@@ -651,9 +643,7 @@ class SecurityDatabase:
                         responded_at = datetime('now')
                     WHERE request_id = ? AND status = 'pending'
                 """
-                await db.execute(
-                    update_query, (status, responder_id, response_reason, request_id)
-                )
+                await db.execute(update_query, (status, responder_id, response_reason, request_id))
                 await db.commit()
                 info_msg = f"Approval request {status}: {request_id} by {responder_id}"
                 logger.info(info_msg)
@@ -723,9 +713,7 @@ class SecurityDatabase:
                 where_clause = " AND ".join(where_parts) if where_parts else "1=1"
 
                 # Get total count
-                count_query = (
-                    f"SELECT COUNT(*) FROM approval_requests WHERE {where_clause}"
-                )
+                count_query = f"SELECT COUNT(*) FROM approval_requests WHERE {where_clause}"
                 async with db.execute(count_query, params) as cursor:
                     total = (await cursor.fetchone())[0]
 

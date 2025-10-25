@@ -52,9 +52,7 @@ class EmailNotifier:
 
         try:
             # 타임스탐프 추가
-            context["timestamp"] = (
-                context.get("timestamp") or self._format_timestamp()
-            )
+            context["timestamp"] = context.get("timestamp") or self._format_timestamp()
 
             template = self.jinja_env.get_template(f"{template_name}.html")
             return template.render(**context)
@@ -65,22 +63,16 @@ class EmailNotifier:
             logger.error(f"Template rendering error: {str(e)}")
             return ""
 
-    async def send_notification(
-        self, template_name: str, context: Dict[str, Any]
-    ) -> bool:
+    async def send_notification(self, template_name: str, context: Dict[str, Any]) -> bool:
         """비동기 방식의 알림 발송 (smtplib 동기 호출을 executor에서 실행)"""
         try:
             loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(
-                None, self._send_sync, template_name, context
-            )
+            return await loop.run_in_executor(None, self._send_sync, template_name, context)
         except Exception as e:
             logger.error(f"Async notification failed: {str(e)}")
             raise
 
-    @retry(
-        stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10)
-    )
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def _send_sync(self, template_name: str, context: Dict[str, Any]) -> bool:
         """동기 방식의 실제 Email 발송 (tenacity 재시도 포함)"""
         try:

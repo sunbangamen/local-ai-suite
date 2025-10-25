@@ -59,9 +59,7 @@ async def cmd_list(status: Optional[str] = None, limit: int = 50):
         status_str = approval.get("status", "")[:8]
         requested_at = approval.get("requested_at", "")[:19]
 
-        print(
-            f"{request_id:<40} {user_id:<12} {tool_name:<15} {status_str:<10} {requested_at:<20}"
-        )
+        print(f"{request_id:<40} {user_id:<12} {tool_name:<15} {status_str:<10} {requested_at:<20}")
 
     print(f"\nTotal: {len(approvals)} requests")
     return True
@@ -198,23 +196,17 @@ Examples:
         choices=["pending", "approved", "rejected", "expired"],
         help="Filter by status",
     )
-    list_cmd.add_argument(
-        "--limit", type=int, default=50, help="Max results (default: 50)"
-    )
+    list_cmd.add_argument("--limit", type=int, default=50, help="Max results (default: 50)")
 
     # Approve command
     approve_cmd = subparsers.add_parser("approve", help="Approve a request")
     approve_cmd.add_argument("request_id", help="Request ID (UUID or short ID)")
-    approve_cmd.add_argument(
-        "--reason", required=True, help="Approval reason/comment"
-    )
+    approve_cmd.add_argument("--reason", required=True, help="Approval reason/comment")
 
     # Reject command
     reject_cmd = subparsers.add_parser("reject", help="Reject a request")
     reject_cmd.add_argument("request_id", help="Request ID (UUID or short ID)")
-    reject_cmd.add_argument(
-        "--reason", required=True, help="Rejection reason/comment"
-    )
+    reject_cmd.add_argument("--reason", required=True, help="Rejection reason/comment")
 
     args = parser.parse_args()
 
@@ -239,6 +231,7 @@ Examples:
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         import traceback
+
         traceback.print_exc()
         return 1
 

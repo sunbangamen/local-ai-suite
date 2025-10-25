@@ -106,8 +106,7 @@ class APIKeyAuth:
         """
         if required_permission not in user.get("permissions", []):
             logger.warning(
-                f"Permission denied for {user.get('user_id')}: "
-                f"{required_permission}"
+                f"Permission denied for {user.get('user_id')}: " f"{required_permission}"
             )
             raise HTTPException(
                 status_code=403,
@@ -129,8 +128,7 @@ async def get_authenticated_user(request: Request) -> dict:
 
     # Audit log API access
     logger.info(
-        f"API request: user={user['user_id']}, "
-        f"path={request.url.path}, method={request.method}"
+        f"API request: user={user['user_id']}, " f"path={request.url.path}, method={request.method}"
     )
 
     return user

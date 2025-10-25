@@ -205,33 +205,30 @@ from prometheus_client import Counter, Histogram
 
 # 승인 워크플로우 메트릭
 approval_requests_total = Counter(
-    'approval_requests_total',
-    'Total approval requests by status',
-    ['status']  # pending, approved, rejected, expired
+    "approval_requests_total",
+    "Total approval requests by status",
+    ["status"],  # pending, approved, rejected, expired
 )
 
 approval_response_time_seconds = Histogram(
-    'approval_response_time_seconds',
-    'Approval response time in seconds',
-    buckets=[1, 5, 10, 30, 60, 120, 300, 600]
+    "approval_response_time_seconds",
+    "Approval response time in seconds",
+    buckets=[1, 5, 10, 30, 60, 120, 300, 600],
 )
 
-approval_timeout_total = Counter(
-    'approval_timeout_total',
-    'Total timed out approval requests'
-)
+approval_timeout_total = Counter("approval_timeout_total", "Total timed out approval requests")
 
 # RBAC 메트릭
 rbac_permission_checks_total = Counter(
-    'rbac_permission_checks_total',
-    'Total RBAC permission checks by result',
-    ['result']  # allowed, denied
+    "rbac_permission_checks_total",
+    "Total RBAC permission checks by result",
+    ["result"],  # allowed, denied
 )
 
 rbac_role_assignments_total = Counter(
-    'rbac_role_assignments_total',
-    'Total RBAC role assignments by role',
-    ['role']  # admin, operator, viewer, user
+    "rbac_role_assignments_total",
+    "Total RBAC role assignments by role",
+    ["role"],  # admin, operator, viewer, user
 )
 
 app.add_middleware(
@@ -245,6 +242,7 @@ app.add_middleware(
 # Import and register Approval API v1 routes (Issue #45 Phase 6.3)
 try:
     from api.v1.approvals import router as approval_router_v1
+
     app.include_router(approval_router_v1)
 except ImportError as e:
     print(f"Warning: Failed to import Approval API v1 routes: {e}")
@@ -257,6 +255,7 @@ if settings.is_rbac_enabled():
 
     # Register RBAC metrics with middleware (Issue #45 Phase 6.2)
     from rbac_middleware import set_rbac_metrics
+
     set_rbac_metrics(rbac_permission_checks_total)
 
     import logging
@@ -450,9 +449,7 @@ async def get_tool_security_info(tool_name: str):
 
 
 @app.get("/api/approvals/pending")
-async def get_pending_approvals(
-    limit: int = 50, user_id: str = Header(None, alias="X-User-ID")
-):
+async def get_pending_approvals(limit: int = 50, user_id: str = Header(None, alias="X-User-ID")):
     """
     대기 중인 승인 요청 목록 조회 (admin only)
 
@@ -815,9 +812,7 @@ async def call_tool(
             }
 
         # 도구 실행 시작 (동시 실행 제한 강제 적용)
-        allowed, error_msg = rate_limiter.start_execution(
-            tool_name, actual_user_id, access_control
-        )
+        allowed, error_msg = rate_limiter.start_execution(tool_name, actual_user_id, access_control)
         if not allowed:
             return {
                 "error": error_msg,
@@ -1051,9 +1046,7 @@ async def read_file(path: str, working_dir: Optional[str] = None) -> FileInfo:
 
 
 @mcp.tool()
-async def write_file(
-    path: str, content: str, working_dir: Optional[str] = None
-) -> FileInfo:
+async def write_file(path: str, content: str, working_dir: Optional[str] = None) -> FileInfo:
     """보안이 강화된 파일 내용 쓰기 - 전역 파일시스템 지원"""
     try:
         # 새로운 안전한 파일 API 사용
@@ -1076,9 +1069,7 @@ async def write_file(
 
 
 @mcp.tool()
-async def list_files(
-    path: str = ".", working_dir: Optional[str] = None
-) -> Dict[str, Any]:
+async def list_files(path: str = ".", working_dir: Optional[str] = None) -> Dict[str, Any]:
     """보안이 강화된 디렉토리 파일 목록 조회"""
     try:
         # 새로운 안전한 파일 API 사용
@@ -1204,9 +1195,7 @@ async def ai_chat(message: str, model: str = None) -> AIResponse:
 
 
 @mcp.tool()
-async def git_status(
-    path: str = ".", working_dir: Optional[str] = None
-) -> ExecutionResult:
+async def git_status(path: str = ".", working_dir: Optional[str] = None) -> ExecutionResult:
     """Git 저장소 상태 확인 (전역 Git 지원)"""
     # working_dir가 제공되면 해당 디렉토리 사용, 아니면 현재 경로
     if working_dir:
@@ -1396,9 +1385,7 @@ async def git_log(
 
 
 @mcp.tool()
-async def git_add(
-    file_paths: str, working_dir: Optional[str] = None
-) -> ExecutionResult:
+async def git_add(file_paths: str, working_dir: Optional[str] = None) -> ExecutionResult:
     """Git 파일 스테이징 (전역 Git 지원)"""
     # working_dir가 제공되면 해당 디렉토리 사용
     if working_dir:
@@ -1527,9 +1514,7 @@ async def git_commit(
 
 
 @mcp.tool()
-async def web_screenshot(
-    url: str, width: int = 1280, height: int = 720
-) -> WebScreenshotResult:
+async def web_screenshot(url: str, width: int = 1280, height: int = 720) -> WebScreenshotResult:
     """웹사이트 스크린샷 촬영"""
     try:
         pw = await init_playwright()
@@ -1559,9 +1544,7 @@ async def web_screenshot(
 
 
 @mcp.tool()
-async def web_scrape(
-    url: str, selector: str, attribute: str = "textContent"
-) -> WebScrapeResult:
+async def web_scrape(url: str, selector: str, attribute: str = "textContent") -> WebScrapeResult:
     """웹사이트에서 특정 요소 크롤링"""
     try:
         pw = await init_playwright()
@@ -1826,9 +1809,7 @@ async def web_to_notion(
         properties = json.dumps(
             {
                 "URL": {"url": url},
-                "Content": {
-                    "rich_text": [{"text": {"content": content[:2000]}}]
-                },  # 2000자 제한
+                "Content": {"rich_text": [{"text": {"content": content[:2000]}}]},  # 2000자 제한
             }
         )
 
@@ -2158,10 +2139,7 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
             # 이미 원하는 모델이 로드된 경우
             models_match = target_model.lower() == current_model_name.lower()
             if success and models_match:
-                message = (
-                    f"Phase 3: 이미 {model_type} 모델({target_model})이 "
-                    "로드되어 있습니다."
-                )
+                message = f"Phase 3: 이미 {model_type} 모델({target_model})이 " "로드되어 있습니다."
                 return ModelSwitchResult(
                     success=True,
                     message=message,
@@ -2202,8 +2180,7 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
             models_match = new_model_name.lower() == target_model.lower()
             if success and models_match:
                 message = (
-                    f"Phase 3: {model_type} 모델({target_model})로 "
-                    "성공적으로 교체되었습니다."
+                    f"Phase 3: {model_type} 모델({target_model})로 " "성공적으로 교체되었습니다."
                 )
                 return ModelSwitchResult(
                     success=True,
