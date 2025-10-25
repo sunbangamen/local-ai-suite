@@ -241,7 +241,7 @@ Email 알림 테스트: 11개
 1. **실제 환경 테스트** (선택사항):
    ```bash
    docker compose -f docker/compose.p3.yml up -d
-   docker compose exec mcp-server python -m pytest -q tests/api/v1/test_approvals.py
+docker compose exec mcp-server python -m pytest -q tests/api/test_approval_api.py
    docker compose exec mcp-server python -m pytest -q tests/notifications/test_email_notifications.py
    ```
 

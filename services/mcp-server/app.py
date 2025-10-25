@@ -247,7 +247,7 @@ try:
     from api.v1.approvals import router as approval_router_v1
     app.include_router(approval_router_v1)
 except ImportError as e:
-    logger.warning(f"Failed to import Approval API v1 routes: {e}")
+    print(f"Warning: Failed to import Approval API v1 routes: {e}")
 
 # RBAC 미들웨어 등록 (Issue #8)
 # CORS 다음에 등록해야 CORS 헤더가 먼저 처리됨
