@@ -190,7 +190,80 @@ docker logs mcp-server | grep -i approval
 # (향후 버전에서 관리 API 제공 예정)
 ```
 
-## 7️⃣ 추가 리소스
+## 7️⃣ API 테스트 실행
+
+### 로컬 환경에서 스펙 검증 (FastAPI 미설치)
+```bash
+# OpenAPI 스펙 및 API 구조 검증 (5/11 테스트 통과)
+python3 tests/api/test_approval_api.py
+
+# 결과 예시
+# ✅ test_approval_workflow_json_schema
+# ✅ test_approval_api_paths_defined
+# ✅ test_approval_api_auth_required
+# ✅ test_approval_request_schema_complete
+# ✅ test_api_responses_documented
+# 결과: 5/11 통과 (API 인증 테스트는 Docker 환경 필요)
+```
+
+### Docker 환경에서 전체 테스트 실행 (권장)
+```bash
+# Phase 3 스택 시작
+make up-p3  # 또는: docker compose -f docker/compose.p3.yml up -d
+
+# MCP 서버 컨테이너에서 전체 테스트 실행
+docker compose exec mcp-server python -m pytest -q tests/api/test_approval_api.py -v
+
+# 또는 단계별 실행
+docker compose exec mcp-server python -m pytest tests/api/test_approval_api.py::test_api_key_auth_valid -v
+docker compose exec mcp-server python -m pytest tests/api/test_approval_api.py::test_permission_check_allowed -v
+
+# 스택 종료
+make down-p3  # 또는: docker compose down
+```
+
+### API 엔드포인트 통합 테스트 (수동)
+```bash
+# API Key 생성 (기본값)
+export API_KEY="approval-admin-001"
+
+# 1. 승인 목록 조회 (GET /api/v1/approvals)
+curl -H "X-API-Key: $API_KEY" \
+  http://localhost:8020/api/v1/approvals?status=pending
+
+# 2. 승인 요청 생성 (POST /api/v1/approvals)
+REQUEST_ID=$(curl -X POST \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  http://localhost:8020/api/v1/approvals \
+  -d '{"tool_name": "git_commit", "user_id": "test_user"}' \
+  | jq -r '.request_id')
+
+# 3. 승인 요청 상세 조회 (GET /api/v1/approvals/{id})
+curl -H "X-API-Key: $API_KEY" \
+  http://localhost:8020/api/v1/approvals/$REQUEST_ID
+
+# 4. 승인 처리 (PUT /api/v1/approvals/{id})
+curl -X PUT \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  http://localhost:8020/api/v1/approvals/$REQUEST_ID \
+  -d '{"action": "approve", "reason": "Approved by admin"}'
+
+# 5. 통계 조회 (GET /api/v1/approvals/stats)
+curl -H "X-API-Key: $API_KEY" \
+  http://localhost:8020/api/v1/approvals/stats | jq
+
+# 권한 검증 테스트 (403 응답)
+curl -X PUT \
+  -H "X-API-Key: viewer-key" \
+  -H "Content-Type: application/json" \
+  http://localhost:8020/api/v1/approvals/$REQUEST_ID \
+  -d '{"action": "approve"}'
+# 결과: 403 Forbidden
+```
+
+## 8️⃣ 추가 리소스
 
 - **API 문서**: http://localhost:8020/docs (Swagger UI)
 - **OpenAPI 스펙**: `/docs/api/APPROVAL_API_SPEC.yaml`
