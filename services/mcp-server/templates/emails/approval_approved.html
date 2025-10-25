@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h3>✅ 승인 완료</h3>
+
+<p>다음 도구 실행이 승인되었습니다:</p>
+
+<div class="info-box">
+    <div class="info-item">
+        <span class="info-label">요청자:</span>
+        {{ user_id }}
+    </div>
+    <div class="info-item">
+        <span class="info-label">도구:</span>
+        <strong>{{ tool_name }}</strong>
+    </div>
+    <div class="info-item">
+        <span class="info-label">승인자:</span>
+        <strong>{{ responder_id }}</strong>
+    </div>
+    <div class="info-item">
+        <span class="info-label">사유:</span>
+        {{ reason if reason else "별도 사유 없음" }}
+    </div>
+</div>
+
+<div class="alert alert-success">
+    <strong>✓ 승인됨:</strong> 이 요청이 성공적으로 승인되었습니다.
+</div>
+
+<p>요청한 도구의 실행이 진행됩니다.</p>
+
+{% endblock %}

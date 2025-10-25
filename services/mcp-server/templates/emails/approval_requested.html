@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h3>🔔 새로운 승인 요청이 발생했습니다</h3>
+
+<p>다음 도구 실행에 대한 승인이 필요합니다:</p>
+
+<div class="info-box">
+    <div class="info-item">
+        <span class="info-label">요청자:</span>
+        {{ user_id }}
+    </div>
+    <div class="info-item">
+        <span class="info-label">도구:</span>
+        <strong>{{ tool_name }}</strong>
+    </div>
+    <div class="info-item">
+        <span class="info-label">요청 ID:</span>
+        <span class="code">{{ request_id[:8] }}</span>
+    </div>
+    <div class="info-item">
+        <span class="info-label">만료:</span>
+        <strong>{{ expires_at }}</strong> (5분)
+    </div>
+</div>
+
+<div class="alert alert-warning">
+    <strong>⚠️ 조치 필요:</strong> 이 요청을 승인하거나 거부해주세요.
+</div>
+
+<h4 style="color: #333; margin-top: 25px;">승인 방법</h4>
+
+<p><strong>1️⃣ 관리자 CLI 사용:</strong></p>
+<div style="background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0; font-family: monospace; font-size: 12px; overflow-x: auto;">
+python scripts/approval_admin.py approve {{ request_id[:8] }} --reason "승인됨"
+</div>
+
+<p><strong>2️⃣ REST API 사용:</strong></p>
+<div style="background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0; font-family: monospace; font-size: 12px; overflow-x: auto;">
+curl -X PUT \<br>
+&nbsp;&nbsp;-H "X-API-Key: approval-admin-001" \<br>
+&nbsp;&nbsp;-H "Content-Type: application/json" \<br>
+&nbsp;&nbsp;http://localhost:8020/api/v1/approvals/{{ request_id[:8] }} \<br>
+&nbsp;&nbsp;-d '{"action": "approve", "reason": "승인됨"}'
+</div>
+
+<p><strong>3️⃣ 거부 방법:</strong></p>
+<div style="background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0; font-family: monospace; font-size: 12px; overflow-x: auto;">
+python scripts/approval_admin.py reject {{ request_id[:8] }} --reason "정책 위반"
+</div>
+
+<div class="alert alert-info">
+    <strong>ℹ️ 정보:</strong> 5분 이내에 승인/거부하지 않으면 이 요청은 자동으로 타임아웃됩니다.
+</div>
+
+{% endblock %}

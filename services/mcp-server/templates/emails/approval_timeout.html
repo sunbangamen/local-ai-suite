@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h3>⏰ 승인 요청 타임아웃</h3>
+
+<p>다음 승인 요청이 5분 내에 처리되지 않아 만료되었습니다:</p>
+
+<div class="info-box">
+    <div class="info-item">
+        <span class="info-label">요청자:</span>
+        {{ user_id }}
+    </div>
+    <div class="info-item">
+        <span class="info-label">도구:</span>
+        <strong>{{ tool_name }}</strong>
+    </div>
+    <div class="info-item">
+        <span class="info-label">요청 ID:</span>
+        <span class="code">{{ request_id[:8] }}</span>
+    </div>
+    <div class="info-item">
+        <span class="info-label">요청 시간:</span>
+        {{ requested_at }}
+    </div>
+</div>
+
+<div class="alert alert-warning">
+    <strong>⚠️ 알림:</strong> 이 승인 요청이 타임아웃되었으며 더 이상 처리할 수 없습니다.
+</div>
+
+<h4 style="color: #333; margin-top: 25px;">다음 단계</h4>
+
+<p>필요한 경우 <strong>새로운 승인 요청</strong>을 다시 생성하세요:</p>
+
+<div style="background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0; font-family: monospace; font-size: 12px; overflow-x: auto;">
+# 사용자가 도구를 다시 실행하면 새로운 승인 요청이 생성됩니다<br>
+ai --mcp {{ tool_name|lower }}
+</div>
+
+<p>또는 관리자가 수동으로 승인 요청을 생성할 수 있습니다:</p>
+
+<div style="background-color: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0; font-family: monospace; font-size: 12px; overflow-x: auto;">
+curl -X POST \<br>
+&nbsp;&nbsp;-H "X-API-Key: approval-admin-001" \<br>
+&nbsp;&nbsp;-H "Content-Type: application/json" \<br>
+&nbsp;&nbsp;http://localhost:8020/api/v1/approvals \<br>
+&nbsp;&nbsp;-d '{"tool_name": "{{ tool_name }}", "user_id": "{{ user_id }}"}'
+</div>
+
+{% endblock %}
