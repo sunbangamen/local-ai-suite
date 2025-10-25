@@ -26,17 +26,15 @@ async def cmd_list(status: Optional[str] = None, limit: int = 50):
     from security_database import get_security_database
     from settings import get_security_settings
 
-    # Initialize
+    # Check if RBAC is enabled
     settings = get_security_settings()
     if not settings.is_rbac_enabled():
         print("❌ RBAC not enabled. Set RBAC_ENABLED=true")
         return False
 
-    await settings.init_database()
-
-    # Query
+    # Query database (DB should already be initialized)
     db = get_security_database()
-    approvals = await db.list_pending_approvals(limit)
+    approvals, total = await db.list_all_approvals(status=status, limit=limit)
 
     if not approvals:
         print("✅ No pending approvals")
@@ -80,8 +78,6 @@ async def cmd_approve(request_id: str, reason: str):
     if not settings.is_rbac_enabled():
         print("❌ RBAC not enabled")
         return False
-
-    await settings.init_database()
 
     # Get request
     db = get_security_database()
@@ -136,8 +132,6 @@ async def cmd_reject(request_id: str, reason: str):
     if not settings.is_rbac_enabled():
         print("❌ RBAC not enabled")
         return False
-
-    await settings.init_database()
 
     # Get request
     db = get_security_database()

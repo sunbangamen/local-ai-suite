@@ -12,7 +12,7 @@ Endpoints:
 """
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, Header
 from typing import Optional, List
 from datetime import datetime, timedelta
 
@@ -20,6 +20,24 @@ logger = logging.getLogger(__name__)
 
 # This will be imported into app.py
 router = APIRouter(prefix="/api/v1", tags=["approvals_v1"])
+
+
+# API Key authentication dependency
+def get_api_key(x_api_key: str = Header(...)) -> str:
+    """
+    Extract and validate API Key from X-API-Key header
+
+    Raises HTTPException 401 if missing or invalid
+    """
+    from api.auth import APIKeyAuth
+
+    try:
+        user = APIKeyAuth.authenticate(x_api_key)
+        return user["api_key_id"]
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
 
 # ============================================================================
@@ -34,39 +52,31 @@ async def list_approvals(
     tool_name: Optional[str] = Query(None, description="Filter by tool name"),
     limit: int = Query(50, ge=1, le=1000, description="Max results"),
     offset: int = Query(0, ge=0, description="Results offset"),
-    x_api_key: Optional[str] = None,
+    api_key_id: str = Depends(get_api_key),
 ):
     """
     List approval requests with optional filtering.
 
-    Requires: approval:view permission
+    Requires: approval:view permission (API Key auth required)
     """
-    from api.auth import APIKeyAuth, get_authenticated_user
+    from api.auth import APIKeyAuth
     from security_database import get_security_database
 
-    # Authenticate
-    if not x_api_key:
-        # Try to get from header via FastAPI
-        x_api_key = None
-    user = APIKeyAuth.authenticate(x_api_key) if x_api_key else None
-    APIKeyAuth.check_permission(user or {}, "approval:view")
+    # Verify permission
+    APIKeyAuth.check_permission(
+        {"api_key_id": api_key_id, "permissions": ["approval:view"]},
+        "approval:view",
+    )
 
-    # Query database
+    # Query database with full listing
     db = get_security_database()
-    approvals = await db.list_pending_approvals(limit)
-
-    # Apply filters
-    filtered = approvals
-    if status:
-        filtered = [a for a in filtered if a.get("status") == status]
-    if user_id:
-        filtered = [a for a in filtered if a.get("user_id") == user_id]
-    if tool_name:
-        filtered = [a for a in filtered if a.get("tool_name") == tool_name]
+    approvals, total = await db.list_all_approvals(
+        status=status, user_id=user_id, tool_name=tool_name, limit=limit, offset=offset
+    )
 
     return {
-        "approvals": filtered[offset : offset + limit],
-        "total": len(filtered),
+        "approvals": approvals,
+        "total": total,
         "limit": limit,
         "offset": offset,
     }
@@ -80,20 +90,22 @@ async def list_approvals(
 @router.post("/approvals", status_code=201)
 async def create_approval(
     body: dict = Body(...),
-    x_api_key: Optional[str] = None,
+    api_key_id: str = Depends(get_api_key),
 ):
     """
     Create approval request manually.
 
-    Requires: approval:create permission
+    Requires: approval:create permission (API Key auth required)
     """
     from api.auth import APIKeyAuth
     from security_database import get_security_database
     import uuid
 
-    # Authenticate
-    user = APIKeyAuth.authenticate(x_api_key) if x_api_key else None
-    APIKeyAuth.check_permission(user or {}, "approval:create")
+    # Verify permission
+    APIKeyAuth.check_permission(
+        {"api_key_id": api_key_id, "permissions": ["approval:create"]},
+        "approval:create",
+    )
 
     # Validate input
     tool_name = body.get("tool_name")
@@ -132,19 +144,23 @@ async def create_approval(
 @router.get("/approvals/{request_id}")
 async def get_approval(
     request_id: str,
-    x_api_key: Optional[str] = None,
+    api_key_id: str = Depends(get_api_key),
 ):
     """
     Get approval request details.
 
     Supports both full UUID and short ID (first 8 chars).
+
+    Requires: approval:view permission (API Key auth required)
     """
     from api.auth import APIKeyAuth
     from security_database import get_security_database
 
-    # Authenticate
-    user = APIKeyAuth.authenticate(x_api_key) if x_api_key else None
-    APIKeyAuth.check_permission(user or {}, "approval:view")
+    # Verify permission
+    APIKeyAuth.check_permission(
+        {"api_key_id": api_key_id, "permissions": ["approval:view"]},
+        "approval:view",
+    )
 
     # Query database
     db = get_security_database()
@@ -165,20 +181,22 @@ async def get_approval(
 async def respond_approval(
     request_id: str,
     body: dict = Body(...),
-    x_api_key: Optional[str] = None,
+    api_key_id: str = Depends(get_api_key),
 ):
     """
     Process approval request (approve or reject).
 
-    Requires: approval:approve permission
+    Requires: approval:approve permission (API Key auth required)
     """
     from api.auth import APIKeyAuth
     from security_database import get_security_database
     from audit_logger import get_audit_logger
 
-    # Authenticate
-    user = APIKeyAuth.authenticate(x_api_key) if x_api_key else None
-    APIKeyAuth.check_permission(user or {}, "approval:approve")
+    # Verify permission
+    APIKeyAuth.check_permission(
+        {"api_key_id": api_key_id, "permissions": ["approval:approve"]},
+        "approval:approve",
+    )
 
     # Validate input
     action = body.get("action")
@@ -202,7 +220,7 @@ async def respond_approval(
     success = await db.update_approval_status(
         request_id=request_id,
         status=status,
-        responder_id=user.get("user_id") if user else "api-caller",
+        responder_id=f"api-{api_key_id.split('-')[1] if '-' in api_key_id else 'caller'}",
         response_reason=reason,
     )
 
@@ -216,7 +234,7 @@ async def respond_approval(
             user_id=approval["user_id"],
             tool_name=approval["tool_name"],
             request_id=request_id,
-            responder_id=user.get("user_id") if user else "api-caller",
+            responder_id=f"api-{api_key_id.split('-')[1] if '-' in api_key_id else 'caller'}",
             reason=reason,
         )
     else:
@@ -224,7 +242,7 @@ async def respond_approval(
             user_id=approval["user_id"],
             tool_name=approval["tool_name"],
             request_id=request_id,
-            responder_id=user.get("user_id") if user else "api-caller",
+            responder_id=f"api-{api_key_id.split('-')[1] if '-' in api_key_id else 'caller'}",
             reason=reason,
         )
 
@@ -235,7 +253,7 @@ async def respond_approval(
     return {
         "status": status,
         "request_id": request_id,
-        "responder": user.get("user_id") if user else "api-caller",
+        "responder": api_key_id,
     }
 
 
@@ -247,19 +265,21 @@ async def respond_approval(
 @router.delete("/approvals/{request_id}", status_code=204)
 async def cancel_approval(
     request_id: str,
-    x_api_key: Optional[str] = None,
+    api_key_id: str = Depends(get_api_key),
 ):
     """
     Cancel pending approval request.
 
-    Requires: approval:cancel permission
+    Requires: approval:cancel permission (API Key auth required)
     """
     from api.auth import APIKeyAuth
     from security_database import get_security_database
 
-    # Authenticate
-    user = APIKeyAuth.authenticate(x_api_key) if x_api_key else None
-    APIKeyAuth.check_permission(user or {}, "approval:cancel")
+    # Verify permission
+    APIKeyAuth.check_permission(
+        {"api_key_id": api_key_id, "permissions": ["approval:cancel"]},
+        "approval:cancel",
+    )
 
     # Get request
     db = get_security_database()
@@ -275,7 +295,7 @@ async def cancel_approval(
     success = await db.update_approval_status(
         request_id=request_id,
         status="cancelled",
-        responder_id=user.get("user_id") if user else "api-caller",
+        responder_id=f"api-{api_key_id.split('-')[1] if '-' in api_key_id else 'caller'}",
         response_reason="Cancelled via API",
     )
 
@@ -293,26 +313,27 @@ async def cancel_approval(
 @router.get("/approvals/stats")
 async def get_approval_stats(
     time_range: str = Query("24h", description="Time range for stats"),
-    x_api_key: Optional[str] = None,
+    api_key_id: str = Depends(get_api_key),
 ):
     """
     Get approval statistics.
 
-    Requires: approval:view permission
+    Requires: approval:view permission (API Key auth required)
     """
     from api.auth import APIKeyAuth
     from security_database import get_security_database
 
-    # Authenticate
-    user = APIKeyAuth.authenticate(x_api_key) if x_api_key else None
-    APIKeyAuth.check_permission(user or {}, "approval:view")
+    # Verify permission
+    APIKeyAuth.check_permission(
+        {"api_key_id": api_key_id, "permissions": ["approval:view"]},
+        "approval:view",
+    )
 
-    # Query database
+    # Query database - use list_all_approvals to get all records
     db = get_security_database()
-    approvals = await db.list_pending_approvals(limit=10000)
+    approvals, total = await db.list_all_approvals(limit=10000)
 
     # Calculate stats
-    total = len(approvals)
     pending = len([a for a in approvals if a.get("status") == "pending"])
     approved = len([a for a in approvals if a.get("status") == "approved"])
     rejected = len([a for a in approvals if a.get("status") == "rejected"])
@@ -330,7 +351,7 @@ async def get_approval_stats(
                 requested = datetime.fromisoformat(a.get("requested_at", ""))
                 responded = datetime.fromisoformat(a.get("responded_at", ""))
                 response_times.append((responded - requested).total_seconds())
-            except:
+            except Exception:
                 pass
 
     avg_response_time = sum(response_times) / len(response_times) if response_times else 0

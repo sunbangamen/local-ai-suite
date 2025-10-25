@@ -668,6 +668,70 @@ class SecurityDatabase:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
 
+    async def list_all_approvals(
+        self,
+        status: Optional[str] = None,
+        user_id: Optional[str] = None,
+        tool_name: Optional[str] = None,
+        limit: int = 1000,
+        offset: int = 0,
+    ) -> tuple[List[Dict], int]:
+        """
+        List all approval requests with filtering (Issue #45 Phase 6.3)
+
+        Args:
+            status: Filter by status (pending, approved, rejected, expired)
+            user_id: Filter by user ID
+            tool_name: Filter by tool name
+            limit: Maximum number of results
+            offset: Results offset for pagination
+
+        Returns:
+            Tuple of (approvals list, total count)
+        """
+        try:
+            async with self.get_connection() as db:
+                # Build WHERE clause dynamically
+                where_parts = []
+                params = []
+
+                if status:
+                    where_parts.append("status = ?")
+                    params.append(status)
+                if user_id:
+                    where_parts.append("user_id = ?")
+                    params.append(user_id)
+                if tool_name:
+                    where_parts.append("tool_name = ?")
+                    params.append(tool_name)
+
+                where_clause = " AND ".join(where_parts) if where_parts else "1=1"
+
+                # Get total count
+                count_query = (
+                    f"SELECT COUNT(*) FROM approval_requests WHERE {where_clause}"
+                )
+                async with db.execute(count_query, params) as cursor:
+                    total = (await cursor.fetchone())[0]
+
+                # Get paginated results
+                params_list = params + [limit, offset]
+                query = f"""
+                    SELECT * FROM approval_requests
+                    WHERE {where_clause}
+                    ORDER BY requested_at DESC
+                    LIMIT ? OFFSET ?
+                """
+                async with db.execute(query, params_list) as cursor:
+                    rows = await cursor.fetchall()
+                    approvals = [dict(row) for row in rows]
+
+                return approvals, total
+
+        except Exception as e:
+            logger.error(f"Failed to list all approvals: {e}")
+            return [], 0
+
     async def cleanup_expired_approvals(self) -> int:
         """
         Cleanup expired approval requests
