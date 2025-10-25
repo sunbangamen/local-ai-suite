@@ -178,6 +178,42 @@ app = FastAPI(title="Local AI MCP Server", version="1.0.0")
 # Prometheus metrics
 Instrumentator().instrument(app).expose(app)
 
+# ============================================================================
+# Approval & RBAC Custom Metrics (Issue #45 Phase 6.2)
+# ============================================================================
+from prometheus_client import Counter, Histogram
+
+# 승인 워크플로우 메트릭
+approval_requests_total = Counter(
+    'approval_requests_total',
+    'Total approval requests by status',
+    ['status']  # pending, approved, rejected, expired
+)
+
+approval_response_time_seconds = Histogram(
+    'approval_response_time_seconds',
+    'Approval response time in seconds',
+    buckets=[1, 5, 10, 30, 60, 120, 300, 600]
+)
+
+approval_timeout_total = Counter(
+    'approval_timeout_total',
+    'Total timed out approval requests'
+)
+
+# RBAC 메트릭
+rbac_permission_checks_total = Counter(
+    'rbac_permission_checks_total',
+    'Total RBAC permission checks by result',
+    ['result']  # allowed, denied
+)
+
+rbac_role_assignments_total = Counter(
+    'rbac_role_assignments_total',
+    'Total RBAC role assignments by role',
+    ['role']  # admin, operator, viewer, user
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -191,6 +227,11 @@ app.add_middleware(
 settings = get_security_settings()
 if settings.is_rbac_enabled():
     app.add_middleware(RBACMiddleware)
+
+    # Register RBAC metrics with middleware (Issue #45 Phase 6.2)
+    from rbac_middleware import set_rbac_metrics
+    set_rbac_metrics(rbac_permission_checks_total)
+
     import logging
 
     logger = logging.getLogger(__name__)
@@ -273,6 +314,11 @@ async def startup_event():
         try:
             await init_database()
             logger.info(f"Security DB initialized: {settings.get_db_path()}")
+
+            # Register metrics callback for role assignments (Issue #45 Phase 6.2)
+            db = get_security_database()
+            db._on_role_assigned = lambda role: rbac_role_assignments_total.labels(role=role).inc()
+
         except Exception as e:
             logger.error(f"Failed to initialize security DB: {e}")
             raise
@@ -397,9 +443,13 @@ async def approve_request(
     Returns:
         승인 결과
     """
+    import time
     from security_database import get_security_database
     from rbac_manager import get_rbac_manager
     from audit_logger import get_audit_logger
+
+    # 응답 시간 측정 시작 (Issue #45 Phase 6.2)
+    start_time = time.time()
 
     # Admin 권한 체크
     rbac = get_rbac_manager()
@@ -435,6 +485,11 @@ async def approve_request(
         reason=reason,
     )
 
+    # Prometheus 메트릭 기록 (Issue #45 Phase 6.2)
+    approval_requests_total.labels(status="approved").inc()
+    response_time = time.time() - start_time
+    approval_response_time_seconds.observe(response_time)
+
     return {"status": "approved", "request_id": request_id, "responder": user_id}
 
 
@@ -455,9 +510,13 @@ async def reject_request(
     Returns:
         거부 결과
     """
+    import time
     from security_database import get_security_database
     from rbac_manager import get_rbac_manager
     from audit_logger import get_audit_logger
+
+    # 응답 시간 측정 시작 (Issue #45 Phase 6.2)
+    start_time = time.time()
 
     # Admin 권한 체크
     rbac = get_rbac_manager()
@@ -492,6 +551,11 @@ async def reject_request(
         responder_id=user_id or "admin",
         reason=reason,
     )
+
+    # Prometheus 메트릭 기록 (Issue #45 Phase 6.2)
+    approval_requests_total.labels(status="rejected").inc()
+    response_time = time.time() - start_time
+    approval_response_time_seconds.observe(response_time)
 
     return {"status": "rejected", "request_id": request_id, "responder": user_id}
 
@@ -545,6 +609,10 @@ async def get_approval_status(
         expires_at = datetime.datetime.fromisoformat(request_data.get("expires_at", ""))
         if request_data.get("status") == "pending" and datetime.datetime.now() > expires_at:
             # 만료된 요청 표시
+            # Prometheus 메트릭 기록 (Issue #45 Phase 6.2)
+            approval_requests_total.labels(status="expired").inc()
+            approval_timeout_total.inc()
+
             return {
                 "status": "expired",
                 "request_id": request_data["request_id"],

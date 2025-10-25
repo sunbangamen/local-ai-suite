@@ -18,6 +18,20 @@ from settings import SecuritySettings
 
 logger = logging.getLogger(__name__)
 
+# Prometheus metrics (imported from app.py)
+# NOTE: These are initialized in app.py and accessed here to avoid circular imports
+try:
+    from prometheus_client import Counter
+    rbac_permission_checks_total = None  # Will be set via set_metrics()
+except ImportError:
+    rbac_permission_checks_total = None
+
+
+def set_rbac_metrics(checks_counter):
+    """Set RBAC metrics from app.py (called during app initialization)"""
+    global rbac_permission_checks_total
+    rbac_permission_checks_total = checks_counter
+
 
 class RBACMiddleware(BaseHTTPMiddleware):
     """
@@ -67,6 +81,11 @@ class RBACMiddleware(BaseHTTPMiddleware):
             f"RBAC check: user={user_id}, tool={tool_name}, "
             f"allowed={allowed}, time={check_time:.2f}ms"
         )
+
+        # Prometheus 메트릭 기록 (Issue #45 Phase 6.2)
+        if rbac_permission_checks_total is not None:
+            result = "allowed" if allowed else "denied"
+            rbac_permission_checks_total.labels(result=result).inc()
 
         # Approval workflow integration (Issue #16)
         if allowed and await self.rbac_manager.requires_approval(tool_name):

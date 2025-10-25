@@ -26,10 +26,11 @@ class SecurityDatabase:
     - Transaction support
     """
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Optional[Path] = None, on_role_assigned=None):
         self.db_path = db_path or SecuritySettings.get_db_path()
         self._connection = None
         self._initialized = False
+        self._on_role_assigned = on_role_assigned  # Callback for metrics (Issue #45 Phase 6.2)
 
     async def initialize(self) -> None:
         """Initialize database with schema"""
@@ -103,6 +104,13 @@ class SecurityDatabase:
                 )
                 await db.commit()
                 logger.info(f"User created: {user_id} (role_id={role_id})")
+
+                # Record metrics for role assignment (Issue #45 Phase 6.2)
+                if self._on_role_assigned:
+                    role_name = await self._get_role_name(role_id)
+                    if role_name:
+                        self._on_role_assigned(role_name)
+
                 return True
         except aiosqlite.IntegrityError as e:
             logger.error(f"Failed to create user {user_id}: {e}")
@@ -118,10 +126,31 @@ class SecurityDatabase:
                 )
                 await db.commit()
                 logger.info(f"User role updated: {user_id} -> role_id={role_id}")
+
+                # Record metrics for role assignment (Issue #45 Phase 6.2)
+                if self._on_role_assigned:
+                    role_name = await self._get_role_name(role_id)
+                    if role_name:
+                        self._on_role_assigned(role_name)
+
                 return True
         except Exception as e:
             logger.error(f"Failed to update user role: {e}")
             return False
+
+    async def _get_role_name(self, role_id: int) -> Optional[str]:
+        """Get role name by role_id (Issue #45 Phase 6.2)"""
+        try:
+            async with self.get_connection() as db:
+                async with db.execute(
+                    "SELECT role_name FROM security_roles WHERE role_id = ?",
+                    (role_id,),
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    return row[0] if row else None
+        except Exception as e:
+            logger.error(f"Failed to get role name for role_id {role_id}: {e}")
+            return None
 
     # ========================================================================
     # Role Operations
