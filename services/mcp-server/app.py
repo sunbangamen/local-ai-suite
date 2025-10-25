@@ -25,6 +25,7 @@ from fastapi import FastAPI, Request, Header, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
 from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Histogram
 from pydantic import BaseModel
 
 
@@ -197,11 +198,6 @@ app = FastAPI(
 
 # Prometheus metrics
 Instrumentator().instrument(app).expose(app)
-
-# ============================================================================
-# Approval & RBAC Custom Metrics (Issue #45 Phase 6.2)
-# ============================================================================
-from prometheus_client import Counter, Histogram
 
 # 승인 워크플로우 메트릭
 approval_requests_total = Counter(
