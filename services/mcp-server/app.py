@@ -173,7 +173,27 @@ def resolve_git_env(work_tree_path: str) -> dict:
 mcp = FastMCP("Local AI MCP Server")
 
 # FastAPI 앱 (헬스체크용)
-app = FastAPI(title="Local AI MCP Server", version="1.0.0")
+app = FastAPI(
+    title="Local AI MCP Server",
+    version="1.0.0",
+    description="""
+    Local AI Suite의 MCP 서버 및 Approval Workflow API를 제공합니다.
+
+    ## 주요 기능
+    - **MCP Tools**: Git, 파일 시스템, 웹 스크래핑 등 14개 도구
+    - **Approval Workflow API**: 승인 요청 관리를 위한 RESTful API
+    - **RBAC System**: 역할 기반 접근 제어
+    - **Monitoring**: Prometheus 메트릭 수집
+
+    ## API 문서
+    - OpenAPI 3.0: `/openapi.json`
+    - Swagger UI: `/docs`
+    - ReDoc: `/redoc`
+    """,
+    openapi_url="/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
 # Prometheus metrics
 Instrumentator().instrument(app).expose(app)
@@ -221,6 +241,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Import and register Approval API v1 routes (Issue #45 Phase 6.3)
+try:
+    from api.v1.approvals import router as approval_router_v1
+    app.include_router(approval_router_v1)
+except ImportError as e:
+    logger.warning(f"Failed to import Approval API v1 routes: {e}")
 
 # RBAC 미들웨어 등록 (Issue #8)
 # CORS 다음에 등록해야 CORS 헤더가 먼저 처리됨
