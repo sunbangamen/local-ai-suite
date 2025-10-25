@@ -212,7 +212,9 @@ Examples:
     # Reject command
     reject_cmd = subparsers.add_parser("reject", help="Reject a request")
     reject_cmd.add_argument("request_id", help="Request ID (UUID or short ID)")
-    reject_cmd.add_argument("--reason", required=True, help="Rejection reason/comment")
+    reject_cmd.add_argument(
+        "--reason", required=True, help="Rejection reason/comment"
+    )
 
     args = parser.parse_args()
 

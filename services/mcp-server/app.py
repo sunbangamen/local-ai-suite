@@ -29,7 +29,7 @@ from pydantic import BaseModel
 
 
 def _resolve_host(env_var: str, default: str = "0.0.0.0") -> str:  # nosec B104
-    """Resolve host binding with fallback to default for container environments."""
+    """Resolve host with fallback to default for container environments."""
     value = os.getenv(env_var)
     return value if value else default
 
@@ -450,7 +450,9 @@ async def get_tool_security_info(tool_name: str):
 
 
 @app.get("/api/approvals/pending")
-async def get_pending_approvals(limit: int = 50, user_id: str = Header(None, alias="X-User-ID")):
+async def get_pending_approvals(
+    limit: int = 50, user_id: str = Header(None, alias="X-User-ID")
+):
     """
     대기 중인 승인 요청 목록 조회 (admin only)
 
@@ -786,7 +788,10 @@ async def list_tools():
 
 @app.post("/tools/{tool_name}/call")
 async def call_tool(
-    tool_name: str, request: Request, arguments: dict = None, user_id: str = "default"
+    tool_name: str,
+    request: Request,
+    arguments: dict = None,
+    user_id: str = "default",
 ):
     """MCP 도구 실행 (Rate Limiting 및 Access Control 적용)"""
     try:
@@ -803,10 +808,16 @@ async def call_tool(
         access_control = get_access_control()
         allowed, error_msg = access_control.check_access(tool_name, actual_user_id)
         if not allowed:
-            return {"error": error_msg, "success": False, "error_type": "access_denied"}
+            return {
+                "error": error_msg,
+                "success": False,
+                "error_type": "access_denied",
+            }
 
         # 도구 실행 시작 (동시 실행 제한 강제 적용)
-        allowed, error_msg = rate_limiter.start_execution(tool_name, actual_user_id, access_control)
+        allowed, error_msg = rate_limiter.start_execution(
+            tool_name, actual_user_id, access_control
+        )
         if not allowed:
             return {
                 "error": error_msg,
@@ -1040,7 +1051,9 @@ async def read_file(path: str, working_dir: Optional[str] = None) -> FileInfo:
 
 
 @mcp.tool()
-async def write_file(path: str, content: str, working_dir: Optional[str] = None) -> FileInfo:
+async def write_file(
+    path: str, content: str, working_dir: Optional[str] = None
+) -> FileInfo:
     """보안이 강화된 파일 내용 쓰기 - 전역 파일시스템 지원"""
     try:
         # 새로운 안전한 파일 API 사용
@@ -1063,7 +1076,9 @@ async def write_file(path: str, content: str, working_dir: Optional[str] = None)
 
 
 @mcp.tool()
-async def list_files(path: str = ".", working_dir: Optional[str] = None) -> Dict[str, Any]:
+async def list_files(
+    path: str = ".", working_dir: Optional[str] = None
+) -> Dict[str, Any]:
     """보안이 강화된 디렉토리 파일 목록 조회"""
     try:
         # 새로운 안전한 파일 API 사용
@@ -1189,7 +1204,9 @@ async def ai_chat(message: str, model: str = None) -> AIResponse:
 
 
 @mcp.tool()
-async def git_status(path: str = ".", working_dir: Optional[str] = None) -> ExecutionResult:
+async def git_status(
+    path: str = ".", working_dir: Optional[str] = None
+) -> ExecutionResult:
     """Git 저장소 상태 확인 (전역 Git 지원)"""
     # working_dir가 제공되면 해당 디렉토리 사용, 아니면 현재 경로
     if working_dir:
@@ -1379,7 +1396,9 @@ async def git_log(
 
 
 @mcp.tool()
-async def git_add(file_paths: str, working_dir: Optional[str] = None) -> ExecutionResult:
+async def git_add(
+    file_paths: str, working_dir: Optional[str] = None
+) -> ExecutionResult:
     """Git 파일 스테이징 (전역 Git 지원)"""
     # working_dir가 제공되면 해당 디렉토리 사용
     if working_dir:
@@ -1508,7 +1527,9 @@ async def git_commit(
 
 
 @mcp.tool()
-async def web_screenshot(url: str, width: int = 1280, height: int = 720) -> WebScreenshotResult:
+async def web_screenshot(
+    url: str, width: int = 1280, height: int = 720
+) -> WebScreenshotResult:
     """웹사이트 스크린샷 촬영"""
     try:
         pw = await init_playwright()
@@ -1538,7 +1559,9 @@ async def web_screenshot(url: str, width: int = 1280, height: int = 720) -> WebS
 
 
 @mcp.tool()
-async def web_scrape(url: str, selector: str, attribute: str = "textContent") -> WebScrapeResult:
+async def web_scrape(
+    url: str, selector: str, attribute: str = "textContent"
+) -> WebScrapeResult:
     """웹사이트에서 특정 요소 크롤링"""
     try:
         pw = await init_playwright()
@@ -1793,14 +1816,19 @@ async def web_to_notion(
         title_result = await web_scrape(url, title_selector)
         content_result = await web_scrape(url, content_selector)
 
-        title = title_result.data[0] if title_result.data else f"웹페이지: {url}"
+        if title_result.data:
+            title = title_result.data[0]
+        else:
+            title = f"웹페이지: {url}"
         content = "\n".join(content_result.data[:5])  # 최대 5개 문단
 
         # Notion 페이지 생성
         properties = json.dumps(
             {
                 "URL": {"url": url},
-                "Content": {"rich_text": [{"text": {"content": content[:2000]}}]},  # 2000자 제한
+                "Content": {
+                    "rich_text": [{"text": {"content": content[:2000]}}]
+                },  # 2000자 제한
             }
         )
 
@@ -1823,7 +1851,7 @@ class ModelSwitchResult(BaseModel):
     switch_time_seconds: Optional[float] = None
 
 
-async def _detect_phase() -> tuple[bool, str]:
+async def _detect_phase() -> tuple:  # Returns (bool | None, str | None)
     """
     docker compose ps 명령으로 실행 중인 서비스를 확인하여 Phase 판별
 
@@ -1882,7 +1910,7 @@ async def _detect_phase() -> tuple[bool, str]:
         return None, None
 
 
-async def _get_model_info(service_url: str) -> tuple[bool, str]:
+async def _get_model_info(service_url: str) -> tuple:  # Returns (bool, str)
     """
     서비스의 현재 로드된 모델 정보 조회
 
@@ -1899,7 +1927,10 @@ async def _get_model_info(service_url: str) -> tuple[bool, str]:
                 models_data = response.json()
                 if models_data.get("data"):
                     model_path = models_data["data"][0]["id"]
-                    model_name = model_path.split("/")[-1] if "/" in model_path else model_path
+                    if "/" in model_path:
+                        model_name = model_path.split("/")[-1]
+                    else:
+                        model_name = model_path
                     return True, model_name
         return False, "unknown"
     except Exception as e:
@@ -1909,7 +1940,7 @@ async def _get_model_info(service_url: str) -> tuple[bool, str]:
 
 async def _restart_service(
     compose_file: str, service_name: str, env_vars: dict = None
-) -> tuple[bool, str]:
+) -> tuple:  # Returns (bool, str)
     """
     Docker Compose 서비스 재시작
 
@@ -1951,7 +1982,11 @@ async def _restart_service(
             service_name,
         ]
         result = subprocess.run(
-            start_cmd, capture_output=True, text=True, cwd="/mnt/workspace", env=env
+            start_cmd,
+            capture_output=True,
+            text=True,
+            cwd="/mnt/workspace",
+            env=env,
         )
         if result.returncode != 0:
             return False, f"서비스 시작 실패: {result.stderr}"
@@ -1980,9 +2015,10 @@ async def _wait_for_health(service_url: str, max_wait: int = 30) -> bool:
             async with httpx.AsyncClient() as client:
                 response = await client.get(health_url, timeout=5)
                 if response.status_code == 200:
-                    print(f"✅ 헬스체크 성공 (시도 {attempt + 1}/{max_wait})")
+                    success_msg = f"✅ 헬스체크 성공 (시도 {attempt + 1}/{max_wait})"
+                    print(success_msg)
                     return True
-        except:
+        except Exception:
             continue
     return False
 
@@ -2046,12 +2082,17 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
             # CHAT_MODEL 또는 CODE_MODEL 환경변수와 일치하는지 확인
             expected_model = target_model
 
-            if expected_model.lower() == current_model_name.lower():
+            models_match = expected_model.lower() == current_model_name.lower()
+            if models_match:
                 # 이미 올바른 모델 실행 중
                 end_time = time.time()
+                message = (
+                    f"Phase 2: {model_type} 모델은 {service_name}에서 "
+                    f"이미 실행 중입니다 ({current_model_name})."
+                )
                 return ModelSwitchResult(
                     success=True,
-                    message=f"Phase 2: {model_type} 모델은 {service_name}에서 이미 실행 중입니다 ({current_model_name}).",
+                    message=message,
                     current_model=current_model_name,
                     switch_time_seconds=round(time.time() - start_time, 1),
                 )
@@ -2115,10 +2156,15 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
             success, current_model_name = await _get_model_info(service_url)
 
             # 이미 원하는 모델이 로드된 경우
-            if success and target_model.lower() == current_model_name.lower():
+            models_match = target_model.lower() == current_model_name.lower()
+            if success and models_match:
+                message = (
+                    f"Phase 3: 이미 {model_type} 모델({target_model})이 "
+                    "로드되어 있습니다."
+                )
                 return ModelSwitchResult(
                     success=True,
-                    message=f"Phase 3: 이미 {model_type} 모델({target_model})이 로드되어 있습니다.",
+                    message=message,
                     current_model=target_model,
                     switch_time_seconds=round(time.time() - start_time, 1),
                 )
@@ -2153,10 +2199,15 @@ async def switch_model(model_type: str) -> ModelSwitchResult:
             success, new_model_name = await _get_model_info(service_url)
             end_time = time.time()
 
-            if success and new_model_name.lower() == target_model.lower():
+            models_match = new_model_name.lower() == target_model.lower()
+            if success and models_match:
+                message = (
+                    f"Phase 3: {model_type} 모델({target_model})로 "
+                    "성공적으로 교체되었습니다."
+                )
                 return ModelSwitchResult(
                     success=True,
-                    message=f"Phase 3: {model_type} 모델({target_model})로 성공적으로 교체되었습니다.",
+                    message=message,
                     current_model=new_model_name,
                     switch_time_seconds=round(end_time - start_time, 1),
                 )

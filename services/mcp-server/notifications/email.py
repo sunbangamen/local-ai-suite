@@ -91,11 +91,12 @@ class EmailNotifier:
                 raise ValueError(f"Failed to render template: {template_name}")
 
             # 제목 결정
+            tool_name = context.get("tool_name", "Unknown")
             subject_map = {
-                "approval_requested": f"[승인 필요] {context.get('tool_name', 'Unknown')} 도구",
-                "approval_timeout": f"[타임아웃] {context.get('tool_name', 'Unknown')} 승인 요청",
-                "approval_approved": f"[승인됨] {context.get('tool_name', 'Unknown')} 도구",
-                "approval_rejected": f"[거부됨] {context.get('tool_name', 'Unknown')} 도구",
+                "approval_requested": f"[승인 필요] {tool_name} 도구",
+                "approval_timeout": f"[타임아웃] {tool_name} 승인 요청",
+                "approval_approved": f"[승인됨] {tool_name} 도구",
+                "approval_rejected": f"[거부됨] {tool_name} 도구",
             }
             subject = subject_map.get(template_name, "승인 알림")
 
@@ -110,7 +111,8 @@ class EmailNotifier:
             msg.attach(html_part)
 
             # SMTP 발송
-            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10) as server:
+            smtp_server = smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10)
+            with smtp_server as server:
                 if self.smtp_use_tls:
                     server.starttls()
                 if self.smtp_user and self.smtp_password:

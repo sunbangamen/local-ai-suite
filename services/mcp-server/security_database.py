@@ -31,7 +31,8 @@ class SecurityDatabase:
         self.db_path = db_path or SecuritySettings.get_db_path()
         self._connection = None
         self._initialized = False
-        self._on_role_assigned = on_role_assigned  # Callback for metrics (Issue #45 Phase 6.2)
+        # Callback for metrics (Issue #45 Phase 6.2)
+        self._on_role_assigned = on_role_assigned
 
     async def initialize(self) -> None:
         """Initialize database with schema"""
@@ -221,7 +222,9 @@ class SecurityDatabase:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
 
-    async def check_permission(self, user_id: str, permission_name: str) -> Tuple[bool, str]:
+    async def check_permission(
+        self, user_id: str, permission_name: str
+    ) -> Tuple[bool, str]:
         """
         Check if user has permission
 
@@ -254,7 +257,9 @@ class SecurityDatabase:
     # Test Helper Methods (for test_approval_workflow.py)
     # ========================================================================
 
-    async def insert_user(self, user_id: str, role: str, attributes: str = "{}") -> bool:
+    async def insert_user(
+        self, user_id: str, role: str, attributes: str = "{}"
+    ) -> bool:
         """
         Insert user for testing (simplified version)
 
@@ -272,9 +277,10 @@ class SecurityDatabase:
                 role_row = await self.get_role_by_name(role)
                 if not role_row:
                     # Create basic role if doesn't exist
+                    role_description = f"Auto-created role: {role}"
                     await db.execute(
                         "INSERT INTO security_roles (role_name, description) VALUES (?, ?)",
-                        (role, f"Auto-created role: {role}"),
+                        (role, role_description),
                     )
                     await db.commit()
                     role_row = await self.get_role_by_name(role)
@@ -339,7 +345,9 @@ class SecurityDatabase:
             logger.error(f"Failed to insert test permission: {e}")
             return False
 
-    async def assign_permission_to_role(self, role_name: str, permission_name: str) -> bool:
+    async def assign_permission_to_role(
+        self, role_name: str, permission_name: str
+    ) -> bool:
         """
         Assign permission to role (for testing)
 
@@ -365,12 +373,12 @@ class SecurityDatabase:
                     return False
 
                 # Insert mapping
-                await db.execute(
-                    """
+                insert_query = """
                     INSERT OR IGNORE INTO security_role_permissions (role_id, permission_id)
                     VALUES (?, ?)
-                    """,
-                    (role["role_id"], permission["permission_id"]),
+                """
+                await db.execute(
+                    insert_query, (role["role_id"], permission["permission_id"])
                 )
                 await db.commit()
                 return True
@@ -477,13 +485,14 @@ class SecurityDatabase:
                 total = row[0] if row else 0
 
             # Success count
+            time_filter = f"-{hours} hours"
             async with db.execute(
                 """
                 SELECT COUNT(*) as success_count
                 FROM security_audit_logs
                 WHERE timestamp >= datetime('now', ?) AND status = 'success'
                 """,
-                (f"-{hours} hours",),
+                (time_filter,),
             ) as cursor:
                 row = await cursor.fetchone()
                 success_count = row[0] if row else 0
@@ -495,7 +504,7 @@ class SecurityDatabase:
                 FROM security_audit_logs
                 WHERE timestamp >= datetime('now', ?) AND status = 'denied'
                 """,
-                (f"-{hours} hours",),
+                (time_filter,),
             ) as cursor:
                 row = await cursor.fetchone()
                 denied_count = row[0] if row else 0
@@ -507,17 +516,18 @@ class SecurityDatabase:
                 FROM security_audit_logs
                 WHERE timestamp >= datetime('now', ?) AND status = 'error'
                 """,
-                (f"-{hours} hours",),
+                (time_filter,),
             ) as cursor:
                 row = await cursor.fetchone()
                 error_count = row[0] if row else 0
 
+            success_rate = (success_count / total * 100) if total > 0 else 0
             return {
                 "total_requests": total,
                 "success_count": success_count,
                 "denied_count": denied_count,
                 "error_count": error_count,
-                "success_rate": (success_count / total * 100) if total > 0 else 0,
+                "success_rate": success_rate,
                 "hours": hours,
             }
 
@@ -627,22 +637,26 @@ class SecurityDatabase:
                         logger.warning(f"Approval request not found: {request_id}")
                         return False
                     if row[0] != "pending":
-                        logger.warning(
-                            f"Approval request already processed: {request_id} (status={row[0]})"
+                        warning_msg = (
+                            f"Approval request already processed: "
+                            f"{request_id} (status={row[0]})"
                         )
+                        logger.warning(warning_msg)
                         return False
 
                 # Update status
-                await db.execute(
-                    """
+                update_query = """
                     UPDATE approval_requests
-                    SET status = ?, responder_id = ?, response_reason = ?, responded_at = datetime('now')
+                    SET status = ?, responder_id = ?, response_reason = ?,
+                        responded_at = datetime('now')
                     WHERE request_id = ? AND status = 'pending'
-                    """,
-                    (status, responder_id, response_reason, request_id),
+                """
+                await db.execute(
+                    update_query, (status, responder_id, response_reason, request_id)
                 )
                 await db.commit()
-                logger.info(f"Approval request {status}: {request_id} by {responder_id}")
+                info_msg = f"Approval request {status}: {request_id} by {responder_id}"
+                logger.info(info_msg)
                 return True
         except Exception as e:
             logger.error(f"Failed to update approval status: {e}")

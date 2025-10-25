@@ -196,7 +196,9 @@ async def respond_approval(
     reason = body.get("reason", "")
 
     if action not in ["approve", "reject"]:
-        raise HTTPException(status_code=400, detail="action must be 'approve' or 'reject'")
+        raise HTTPException(
+            status_code=400, detail="action must be 'approve' or 'reject'"
+        )
 
     # Get request
     db = get_security_database()
@@ -206,7 +208,9 @@ async def respond_approval(
         raise HTTPException(status_code=404, detail="Approval request not found")
 
     if approval.get("status") != "pending":
-        raise HTTPException(status_code=409, detail="Request already processed or expired")
+        raise HTTPException(
+            status_code=409, detail="Request already processed or expired"
+        )
 
     # Process
     status = "approved" if action == "approve" else "rejected"
@@ -279,7 +283,9 @@ async def cancel_approval(
         raise HTTPException(status_code=404, detail="Approval request not found")
 
     if approval.get("status") != "pending":
-        raise HTTPException(status_code=409, detail="Only pending requests can be cancelled")
+        raise HTTPException(
+            status_code=409, detail="Only pending requests can be cancelled"
+        )
 
     # Cancel
     success = await db.update_approval_status(
@@ -328,7 +334,10 @@ async def get_approval_stats(
 
     # Approval rate (approved / (approved + rejected))
     approvals_finished = approved + rejected
-    approval_rate = approved / approvals_finished if approvals_finished > 0 else 0
+    if approvals_finished > 0:
+        approval_rate = approved / approvals_finished
+    else:
+        approval_rate = 0
 
     # Average response time
     response_times = []
@@ -341,7 +350,10 @@ async def get_approval_stats(
             except Exception:
                 pass
 
-    avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+    if response_times:
+        avg_response_time = sum(response_times) / len(response_times)
+    else:
+        avg_response_time = 0
 
     return {
         "total_requests": total,

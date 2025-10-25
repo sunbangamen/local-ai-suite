@@ -106,7 +106,8 @@ class APIKeyAuth:
         """
         if required_permission not in user.get("permissions", []):
             logger.warning(
-                f"Permission denied for {user.get('user_id')}: {required_permission}"
+                f"Permission denied for {user.get('user_id')}: "
+                f"{required_permission}"
             )
             raise HTTPException(
                 status_code=403,

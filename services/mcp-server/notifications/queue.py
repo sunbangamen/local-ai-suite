@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class ApprovalEventType(str, Enum):
     """승인 이벤트 타입"""
+
     REQUESTED = "approval_requested"
     TIMEOUT = "approval_timeout"
     APPROVED = "approval_approved"
@@ -34,7 +35,8 @@ class ApprovalEvent:
         self.max_retries = 3
 
     def __repr__(self):
-        return f"ApprovalEvent({self.event_type.value}, {self.data.get('request_id', 'unknown')[:8]})"
+        request_id = self.data.get("request_id", "unknown")[:8]
+        return f"ApprovalEvent({self.event_type.value}, {request_id})"
 
 
 class ApprovalEventQueue:
@@ -99,7 +101,8 @@ class ApprovalEventQueue:
                 # 배치 채우기
                 while len(batch) < batch_size and self.running:
                     try:
-                        timeout = batch_timeout / max(1, batch_size - len(batch))
+                        remaining_slots = batch_size - len(batch)
+                        timeout = batch_timeout / max(1, remaining_slots)
                         event = await asyncio.wait_for(
                             self.queue.get(), timeout=timeout
                         )
@@ -124,7 +127,8 @@ class ApprovalEventQueue:
         # 결과 로깅
         for event, result in zip(events, results):
             if isinstance(result, Exception):
-                logger.error(f"Event processing failed for {event}: {str(result)}")
+                error_msg = f"Event processing failed for {event}: {str(result)}"
+                logger.error(error_msg)
 
     async def _process_event(self, event: ApprovalEvent, notifier):
         """이벤트 처리"""
@@ -153,13 +157,17 @@ class ApprovalEventQueue:
             if event.retry_count < event.max_retries:
                 event.retry_count += 1
                 await self.queue.put(event)
-                logger.warning(
-                    f"Retrying event {event} (attempt {event.retry_count}/{event.max_retries})"
+                retry_msg = (
+                    f"Retrying event {event} "
+                    f"(attempt {event.retry_count}/{event.max_retries})"
                 )
+                logger.warning(retry_msg)
             else:
-                logger.error(
-                    f"Event processing failed after {event.max_retries} retries: {str(e)}"
+                error_msg = (
+                    f"Event processing failed after {event.max_retries} "
+                    f"retries: {str(e)}"
                 )
+                logger.error(error_msg)
 
 
 def get_approval_event_queue() -> ApprovalEventQueue:
