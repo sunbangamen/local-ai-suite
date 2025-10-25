@@ -4,11 +4,12 @@ Security Database Manager
 SQLite database operations with connection pooling and WAL mode
 """
 
-import aiosqlite
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from contextlib import asynccontextmanager
+
+import aiosqlite
 
 from settings import SecuritySettings
 

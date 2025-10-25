@@ -10,10 +10,12 @@ MCP Server for Local AI Suite
 """
 
 import asyncio
+import base64
 import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -22,10 +24,8 @@ import httpx
 from fastapi import FastAPI, Request, Header, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
-from pydantic import BaseModel
 from prometheus_fastapi_instrumentator import Instrumentator
-import base64
-import tempfile
+from pydantic import BaseModel
 
 
 def _resolve_host(env_var: str, default: str = "0.0.0.0") -> str:  # nosec B104

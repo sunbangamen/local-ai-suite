@@ -12,9 +12,9 @@ from .queue import ApprovalEventQueue, ApprovalEventType, get_approval_event_que
 from .email import EmailNotifier, get_email_notifier
 
 __all__ = [
-    'ApprovalEventQueue',
-    'ApprovalEventType',
-    'get_approval_event_queue',
-    'EmailNotifier',
-    'get_email_notifier',
+    "ApprovalEventQueue",
+    "ApprovalEventType",
+    "get_approval_event_queue",
+    "EmailNotifier",
+    "get_email_notifier",
 ]

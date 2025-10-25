@@ -7,13 +7,14 @@ FastAPI middleware for automatic permission checking
 import json
 import logging
 import time
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from rbac_manager import get_rbac_manager
 from audit_logger import get_audit_logger
+from rbac_manager import get_rbac_manager
 from settings import SecuritySettings
 
 logger = logging.getLogger(__name__)

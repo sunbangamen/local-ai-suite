@@ -9,8 +9,8 @@ Features:
 """
 
 import logging
+
 from fastapi import HTTPException, Request
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

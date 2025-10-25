@@ -12,9 +12,10 @@ Endpoints:
 """
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, Body, Header
-from typing import Optional, List, Dict
 from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,11 @@ async def list_approvals(
     # Query database with full listing
     db = get_security_database()
     approvals, total = await db.list_all_approvals(
-        status=status, user_id=user_id, tool_name=tool_name, limit=limit, offset=offset
+        status=status,
+        user_id=user_id,
+        tool_name=tool_name,
+        limit=limit,
+        offset=offset,
     )
 
     return {

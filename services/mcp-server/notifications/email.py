@@ -5,15 +5,16 @@ Handles email sending with template rendering, retry logic,
 and async execution using tenacity for exponential backoff.
 """
 
-import smtplib
-import os
 import asyncio
 import logging
-from email.mime.text import MIMEText
+import os
+import smtplib
 from email.mime.multipart import MIMEMultipart
-from jinja2 import Environment, FileSystemLoader, TemplateNotFound
+from email.mime.text import MIMEText
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
+from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
