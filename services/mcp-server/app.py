@@ -378,6 +378,18 @@ async def startup_event():
     else:
         logger.info("RBAC system disabled (RBAC_ENABLED=false)")
 
+    # Phase 6.4: Email notification worker startup
+    notification_enabled = os.getenv("NOTIFICATION_ENABLED", "false").lower() == "true"
+    if notification_enabled:
+        try:
+            from notifications.queue import get_approval_event_queue
+
+            approval_queue = get_approval_event_queue()
+            await approval_queue.start_worker()
+            logger.info("✅ Email notification worker started")
+        except Exception as e:
+            logger.error(f"Failed to start email notification worker: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -399,6 +411,18 @@ async def shutdown_event():
             logger.error(f"Error stopping audit logger: {e}")
 
         logger.info("RBAC system shutdown complete")
+
+    # Phase 6.4: Email notification worker shutdown
+    notification_enabled = os.getenv("NOTIFICATION_ENABLED", "false").lower() == "true"
+    if notification_enabled:
+        try:
+            from notifications.queue import get_approval_event_queue
+
+            approval_queue = get_approval_event_queue()
+            await approval_queue.stop_worker()
+            logger.info("✅ Email notification worker stopped")
+        except Exception as e:
+            logger.error(f"Error stopping email notification worker: {e}")
 
 
 @app.get("/health")
@@ -517,6 +541,26 @@ async def approve_request(
     response_time = time.time() - start_time
     approval_response_time_seconds.observe(response_time)
 
+    # Phase 6.4: Email notification event
+    notification_enabled = os.getenv("NOTIFICATION_ENABLED", "false").lower() == "true"
+    if notification_enabled:
+        try:
+            from notifications.queue import get_approval_event_queue
+
+            approval_queue = get_approval_event_queue()
+            await approval_queue.enqueue(
+                "approval_approved",
+                {
+                    "request_id": request_id,
+                    "user_id": original_request["user_id"],
+                    "tool_name": original_request["tool_name"],
+                    "responder_id": user_id or "admin",
+                    "reason": reason,
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to enqueue approval_approved event: {e}")
+
     return {"status": "approved", "request_id": request_id, "responder": user_id}
 
 
@@ -584,6 +628,26 @@ async def reject_request(
     response_time = time.time() - start_time
     approval_response_time_seconds.observe(response_time)
 
+    # Phase 6.4: Email notification event
+    notification_enabled = os.getenv("NOTIFICATION_ENABLED", "false").lower() == "true"
+    if notification_enabled:
+        try:
+            from notifications.queue import get_approval_event_queue
+
+            approval_queue = get_approval_event_queue()
+            await approval_queue.enqueue(
+                "approval_rejected",
+                {
+                    "request_id": request_id,
+                    "user_id": original_request["user_id"],
+                    "tool_name": original_request["tool_name"],
+                    "responder_id": user_id or "admin",
+                    "reason": reason,
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to enqueue approval_rejected event: {e}")
+
     return {"status": "rejected", "request_id": request_id, "responder": user_id}
 
 
@@ -639,6 +703,25 @@ async def get_approval_status(
             # Prometheus 메트릭 기록 (Issue #45 Phase 6.2)
             approval_requests_total.labels(status="expired").inc()
             approval_timeout_total.inc()
+
+            # Phase 6.4: Email notification event for timeout
+            notification_enabled = os.getenv("NOTIFICATION_ENABLED", "false").lower() == "true"
+            if notification_enabled:
+                try:
+                    from notifications.queue import get_approval_event_queue
+
+                    approval_queue = get_approval_event_queue()
+                    await approval_queue.enqueue(
+                        "approval_timeout",
+                        {
+                            "request_id": request_data["request_id"],
+                            "user_id": request_data["user_id"],
+                            "tool_name": request_data["tool_name"],
+                            "requested_at": request_data["requested_at"],
+                        },
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to enqueue approval_timeout event: {e}")
 
             return {
                 "status": "expired",
